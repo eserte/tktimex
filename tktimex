@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 3.20 1998/01/26 01:09:19 eserte Exp $
+# $Id: tktimex,v 4.1 1998/01/26 03:28:00 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about
@@ -21,15 +21,18 @@ use FindBin;
 use lib ("$FindBin::RealBin", "/home/e/eserte/lib/perl");
 eval { require Tk::UnderlineAll };
 use Tk::Getopt 0.34;
-use Project;
+use Timex::Project;
 use strict;
+use vars qw($VERSION);
 use locale; # for sort
 
-my $root = new Project;
+$VERSION = sprintf("%d.%02d", q$Revision: 4.1 $ =~ /(\d+)\.(\d+)/);
+
+my $root = new Timex::Project;
 
 my $quit_dialog;
-my $copyright = 'tktimex © 1996, 1997 Slaven Rezic';
-my $title = 'tktimex';
+my $copyright = "tktimex $VERSION © 1996-1998 Slaven Rezic";
+my $title = "tktimex $VERSION";
 my $current_project = undef;
 my $start_session_time = time;
 my $time_after;
@@ -98,9 +101,9 @@ $mb_project->command(-label => 'Pause',
 $mb_project->command(-label => 'Undo', # XXX Redo
 		     -command => \&undo_or_redo);
 $mb_project->separator;
-$mb_project->command(-label => 'Today\'s time',
-		     -command => \&today_time);
-$mb_project->command(-label => 'Show one day',
+$mb_project->command(-label => 'Working time',
+		     -command => \&working_time);
+$mb_project->command(-label => 'Daily details',
 		     -command => \&show_one_day);
 
 my $mb_options = $menu_frame->Menubutton(-text => 'Options'
@@ -407,7 +410,7 @@ sub set_timeout {
       ($time_update*1000, sub { &act_time(); } );
 }
 
-sub today_time {
+sub working_time {
     my $sum = 0;
     my $last_4week_time = $today_time - 86400*7*4;
     my $last_week_time = $today_time - 86400*7;
@@ -441,7 +444,9 @@ sub today_time {
 	    "Last week\'s working time (8h-day):   " .
 	    &sec2time($last_week_sum, 'd', 1) . "\n" .
 	    "Last 4 week\'s working time (8h-day): " .
-	    &sec2time($last_4week_sum, 'd', 1),
+	    &sec2time($last_4week_sum, 'd', 1) . "\n" .
+	    "Average per working day:             " .
+	    &sec2time($last_4week_sum/20, 'h', 0)
 	   );
     $d->Show;
 }
@@ -825,7 +830,9 @@ sub set_text_or_image {
     my($widget, $image, $text) = @_;
     # use image if available, otherwise text
     if (-r $image) {
-	eval { $widget->configure(-image => $widget->Photo(-file => $image)) };
+	eval { $widget->configure
+		 (-image => $widget->Photo(-file => Tk::findINC($image)))
+	     };
 	if (!$@) { return }
     } 
     $widget->configure(-text => $text);
@@ -834,7 +841,7 @@ sub set_text_or_image {
 sub make_path {
     my($p) = @_;
     return if !$p;
-    die "wrong arg for make_path: <$p>" if !$p->isa('Project');
+    die "wrong arg for make_path: <$p>" if !$p->isa('Timex::Project');
     my @path = $p->path;
     join($separator, @path[1 .. $#path]);
 }
