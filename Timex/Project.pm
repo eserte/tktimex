@@ -45,6 +45,7 @@ sub new {
     $self->{'parent'} = undef;
     $self->{'modified'} = 1;
     $self->{'separator'} = "/";
+    $pkg = ref $pkg if (ref $pkg);
     bless $self, $pkg;
 }
 
@@ -285,7 +286,8 @@ sub subproject {
     my($self, $label) = @_;
     if (defined $label) {
 	my $sub;
-	if (ref $label !~ /^Timex::Project/) {
+	my $ref_label = ref $label;
+	if (!$ref_label || $ref_label !~ /^Timex::Project/) {
 	    $sub = $self->new($label);
 	} else {
 	    $sub = $label;
@@ -800,9 +802,20 @@ sub save {
 	warn $@;
 	undef;
     } else {
-	print FILE $self->dump_data(%args);
+	my $buf = $self->dump_data(%args);
+	print FILE $buf;
 	close FILE;
-	1;
+	# Filesize could be actually larger, because of different line
+	# endings (so on MS-DOS/Windows)
+	if (-f $file && 
+	    length($buf) <= -s $file) {
+	    1;
+	} else {
+	    $@ = "Expected size " . length($buf) . 
+	      " of file <$file>, but got " . (-s $file) . "\n";
+	    warn $@;
+	    undef;
+	}
     }
 }
 
