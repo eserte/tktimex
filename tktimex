@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.58 2000/08/24 08:53:49 eserte Exp $
+# $Id: tktimex,v 4.59 2000/08/25 02:21:10 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -99,7 +99,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.58 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.59 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -2140,6 +2140,7 @@ sub show_intervals {
     my $geometry      = $args{-geometry};
     my $modified      = $args{-modified};
     my $day           = $args{-day};
+    my $subproj       = $args{-subproj};
 
     if (!defined $project) {
 	$project = entry_to_project(get_sel_entry());
@@ -2155,6 +2156,8 @@ sub show_intervals {
 	    $group = "daily";
 	}
     }
+
+    #$top->Busy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
 
     my @rev;
     if ($project->rcsfile) {
@@ -2182,6 +2185,7 @@ sub show_intervals {
 	$args{-show_seconds} = $show_seconds;
 	$args{-group}        = $group;
 	$args{-modified}     = $modified;
+	$args{-subproj}      = $subproj;
 	$w->destroy;
 	show_intervals($top, $project,
 		       %args);
@@ -2353,10 +2357,7 @@ sub show_intervals {
     my $anchor_set = 0;
     my $last_rev_def;
     my $i = 0;
-    $times = ($group eq ''
-	      ? $project->{'times'}
-	      : [ $project->interval_times($group) ]
-	      );
+    $times = [ $project->interval_times($group, -recursive => $subproj) ];
 
     foreach (@$times) {
 	my($from, $to, $interval) = @$_;
@@ -2426,6 +2427,9 @@ sub show_intervals {
 	}
 	$i++;
     }
+
+    #$top->Unbusy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
+
     if (exists $last_rev_def->{'Time'}) {
 	$lb->itemCreate
 	  ($last_rev_def->{'Item'}, $rev_lifetime_col,
@@ -2445,14 +2449,14 @@ sub show_intervals {
 			)->pack(-side => 'left');
     $f->Label(-text => '  ')->pack(-side => 'left');
     if ($group eq '') {
-	$f->Button(-text => 'Delete',
+	$f->Button(-text => 'Del',
 		   -command => sub {
 		       $project->delete_times($lb->info('selection'));
 		       $modified++;
 		       $update->();
 		   }
 		   )->pack(-side => 'left');
-	$f->Button(-text => 'Insert',
+	$f->Button(-text => 'Ins',
 		   -command => sub {
 		       my @sel = $lb->info('selection');
 		       my $before = (!@sel ? -1 : $sel[$#sel]);
@@ -2472,13 +2476,18 @@ sub show_intervals {
 		   $update->();
 	       }
 	      )->pack(-side => 'left');
-    $f->Label(-text => ' ')->pack(-side => 'left');
     if ($group eq '') {
-	$f->Checkbutton(-text => 'Show seconds',
+	$f->Label(-text => ' ')->pack(-side => 'left');
+	$f->Checkbutton(-text => 'Seconds',
 			-variable => \$show_seconds,
 			-command => sub { $update->() },
 			)->pack(-side => 'left');
     }
+    $f->Label(-text => ' ')->pack(-side => 'left');
+    $f->Checkbutton(-text => 'Subprojects',
+		    -variable => \$subproj,
+		    -command => sub { $update->() },
+		   )->pack(-side => 'left');
 
     require Tk::Optionmenu;
     $f->Label(-text => ' Group:')->pack(-side => 'left');
@@ -2491,8 +2500,8 @@ sub show_intervals {
     $w->bind('<Escape>' => sub { $clb->invoke });
 
     my @popup_args;
-    push @popup_args, (-popover => 'cursor') unless $geometry;
-    $w->Popup;
+    #push @popup_args, (-popover => 'cursor') unless $geometry;
+    $w->Popup; #(@popup_args);
     if ($geometry) {
 	$w->geometry($geometry);
     }
