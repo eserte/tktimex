@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: MultiProject.pm,v 1.1 2001/04/04 21:35:04 eserte Exp $
+# $Id: MultiProject.pm,v 1.2 2001/04/04 21:50:13 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Slaven Rezic. All rights reserved.
@@ -24,7 +24,10 @@ Timex::MultiProject - manage a number of project files
 =cut
 
 package Timex::MultiProject;
+
 use strict;
+use vars qw($AUTOLOAD);
+
 use Timex::Project;
 use File::Basename;
 
@@ -131,8 +134,9 @@ sub AUTOLOAD {
     my $cmd = <<EOF;
 sub $AUTOLOAD { shift->{MasterProject}->$base(\@_) }
 EOF
-    warn $cmd;
-    die;
+    #warn $cmd;
+    eval $cmd;
+    die $@ if $@;
     goto &$AUTOLOAD;
 }
 
