@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.65 2000/09/02 22:19:36 eserte Exp $
+# $Id: tktimex,v 4.66 2000/09/02 22:27:02 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -101,7 +101,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.65 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.66 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -1316,35 +1316,46 @@ sub show_one_day {
 	     }
 	    )->grid(-row => 1, -column => 0, -sticky => "e");
 
-	my $c = $df->Canvas
-	    (-width => 20,
-	     -height => 40, #XXX$dw->reqheight + $dw_to->reqheight + 5,
-	     -takefocus => 0,
-	     -highlightthickness => 0,
-	    )->grid(-row => 0, -column => 1, -rowspan => 2);
-	$c->createLine(5,5, 10,5, 15,10, 15,30, 10,35, 5,35, # XXX verwendung von reqheight etc.
-		       -width => 5, -smooth => 1,
-		       -tags => "chain");
-	my $orig_bg  = $c->cget(-bg);
-	$c->Tk::bind('<Enter>' => sub {
-			 $c->itemconfigure("chain", -fill => 'grey50');
-		     }); # XXX
-	$c->Tk::bind('<Leave>' => sub {
-			 $c->itemconfigure("chain", -fill => "black");
-		     });
-	$adjust_chain = sub {
-	    if ($one_day_only) {
-		$c->delete("broken");
-	    } else {
-		$c->createRectangle(0,13,20,27,-fill=>$orig_bg,
-				    -outline=>undef,
-				    -tags=>"broken");
-	    }
+	my $c;
+
+	my $setup_chain = sub {
+	    $dw_to->update; # XXX wollte ich eigentlich vermeiden
+	    my $h = $dw_to->y - $dw->y + $dw_to->height;
+	    my $h_step = $h*5/40;
+
+	    $c = $df->Canvas
+		(-width => 20,
+		 -height => $h,
+		 -takefocus => 0,
+		 -highlightthickness => 0,
+		)->grid(-row => 0, -column => 1, -rowspan => 2);
+	    $c->createLine(5,$h_step*2, 10,$h_step*2,
+			   15,$h_step*3, 15,$h_step*5,
+			   10,$h_step*6, 5,$h_step*6,
+			   -width => $h_step, -smooth => 1,
+			   -tags => "chain");
+	    my $orig_bg  = $c->cget(-bg);
+	    $c->Tk::bind('<Enter>' => sub {
+			     $c->itemconfigure("chain", -fill => 'grey50');
+			 });
+	    $c->Tk::bind('<Leave>' => sub {
+			     $c->itemconfigure("chain", -fill => "black");
+			 });
+	    $adjust_chain = sub {
+		if ($one_day_only) {
+		    $c->delete("broken");
+		} else {
+		    $c->createRectangle(0,16/40*$h,20,23/40*$h,-fill=>$orig_bg,
+					-outline=>undef,
+					-tags=>"broken");
+		}
+	    };
+	    $c->Tk::bind('<1>' => sub {
+			     $no_interval_cb->toggle;
+			     $adjust_chain->();
+			 });
 	};
-	$c->Tk::bind('<1>' => sub {
-			 $no_interval_cb->toggle;
-			 $adjust_chain->();
-		     });
+	$df->afterIdle($setup_chain);
     } else {
 	if ($has_date_entry) {
 	    $dw = $f->DateEntry
