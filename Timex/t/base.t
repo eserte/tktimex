@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: base.t,v 1.3 1999/04/01 08:08:27 eserte Exp $
+# $Id: base.t,v 1.4 1999/04/01 15:43:15 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -184,6 +184,10 @@ $sp->move_times_after(1, -1);
 print $sp->parent->dump_data;
 $sp->sort_times;
 print $sp->parent->dump_data;
+
+print "Before delete of " . $sp->pathname . ":\n" . $p2->dump_data;
+$sp->delete;
+print "After delete:\n" . $p2->dump_data;
 
 print
     "All subprojects of " . $p2->label . ":\n",
