@@ -397,10 +397,8 @@ sub update_cached_time {
     my $self = shift;
     while(my($from, $k) = each %{ $self->{'cached_time'} }) {
 	delete $self->{'cached_time'}{$from};
-warn "delete $from";
 #	$self->{'cached_time'}{$from} = $self->sum_time($from, undef);
     }
-warn scalar keys %{ $self->{'cached_time'} };
 }
 
 =head2 archived
