@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.40 1999/06/26 00:49:26 eserte Exp $
+# $Id: tktimex,v 4.41 1999/06/29 00:43:56 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -80,7 +80,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.40 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.41 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = 1; # gefährlich für win...
@@ -112,6 +112,8 @@ my $status_edit = 0;
 my $last_projects;
 my $max_last_projects = 4;
 my $home = get_home_dir();
+my $inner_fg = "black";
+my $inner_bg = "white";
 
 my $options = {};
 my @opttable =
@@ -153,8 +155,10 @@ if ($@) {
     my @getopt;
     push @getopt, $options;
     foreach (@opttable) {
-	$options->{$_->[0]} = $_->[2] if defined $_->[2];
-	push @getopt, $_->[0] . $_->[1];
+	if (ref $_ eq 'ARRAY') {
+	    $options->{$_->[0]} = $_->[2] if defined $_->[2];
+	    push @getopt, $_->[0] . $_->[1];
+	}
     }
     die "Usage?" if !Getopt::Long::GetOptions(@getopt);
 } else {
@@ -381,6 +385,8 @@ $menu_frame->pack(-fill => 'x');
 
 my $project_frame = $top->Scrolled
   ('HList', -scrollbars => 'osoe',
+   -bg => $inner_bg,
+   -fg => $inner_fg,
    -columns => 4,
    -height => 1,
    -drawbranch => 1,
@@ -481,7 +487,9 @@ sub enter_label {
     my $res = '';
     $status_edit++;
     $status_text->configure(-text => 'Project name:');
-    my $entry = $status_frame->Entry(-textvariable => \$res,
+    my $entry = $status_frame->Entry(-bg => $inner_bg,
+				     -fg => $inner_fg,
+				     -textvariable => \$res,
 				     -width => 30);
     $entry->pack(-side => 'left');
     $entry->waitVisibility;
@@ -896,9 +904,13 @@ sub working_time {
 }
 
 sub show_one_day {
+    my($inner_bg_opt, $inner_fg_opt) = ('-bg', '-fg');
     eval {
 	require Tk::Date;
 	Tk::Date->VERSION(0.27);
+	if ($Tk::Date::VERSION >= 0.30) {
+	    ($inner_bg_opt, $inner_fg_opt) = ('-innerbg', '-innerfg');
+	}
     };
     my $has_date = !$@;
     if (!$has_date) {
@@ -910,7 +922,9 @@ sub show_one_day {
     my $dw;
     if ($has_date) {
 	$dw = $f->Date
-	  (-fields => 'date',
+	  ($inner_bg_opt => $inner_bg,
+	   $inner_fg_opt => $inner_fg,
+	   -fields => 'date',
 	   -value => 'now',
 	   -datefmt => "%12A, %2d.%2m.%4y",
 	   -choices => [qw(today yesterday),
@@ -924,7 +938,9 @@ sub show_one_day {
 	   }
 	  )->pack;
     } else {
-	$dw = $f->Entry->pack;
+	$dw = $f->Entry(-bg => $inner_bg,
+			-fg => $inner_fg,
+		       )->pack;
 	my(@l) = localtime;
 	$dw->insert(0, "$l[3]." . ($l[4]+1) . "." . ($l[5]+1900));
 	$dw->bind('<Return>' => sub {
@@ -955,6 +971,8 @@ sub show_one_day {
 		      },
 		    )->pack(-side => 'left');
     my $lb = $f->Scrolled('HList',
+			  -bg => $inner_bg,
+			  -fg => $inner_fg,
 			  -columns => 2,
 			  -width => 40,
 			  -header => 1,
@@ -1518,7 +1536,9 @@ sub show_attributes {
     $f->Label(-text => 'Name: ')->grid(-row => $row, -column => 0,
 				       -sticky => 'w');
     my $label = $project->label;
-    my $name_entry = $f->Entry(-textvariable => \$label
+    my $name_entry = $f->Entry(-bg => $inner_bg,
+			       -fg => $inner_fg,
+			       -textvariable => \$label
 			      )->grid(-row => $row, -column => 1,
 				      -sticky => 'w');
     if ($readonly) { $name_entry->configure(-state => 'disabled') }
@@ -1551,6 +1571,8 @@ sub show_attributes {
     $row++;
     my $browse = $f->$combo(-label => "New Parent",
 			    -variable => \$new_parent,
+			    -bg => $inner_bg,
+			    -fg => $inner_fg,
 			    %combo_args);
     if ($readonly) {
 	$browse->configure(-state => 'disabled')
@@ -1575,7 +1597,9 @@ sub show_attributes {
     $row++;
     $f->Label(-text => 'RCS file:'
 	     )->grid(-row => $row, -column => 0, -sticky => 'w');
-    $f->Entry(-textvariable => \$rcsfile
+    $f->Entry(-bg => $inner_bg,
+	      -fg => $inner_fg,
+	      -textvariable => \$rcsfile
 	     )->grid(-row => $row, -column => 1, -sticky => 'w');
     $f->Button
       (-text => 'Browse...',
@@ -1702,26 +1726,38 @@ sub show_intervals {
 	my $i = shift;
 	return if $readonly;
 	my $has_date;
+	my($inner_bg_opt, $inner_fg_opt) = ('-bg', '-fg');
 	eval {
 	    require Tk::Date;
 	    $has_date = 1 if !$@;
+	    if ($Tk::Date::VERSION >= 0.30) {
+		($inner_bg_opt, $inner_fg_opt) = ('-innerbg', '-innerfg');
+	    }
 	};
 	my $t = $w->Toplevel(-title => "Edit line $i");
 	my($from, $to) = @{$project->{'times'}[$i]};
 	$t->Label(-text => 'From:')->grid(-row => 0, -column => 0);
 	my $from_date = ($has_date
-			 ? $t->Date(-variable => \$from,
+			 ? $t->Date($inner_bg_opt => $inner_bg,
+				    $inner_fg_opt => $inner_fg,
+				    -variable => \$from,
 				    -choices => 'now',
 				    )
-			 : $t->Entry(-textvariable => \$from)
+			 : $t->Entry(-bg => $inner_bg,
+				     -fg => $inner_fg,
+				     -textvariable => \$from)
 			 );
 	$from_date->grid(-row => 0, -column => 1);
 	$t->Label(-text => 'To:')->grid(-row => 1, -column => 0);
 	my $to_date = ($has_date
-		       ? $t->Date(-variable => \$to,
+		       ? $t->Date($inner_bg_opt => $inner_bg,
+				  $inner_fg_opt => $inner_fg,
+				  -variable => \$to,
 				  -choices => 'now',
 				  )
-		       : $t->Entry(-textvariable => \$to)
+		       : $t->Entry(-bg => $inner_bg,
+				   -fg => $inner_fg,
+				   -textvariable => \$to)
 		       );
 	$to_date->grid(-row => 1, -column => 1);
 	my $f = $t->Frame->grid(-row => 2, -column => 0, -columnspan => 2);
@@ -1759,6 +1795,8 @@ sub show_intervals {
     $no_cols ++   if $show_seconds and !$daily; # für To-Spalte
     $no_cols += 2 if @rev;
     $lb = $w->Scrolled('HList', -scrollbars => 'osoe',
+		       -bg => $inner_bg,
+		       -fg => $inner_fg,
 		       -columns => $no_cols,
 		       -width => 80,
 		       -header => 1,
