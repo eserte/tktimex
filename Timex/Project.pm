@@ -44,6 +44,17 @@ sub label {
     }
 }
 
+sub path {
+    my($self) = @_;
+    my @path;
+    if (!defined $self->parent) {
+	@path = ($self->label);
+    } else {
+	@path = ($self->parent->path, $self->label);
+    }
+    wantarray ? @path : \@path;
+}
+
 sub parent {
     my($self, $parent) = @_;
     if (defined $parent) {
@@ -74,6 +85,13 @@ sub delete_subproject {
     $self->{'subprojects'} = \@newsubprojects;
 }
 
+sub delete_all {
+    my($self) = @_;
+    foreach ($self->subproject) {
+	$self->delete_subproject($_);
+    }
+}
+
 sub subproject {
     my($self, $label) = @_;
     if (defined $label) {
@@ -88,7 +106,7 @@ sub subproject {
 	$self->modified(1);
 	$sub;
     } else {
-	$self->{'subprojects'};
+	wantarray ? @{$self->{'subprojects'}} : $self->{'subprojects'};
     }
 }
 
@@ -253,6 +271,7 @@ sub dump_data {
     my $res;
     if (!$indent) {
 	$res = "$magic $emacsmode\n";
+	$indent = 0; # because of $^W
     } else {
 	$res .= (">" x $indent) . "$self->{'label'}\n";
 	$res .= "/archived=$self->{'archived'}\n";
@@ -350,6 +369,15 @@ sub interpret_data_project {
 
     $i;
 }
+
+=head2 load
+
+    $r = $project->load($filename)
+
+Loads the project file $filename and returns true if the loading was
+successfull. New data is merged to the existing project.
+
+=cut
 
 sub load {
     my($self, $file) = @_;
