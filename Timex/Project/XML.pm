@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: XML.pm,v 1.6 2000/11/28 01:50:27 eserte Exp $
+# $Id: XML.pm,v 1.7 2000/12/07 23:04:36 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -90,6 +90,7 @@ sub dump_data_subproject { # XXX note is missing...
     foreach my $attr (@Timex::Project::attributes) {
 	$res .= " $attr='" . convert1($p->{$attr}) . "'"
 	    if defined $p->{$attr} and $p->{$attr} ne "";
+    }
     $res .=     ">\n";
     $res .= $is." <times>\n";
     foreach my $ts (@{ $p->{'times'} }) {
