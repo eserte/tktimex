@@ -53,6 +53,26 @@ sub parent {
     }
 }
 
+sub reparent {
+    my($self, $newparent) = @_;
+    my $oldparent = $self->parent;
+    # don't become a child of a descended project :-)
+    return if $self->is_descendent($newparent);
+    return if !$oldparent;         # don't reparent root
+    $oldparent->delete_subproject($self);
+    $newparent->subproject($self);
+}
+
+sub delete_subproject {
+    my($self, $subp) = @_;
+    my @subprojects = @{$self->subproject};
+    my @newsubprojects;
+    foreach (@subprojects) {
+	push(@newsubprojects, $_) unless $_ eq $subp;
+    }
+    $self->{'subprojects'} = \@newsubprojects;
+}
+
 sub subproject {
     my($self, $label) = @_;
     if (defined $label) {
@@ -78,6 +98,36 @@ sub level {
     } else {
 	$self->{'parent'}->level + 1;
     }
+}
+
+sub find_by_label {
+    my($self, $label) = @_;
+    return $self if $self->label eq $label;
+    foreach (@{$self->subproject}) {
+	my $r = $_->find_by_label($label);
+	return $r if defined $r;
+    }
+    return undef;
+}
+
+sub is_descendent {
+    my($self, $project) = @_;
+    return 1 if $self eq $project;
+    foreach (@{$self->subproject}) {
+	my $r = $_->is_descendent($project);
+	return 1 if $r;
+    }
+    0;
+}
+
+sub all_labels {
+    my $self = shift;
+    my $labels;
+    push(@$labels, $self->label);
+    foreach (@{$self->subproject}) {
+	push(@$labels, @{$_->all_labels});
+    }
+    $labels;
 }
 
 sub start_time {
