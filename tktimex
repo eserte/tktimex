@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 1.2 1996/10/28 10:31:23 eserte Exp $
+# $Id: tktimex,v 1.3 1996/10/28 12:12:42 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -155,15 +155,22 @@ my $top = new MainWindow;
 $top->protocol('WM_DELETE_WINDOW', \&quit_program);
 
 my $quit_dialog;
-my $datafile = 'mytimex.data';
+my $copyright = 'tktimex © 1996 Slaven Rezic';
+my $datafile = '/home/e/eserte/private/log/mytimex.data';
+#my $datafile = "/tmp/mytimex.data";
 my $current_project_index = undef;
 my $start_session_time = time;
 my $time_after;
-my $time_update = 1; #60;
+my $time_update = 60;
+my $autosave_after;
+my $autosave_update = 60*20;
+my $autosave = 1;
 my @nowtime = localtime;
 my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
 my @projects_in_text;
 my %projects_in_text;
+my $project_status = "Left: Start/Stop | Right: Create Subproject";
+
 #my $menu_frame = $top->Frame;
 #$menu_frame->pack(-expand => 1, -fill => 'x');
 
@@ -180,28 +187,41 @@ $buttons_frame->Button(-text => 'Pause',
 		       -command => \&pause)->pack(-side => 'left');
 $buttons_frame->Button(-text => 'Quit',
 		       -command => \&quit_program)->pack(-side => 'left');
+# XXX es reicht nicht, nur die Variable zu setzen ...
+$buttons_frame->Checkbutton(-text => 'Autosave',
+			    -variable => \$autosave)->pack(-side => 'left');
 
 my $project_frame = $top->Frame;
 $project_frame->pack(-expand => 1, -fill => 'both');
-my $header_text = $project_frame->ROText(-tabs => ['4c', '6.5c', '9c'],
-					 -width => 63,
-					 -height => 2,
-					 -relief => 'ridge');
+my $header_text = $project_frame->Text(-tabs => ['4c', '6.5c', '9c'],
+				       -width => 63,
+				       -height => 2,
+				       -cursor => 'left_ptr',
+				       -relief => 'ridge');
 $header_text->pack(-expand => 1, -fill => 'x');
 $header_text->insert('1.0', "\t\tTime\nProjects:\tSession\tToday\tAll");
+$header_text->bindtags(qw(dummy));
 
-my $projects_text = $project_frame->Scrolled('ROText',
-					     -scrollbars => 'e',
-					     -tabs => ['4c', '6.5c', '9c'],
-					     -width => 63,
-					     -height => 10,
-					     -relief => 'ridge');
+my $projects_scrollbar = $project_frame->Scrollbar(-orient => 'vertical');
+$projects_scrollbar->pack(-side => 'right', -fill => 'y');
+my $projects_text = $project_frame->Text
+  (-yscrollcommand => [$projects_scrollbar => 'set'],
+   -tabs => ['4c', '6.5c', '9c'],
+   -width => 63,
+   -height => 10,
+   -spacing1 => 1,
+   -spacing3 => 1,
+   -cursor => 'left_ptr',
+   -relief => 'ridge');
+$projects_scrollbar->configure(-command => [$projects_text => 'yview']);
 $projects_text->pack(-expand => 1, -fill => 'both');
 $projects_text->bindtags(qw(dummy));
 $projects_text->tagConfigure('running',
 			     -relief => 'raised',
 			     -borderwidth => 1,
 			     -background  => 'SeaGreen3');
+$projects_text->tagConfigure('project',
+			     -underline => 1);
 $projects_text->tagBind('project',
 			"<Button-1>" =>
 			sub { &start_stop($projects_text->index('current')) });
@@ -212,8 +232,15 @@ $projects_text->tagBind('project',
 my $status_frame = $top->Frame(-relief => 'ridge',
 			       -bd => 1);
 $status_frame->pack(-expand => 1, -fill => 'x');
-my $status_text = $status_frame->Label(-text => 'tktimex (c) 1996 Slaven Rezic');
+my $status_text = $status_frame->Label(-text => $copyright);
 $status_text->pack(-side => 'left');
+
+$projects_text->tagBind('project',
+			"<Enter>" =>
+			sub { $status_text->configure(-text => $project_status); });
+$projects_text->tagBind('project',
+			"<Leave>" =>
+			sub { $status_text->configure(-text => $copyright); });
 
 MainLoop;
 
@@ -224,14 +251,14 @@ sub enter_label {
 				     -width => 30);
     $entry->pack(-side => 'left');
     $entry->waitVisibility;
-#    $entry->grab;
+    $entry->grab;
     $entry->focus;
     $entry->bind("<Return>", sub { $action = 'yes' });
     $entry->bind("<Escape>", sub { $action = 'no' });
     $entry->waitVariable(\$action);
-#    $entry->grabRelease;
+    $entry->grabRelease;
     $entry->destroy;
-    $status_text->configure(-text => '');
+    $status_text->configure(-text => $copyright);
     $action eq 'yes' ? $res : undef;
 }
 
@@ -267,8 +294,10 @@ sub insert_project {
     $projects_in_text{$p} = $index;
     $projects_text->insert
       ($after, 
-       ("-" x ($indent-1)) . ($indent ? "> " : "") .
-       $label, ["label-$index", "project-$index", 'project'],
+       ("-" x ($indent-1)) . ($indent ? "> " : ""),
+       [$project-$index],
+       $label,
+       ["label-$index", "project-$index", 'project'],
        "\t" . &sec2time($p->sum_time($start_session_time, 1)) .
        "\t" . &sec2time($p->sum_time($today_time, 1)) .
        "\t" . &sec2time($p->sum_time(0, 1)) . "\n",
@@ -355,7 +384,7 @@ sub load_file {
 #    my $pool;
     # XXX warum dieser Workaround und kein 'do $datafile' ?
     if (!open(D, $datafile)) {
-	warn "No $datafile!";
+	$status_text->configure(-text => "No $datafile!");
 	return;
     }
     local($/) = undef;
@@ -370,6 +399,8 @@ sub load_file {
     foreach (@{$pool}) {
 	&insert_old_project($_, 0);
     }
+
+    &set_autosave;
 }
 
 sub insert_old_project {
@@ -381,16 +412,39 @@ sub insert_old_project {
 }
 
 sub save_file {
+    my $autosave = shift;
+
     if (defined $current_project_index) {
 	$projects_in_text[$current_project_index]->end_time;
     }
+
+    if (!autosave) {
+	foreach (reverse(0 .. 8)) {
+	    rename "$datafile.$_", "$datafile." . ($_+1);
+	}
+    }
+    rename $datafile, "$datafile.0";
+
     if (!open(OUT, ">$datafile")) {
-	warn "Can't write to $datafile";
+	$status_text->configure(-text => "Can't write to $datafile");
 	return;
     }
     $Data::Dumper::Purity = 1;
     print OUT Data::Dumper->Dump([Project->pool], ['pool']), "\n";
     close OUT;
+    $status_text->configure(-text => "Saved $datafile");
+
+    &set_autosave;
+}
+
+sub set_autosave {
+    if ($autosave) {
+	if (defined $autosave_after) {
+	    $autosave_after->cancel;
+	}
+	$autosave_after = $top->after($autosave_update*1000,
+				      sub { &save_file(1) });
+    }
 }
 
 sub quit_program {
@@ -413,15 +467,7 @@ sub sec2time {
     $hour = int($sec / 1440);
     $sec  = $sec % 1440;
     $min  = int($sec / 60);
-#    sprintf("%3dd %02d:%02d", $day, $hour, $min);
-    sprintf("%02d:%02d:%02d", $hour, $min, $sec % 60); # XXX Test
+    sprintf("%3dd %02d:%02d", $day, $hour, $min);
+#    sprintf("%02d:%02d:%02d", $hour, $min, $sec % 60); # XXX Test
 }
 
-#my $p = new Project("IHK-CGI");
-#my $r = new Project("IHK Diskversion");
-#my $s = $p->subproject("agrep");
-#$p->start_time(time-30); $p->end_time(time-20);
-#$p->start_time(time-10); $p->end_time(time+40);
-#$s->start_time(time-40);
-#print STDERR Data::Dumper->Dump([Project->pool], ['pool']), "\n";
-#print STDERR $p->sum_time(time-20,1),"\n";
