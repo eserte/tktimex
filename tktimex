@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.7 1998/02/03 03:36:22 eserte Exp $
+# $Id: tktimex,v 4.8 1998/02/10 16:53:36 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -75,7 +75,9 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.7 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.8 $ =~ /(\d+)\.(\d+)/);
+
+my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
 my $root = new Timex::Project;
 
@@ -137,6 +139,8 @@ $mb_file->command(-label => 'Save',
 		  -command => \&save_file);
 $mb_file->command(-label => 'Save as ...',
 		  -command => \&save_as_file);
+$mb_file->command(-label => 'Merge',
+		  -command => \&merge_file);
 $mb_file->command(-label => 'Dump',
 		  -command => \&dump_data);
 $mb_file->command(-label => 'Quit',
@@ -777,12 +781,36 @@ sub save_as_file {
     save_file($autosave);
 }
 
+sub merge_file {
+    my $path = dirname($options->{'file'});
+    my $file = get_filename($top,
+			    -Title => 'Enter project file for merge',
+			    -Path => $path,
+			    -FPat => '*.pj1',
+			    -Create => 0);
+    return unless $file;
+
+    my $new_project = new Timex::Project;
+    if (!$new_project->load($file)) {
+	$status_text->configure(-text => $@);
+	return;
+    }
+    my $diff = $root->merge($new_project);
+    $status_text->configure
+      (-text => "Merge completed with $diff differences"); 
+}
+
 sub get_filename {
     my($top, %args) = @_;
     my $filedialog = 'FileDialog';
     my %change_opt;
-    eval { require Tk::FileDialog };
+    if ($os eq 'win') {
+	$@ = "XXX Tk::FileDialog does not work with win32";
+    } else {
+	eval { require Tk::FileDialog };
+    }
     if ($@) {
+	warn "Harmless warning:\n$@\n";
 	require Tk::FileSelect;
 	$filedialog = 'FileSelect';
 	%change_opt = (-FPat   => '-filter',
