@@ -68,13 +68,23 @@ sub path {
     wantarray ? @path : \@path;
 }
 
-sub pathname {
+sub pathname { # virtual pathname!
     my($self) = @_;
     my @path = $self->path;
     if (!defined $path[0] || $path[0] eq '') {
 	shift @path;
     }
     join("/", @path);
+}
+
+sub rcsfile {
+    my($self, $rcsfile) = @_;
+    if (defined $rcsfile) {
+	$self->{'rcsfile'} = $rcsfile;
+	$self->modified(1);
+    } else {
+	$self->{'rcsfile'};
+    }
 }
 
 sub parent {
@@ -359,6 +369,7 @@ sub dump_data {
     } else {
 	$res .= (">" x $indent) . "$self->{'label'}\n";
 	$res .= "/archived=$self->{'archived'}\n";
+	$res .= "/rcsfile=" . $self->rcsfile . "\n" if $self->rcsfile;
 	my $time;
 	foreach $time (@{$self->{'times'}}) {
 	    $res .= "|" . $time->[0];
@@ -393,7 +404,8 @@ sub interpret_data {
     my $i = $[;
     
     if ($data->[$i] !~ /^$magic/) {
-	warn "Wrong magic!";
+	$@ = "Wrong magic!";
+	warn $@;
 	return undef;
     }
     $i++;
@@ -409,7 +421,8 @@ sub interpret_data_project {
     my($indent, $self);
     while(defined $data->[$i]) {
 	if ($data->[$i] !~ /^>+/) {
-	    warn 'Project does not begin with ">"';
+	    $@ = 'Project does not begin with ">"';
+	    warn $@;
 	    return undef;
 	}
 	my $label = $';
@@ -446,7 +459,10 @@ sub interpret_data_project {
 #		print STDERR (">" x $indent) . $label, "\n";
 		$self = new Timex::Project $label;
 		$self->{'times'} = \@times;
-		$self->{'archived'} = $attributes{'archived'};
+		$self->{'archived'} = delete $attributes{'archived'};
+		$self->{'rcsfile'}  = delete $attributes{'rcsfile'};
+		warn "Unknown attributes: " . join(" ", %attributes)
+		  if %attributes;
 		$parent->subproject($self);
 	    }
 	}
