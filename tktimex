@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.30 1999/03/15 23:24:40 eserte Exp $
+# $Id: tktimex,v 4.31 1999/03/18 17:55:04 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -80,7 +80,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.30 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.31 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 my $can_lock = ($os eq 'unix');
@@ -297,10 +297,35 @@ $mb_help->command
        $status_text->configure(-text => substr($@, 0, 40) . "...") if $@;
    });
 
-my $save_check = $menu_frame->Checkbutton(-text => '*',
-					  -variable => \$root->{'modified'},
-					  -state => 'disabled',
-					 )->pack(-side => 'right');
+my $save_check;
+my($mod_watch, $mod_sub);
+# Aus mir völlig unerklärlichen Gründen muß sich mod_sub außerhalb
+# des evals befinden (perl5.00404)
+$mod_sub = sub {
+    my($self, $newval) = @_;
+    if ($newval) {
+	$save_check->configure(-bg => 'red');
+    } else {
+	$save_check->configure(-bg => 'green');
+    }
+    $self->Store($newval) if $self;
+};
+eval {
+    require Tie::Watch;
+    $save_check = $menu_frame->Label(-padx => 4, -relief => 'raised');
+ 
+    $mod_watch = Tie::Watch->new(-variable => \$root->{'modified'},
+				 -store => $mod_sub,
+				);
+    $mod_sub->();
+};
+if (!$mod_watch || $@) {
+    $save_check = $menu_frame->Checkbutton(-text => '*',
+					   -variable => \$root->{'modified'},
+					   -state => 'disabled',
+					  );
+}
+$save_check->pack(-side => 'right');
 $balloon->attach($save_check, -msg => 'File saved indicator') if $balloon;
 
 my $pause_cont_button = $menu_frame->Button
@@ -392,6 +417,7 @@ $opt->process_options if defined $opt;
 &set_time_update();
 
 $root->modified(0);
+
 if ($options->{'file'}) {
     load_file(0);
     load_last_projects();
@@ -933,7 +959,15 @@ sub load_file {
     &insert_all;
     &set_autosave;
     $root->modified(0);
-    $save_check->configure(-variable => \$root->{'modified'});
+    if ($mod_watch) {
+	$mod_watch->Delete;
+	$mod_watch = Tie::Watch->new(-variable => \$root->{'modified'},
+				     -store => $mod_sub,
+				    );
+	$mod_sub->();
+    } else {
+	$save_check->configure(-variable => \$root->{'modified'});
+    }
     my $last_project = $root->last_project;
     if ($last_project) {
 	my $last_project_path = make_path($last_project);
@@ -1206,12 +1240,18 @@ sub get_filename {
 	    ($defaultextension = $args{'-FPat'}) =~ s/^\*//;
 	}
     }
+
     if ($args{-Create} && $top->can('getSaveFile')) {
 	my $file = $top->getSaveFile
 	  (-initialdir => $args{-Path},
 	   -initialfile => $args{'File'},
 	   -defaultextension => $defaultextension,
-	   -title => $args{-Title});
+	   -title => $args{-Title},
+	   ($Tk::VERSION >= 800.012 && $args{'-FPat'} =~ /pj1/ ?
+	    (-filetypes => [['Timex files', '.pj1'],
+			    ['All files',  '*']])
+	    : ()),
+	  );
 	return $file;
     } elsif (!$args{-Create} && $top->can('getOpenFile')) {
 	my $file = $top->getOpenFile
