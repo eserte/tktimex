@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.55 2000/08/01 19:35:22 eserte Exp $
+# $Id: tktimex,v 4.56 2000/08/01 23:50:03 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -99,7 +99,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.55 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.56 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -258,7 +258,7 @@ $top->protocol('WM_SAVE_YOURSELF',
 		     $top->command("$^X $0 $options->{'file'}");
 		     $top->destroy;
 		 });
-$SIG{'HUP'} = sub { save_sos(); $top->destroy; };
+$SIG{'HUP'} = sub { save_sos(); };
 
 $top->title($title);
 $top->geometry($options->{'geometry'}) if $options->{'geometry'};
@@ -1674,6 +1674,26 @@ sub save_sos {
     if (defined $current_project) {
 	$current_project->unend_time;
     }
+
+    eval {
+	require Mail::Send;
+	my $msg = Mail::Send->new;
+	$msg->to((getpwuid($<))[0]);
+	$msg->subject("tktimex: sos file");
+	my $fh = $msg->open;
+	print $fh <<EOF;
+A copy of your tktimex data is saved in $file.
+Please check whether the data is complete, then copy this file
+as your tktimex data file with:
+
+    @{[
+         $os eq 'win' ? "copy" : "cp"
+      ]} $file $options->{'file'}
+
+EOF
+        $fh->close;
+    };
+    warn $@ if $@;
 }
 
 sub _overwrite_warning {
