@@ -55,6 +55,15 @@ sub path {
     wantarray ? @path : \@path;
 }
 
+sub pathname {
+    my($self) = @_;
+    my @path = $self->path;
+    if (!defined $path[0] || $path[0] eq '') {
+	shift @path;
+    }
+    join("/", @path);
+}
+
 sub parent {
     my($self, $parent) = @_;
     if (defined $parent) {
@@ -126,6 +135,7 @@ sub sorted_subprojects {
 
 sub _in_interval {
     my($myfrom, $myto, $from, $to) = @_;
+    return undef if !defined $myfrom || !defined $myto;
     ((!defined $from || $myfrom >= $from) &&
      (!defined $to || $myfrom <= $to))    ||
     ((!defined $from || $myto >= $from) &&
@@ -181,12 +191,22 @@ sub is_descendent {
 
 sub all_labels {
     my $self = shift;
-    my $labels;
-    push(@$labels, $self->label);
+    my @labels;
+    push(@labels, $self->label);
     foreach (@{$self->subproject}) {
-	push(@$labels, @{$_->all_labels});
+	push(@labels, $_->all_labels);
     }
-    $labels;
+    wantarray ? @labels : \@labels;
+}
+
+sub all_pathnames {
+    my $self = shift;
+    my @pathnames;
+    push(@pathnames, $self->pathname);
+    foreach (@{$self->subproject}) {
+	push(@pathnames, $_->all_pathnames);
+    }
+    wantarray ? @pathnames : \@pathnames;
 }
 
 sub start_time {
