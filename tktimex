@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.71 2000/09/19 23:40:03 eserte Exp $
+# $Id: tktimex,v 4.72 2000/09/20 02:02:44 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -101,7 +101,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.71 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.72 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -1507,7 +1507,7 @@ sub show_one_day {
 	   -command => sub {
 	       my $begin_date = $dw->get("%s");
 	       $begin_date = Tk::Date::_begin_of_day($begin_date);
-	       daily_intervals($begin_date, $begin_date+86400);
+	       daily_intervals($begin_date, $begin_date+86400-1);
 	   },
 	   -padx => 0, -pady => 0);
 	$di->place(-rely => 1, '-y' => -$di->reqheight,
@@ -1534,6 +1534,16 @@ sub daily_intervals {
 	    $c->itemconfigure($new_it, -fill => "green", -tags => "hi");
 	}
     };
+
+    my @utmp_lines;
+    eval {
+	require Timex::Utmp;
+	my $utmp = new Timex::Utmp;
+	$utmp->init;
+	@utmp_lines = $utmp->restrict(User => ((getpwuid($<))[0]),
+				      From => $begin_date,
+				      To   => $end_date);
+    }; warn $@ if $@;
 
     $lb = $t->Scrolled
 	('HList', -scrollbars => "oso$sbside",
@@ -1576,6 +1586,8 @@ sub daily_intervals {
 		 }
 	     });
 
+    my $str_time = sub { POSIX::strftime("%H:%M:%S", localtime $_[0]) };
+
     my @res_times = $root->restricted_times($begin_date, $end_date);
     my $i = 0;
     my $fill_color = "red";
@@ -1588,8 +1600,8 @@ sub daily_intervals {
 		 ($hl_entry{$fill_color}
 		  ? (-style => $hl_entry{$fill_color}) : ()));
 
-	my $begin_time = POSIX::strftime("%H:%M:%S", localtime $_->[1]);
-	my $end_time   = POSIX::strftime("%H:%M:%S", localtime $_->[2]);
+	my $begin_time = $str_time->($_->[1]);
+	my $end_time   = $str_time->($_->[2]);
 
 	$lb->itemCreate($i, 1, -text => $begin_time,
 			($hl_entry{$fill_color}
@@ -1607,7 +1619,6 @@ sub daily_intervals {
 	   $end_y,
 	   $end_angle) = _get_tic_pos($c, $clock[0], $clock[1], $end_time);
 
-	my($midx, $midy);
 	if ($begin_clock == $end_clock) {
 	    $c->createArc($clock[$begin_clock]->[0], $clock[$begin_clock]->[1],
 			  $clock[$begin_clock]->[0]+$clock[$begin_clock]->[2],
@@ -1636,12 +1647,61 @@ sub daily_intervals {
 			 );
 	}
 
-	$c->raise('tics');
-
 	$fill_color = ($fill_color eq 'red' ? 'blue' : 'red');
 
 	$i++;
     }
+
+    my @utmp_canvas_args = (-fill => 'yellow',
+			    -stipple => 'gray50',
+			    -tags => "uptime",
+			    -outline => undef,
+			   );
+
+    foreach my $utmp_line (@utmp_lines) {
+
+	my $begin_time = $str_time->($utmp_line->{Begin});
+	my $end_time   = $str_time->($utmp_line->{End});
+
+	my($begin_clock,
+	   $begin_x,
+	   $begin_y,
+	   $begin_angle) = _get_tic_pos($c, $clock[0], $clock[1], $begin_time);
+	my($end_clock,
+	   $end_x,
+	   $end_y,
+	   $end_angle) = _get_tic_pos($c, $clock[0], $clock[1], $end_time);
+
+	if ($begin_clock == $end_clock) {
+	    $c->createArc($clock[$begin_clock]->[0], $clock[$begin_clock]->[1],
+			  $clock[$begin_clock]->[0]+$clock[$begin_clock]->[2],
+			  $clock[$begin_clock]->[1]+$clock[$begin_clock]->[3],
+			  -start => $begin_angle,
+			  -extent => $end_angle-$begin_angle,
+			  @utmp_canvas_args,
+			 );
+	} else {
+	    $c->createArc($clock[0]->[0], $clock[0]->[1],
+			  $clock[0]->[0]+$clock[0]->[2],
+			  $clock[0]->[1]+$clock[0]->[3],
+			  -start => $begin_angle,
+			  -extent => 90-$begin_angle,
+			  @utmp_canvas_args,
+			 );
+	    $c->createArc($clock[1]->[0], $clock[1]->[1],
+			  $clock[1]->[0]+$clock[1]->[2],
+			  $clock[1]->[1]+$clock[1]->[3],
+			  -start => 90,
+			  -extent => $end_angle-(90+360),
+			  @utmp_canvas_args,
+			 );
+	}
+    }
+
+    $c->raise('uptime');
+    $c->raise('entry');
+    $c->raise('tics');
+
 }
 
 sub _draw_hour_ticks {
