@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.15 1998/08/17 10:22:56 eserte Exp $
+# $Id: tktimex,v 4.16 1998/08/17 18:18:10 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -74,7 +74,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.15 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.16 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -378,8 +378,12 @@ sub enter_label {
     $entry->grabRelease;
     $entry->destroy;
     $status_text->configure(-text => "Current file: $options->{file}");
-    $res =~ s/$separator//g; # sicherheitshalber ...
-    $action eq 'yes' ? $res : undef;
+    if ($action eq 'yes') {
+	$res =~ s/$separator//g; # sicherheitshalber ...
+	$res;
+    } else {
+	undef;
+    }
 }
 
 sub new_project {
@@ -421,13 +425,16 @@ sub insert_project {
     }
     $project_frame->itemCreate
       ($path, $pf_time_index, -itemtype => 'text',
-       -text => &sec2time($p->sum_time($start_session_time, undef, 1)));
+       -text => &sec2time($p->sum_time($start_session_time, undef,
+				       -recursive => 1)));
     $project_frame->itemCreate
       ($path, $pf_time_index+1, -itemtype => 'text',
-       -text => &sec2time($p->sum_time($today_time, undef, 1)));
+       -text => &sec2time($p->sum_time($today_time, undef,
+				       -recursive => 1)));
     $project_frame->itemCreate
       ($path, $pf_time_index+2, -itemtype => 'text',
-       -text => &sec2time($p->sum_time(0, undef, 1)));
+       -text => &sec2time($p->sum_time(0, undef,
+				       -recursive => 1)));
 
     for ($pf_time_index .. $pf_time_index+1) {
 	$project_frame->column('width', $_, '');
@@ -553,13 +560,19 @@ sub act_time_project {
     return if !$path;
     $project_frame->itemConfigure
       ($path, $pf_time_index,
-       -text => &sec2time($p->sum_time($start_session_time, undef, 1)));
+       -text => &sec2time($p->sum_time($start_session_time, undef,
+				       -recursive => 1,
+				       -usecache => 1)));
     $project_frame->itemConfigure
       ($path, $pf_time_index+1,
-       -text => &sec2time($p->sum_time($today_time, undef, 1)));
+       -text => &sec2time($p->sum_time($today_time, undef,
+				       -recursive => 1,
+				       -usecache => 1)));
     $project_frame->itemConfigure
       ($path, $pf_time_index+2,
-       -text => &sec2time($p->sum_time(0, undef, 1)));
+       -text => &sec2time($p->sum_time(0, undef,
+				       -recursive => 1,
+				       -usecache => 1)));
 }
 
 sub set_timeout {
@@ -583,14 +596,16 @@ sub working_time {
     my $last_week_sum = 0;
     my $yesterday_sum = 0;
     foreach ($root->subproject) {
-	my $project_today_time = $_->sum_time($today_time, undef, 1);
+	my $project_today_time = $_->sum_time($today_time, undef,
+					      -recursive => 1);
 	$sum += $project_today_time;
 	$yesterday_sum
-	  += $_->sum_time($yesterday_time, undef, 1) - $project_today_time;
+	  += $_->sum_time($yesterday_time, undef,
+			  -recursive => 1) - $project_today_time;
 	$last_week_sum
-	  += $_->sum_time($last_week_time, undef, 1);
+	  += $_->sum_time($last_week_time, undef, -recursive => 1);
 	$last_4week_sum
-	  += $_->sum_time($last_4week_time, undef, 1);
+	  += $_->sum_time($last_4week_time, undef, -recursive => 1);
     }
 
     require Tk::DialogBox;
@@ -704,7 +719,7 @@ sub show_one_day {
 		      my $sum = 0;
 		      foreach (@p) {
 			  $lb->add($i, -text => $_->pathname);
-			  my $diff = $_->sum_time($s_from, $s_to, 0);
+			  my $diff = $_->sum_time($s_from, $s_to);
 			  $sum += $diff;
 			  $lb->itemCreate($i, 1, -text =>
 					  sec2time($diff, undef, undef));
