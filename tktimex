@@ -1,0 +1,224 @@
+#!/usr/local/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: tktimex,v 1.1 1996/10/26 15:45:35 eserte Exp $
+# Author: Slaven Rezic
+# Mail: <URL:mailto:eserte@cs.tu-berlin.de>
+# WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
+# Talk: <URL:telnet://ole.cs.tu-berlin.de:1211>
+#
+
+#use strict;
+
+package Project;
+
+my $pool = [];
+
+sub new {
+    my($pkg, $label) = @_;
+    my $self = {};
+    $self->{'label'} = $label;
+    $self->{'subprojects'} = [];
+    $self->{'archived'} = 0;
+    $self->{'times'} = [];
+    bless $self, $pkg;
+    $self->push_pool;
+    $self;
+}
+
+sub push_pool {
+    my $self = shift;
+    push(@{$Project::pool}, $self);
+}
+
+sub pool {
+    my($pkg, $pool) = @_;
+    if (defined $pool) {
+	$Project::pool = $pool;
+    } else {
+	$Project::pool;
+    }
+}
+
+sub subproject {
+    my($self, $label) = @_;
+    if (defined $label) {
+	my $sub = Subproject->new($label);
+	push(@{$self->{'subprojects'}}, $sub);
+	$sub;
+    } else {
+	$self->{'subprojects'};
+    }
+}
+
+sub start_time {
+    my($self, $time) = @_;
+    $time = time unless $time;
+    push(@{$self->{'times'}}, [$time]);
+}
+
+sub end_time {
+    my($self, $time) = @_;
+    $time = time unless $time;
+    my @times = @{$self->{'times'}};
+    $times[$#times]->[1] = $time;
+}
+
+sub sum_time {
+    my($self, $since, $recursive) = @_;
+    my $sum = 0;
+    if ($recursive) {
+	foreach (@{$self->subproject}) {
+	    $sum += $_->sum_time($since, $recursive);
+	}
+    }
+    my @times = @{$self->{'times'}};
+    my $i = -1;
+    foreach (@times) {
+	my($from, $to) = ($_->[0], $_->[1]);
+	$i++;
+	if (defined $from) {
+	    if (!defined $to) {
+		if ($i != $#times) {
+		    warn "No end time in $self";
+		    next;
+		} else {
+		    $to = time;
+		}
+	    }
+	    if ($since =~ /^\d+$/ && $to >= $since) {
+		if ($from >= $since) {
+		    $sum += $to - $from;
+		} else {
+		    $sum += $to - $since;
+		}
+	    } else {
+		$sum += $to - $from;
+	    }
+	} else {
+	    warn "No start time in $self";
+	}
+    }
+    $sum;
+}
+
+sub archived {
+    my($self, $flag) = @_;
+    if (!defined $flag) {
+	$self->{'archived'};
+    } else {
+	if ($flag) {
+	    $self->{'archived'} = 1;
+	} else {
+	    $self->{'archived'} = 0;
+	}
+    }
+}
+
+######################################################################
+
+package Subproject;
+@Subproject::ISA = qw(Project);
+
+sub push_pool { }
+
+######################################################################
+
+package main;
+
+use Tk;
+use Data::Dumper;
+
+my $top = new MainWindow;
+$top->protocol('WM_DELETE_WINDOW', \&quit_program);
+
+my $quit_dialog;
+my $datafile = 'mytimex.data';
+
+#my $menu_frame = $top->Frame;
+#$menu_frame->pack(-expand => 1, -fill => 'x');
+
+my $buttons_frame = $top->Frame(-relief => 'ridge',
+				-bd => 1);
+$buttons_frame->pack(-expand => 1, -fill => 'x');
+$buttons_frame->Button(-text => 'New Project',
+		       -command => \&new_project)->pack(-side => 'left');
+$buttons_frame->Button(-text => 'Load',
+		       -command => \&load_file)->pack(-side => 'left');
+$buttons_frame->Button(-text => 'Save',
+		       -command => \&save_file)->pack(-side => 'left');
+$buttons_frame->Button(-text => 'Pause',
+		       -command => \&pause)->pack(-side => 'left');
+$buttons_frame->Button(-text => 'Quit',
+		       -command => \&quit_program)->pack(-side => 'left');
+
+my $project_frame = $top->Frame(-relief => 'ridge',
+				-bd => 1);
+$project_frame->pack(-expand => 1, -fill => 'both');
+$project_frame->gridColumnconfigure(0, -weight => 0.4);
+$project_frame->Label(-text => 'Projects:')->grid(-sticky => 'w');
+$project_frame->Label(-text => 'Time:')->grid(-row => 0, -column => 3,
+					      -sticky => 'e');
+
+my $status_frame = $top->Frame(-relief => 'ridge',
+			       -bd => 1);
+$status_frame->pack(-expand => 1, -fill => 'x');
+
+MainLoop;
+
+sub enter_name {
+    my $label = shift;
+    my $res;
+    my $action;
+    my $toplevel = $top->Toplevel(-title => 'Enter name');
+    $toplevel->grab;
+    $toplevel->Label(-text => $label)->pack(-side => 'left');
+    my $entry = $toplevel->Entry(-textvariable => \$res);
+    $entry->pack(-side => 'left');
+    $entry->focus;
+    $toplevel->bind("<Return>", sub { $action = 'yes' });
+    $toplevel->bind("<Escape>", sub { $action = 'no' });
+    $toplevel->protocol('WM_DELETE_WINDOW' => sub { $action = 'no' });
+    $toplevel->waitVariable(\$action);
+    $toplevel->grabRelease;
+    $toplevel->destroy;
+    $action eq 'yes' ? $res : undef;
+}
+
+sub new_project {
+    my $label = &enter_name("New project:");
+    if ($label) {
+	my $p = new Project($label);
+	$project_frame->Button(-text => $label,
+			       -width => 40,
+			       -anchor => 'w')->grid(-column => 0,
+						     -sticky => 'w');
+    }
+}
+
+sub update_project_frame {
+    my $project_frame = shift;
+    
+}
+
+sub quit_program {
+    require Tk::Dialog;
+    if (!defined $quit_dialog) {
+	$quit_dialog = $top->Dialog(-title => 'Quit Program',
+				    -text  => "Really quit?",
+				    -default_button => 'No',
+				    -buttons => ['Yes', 'No']);
+    }
+    return 0 if $quit_dialog->Show ne 'Yes';
+    $top->destroy;
+}
+
+#my $p = new Project("IHK-CGI");
+#my $r = new Project("IHK Diskversion");
+#my $s = $p->subproject("agrep");
+#$p->start_time(time-30); $p->end_time(time-20);
+#$p->start_time(time-10); $p->end_time(time+40);
+#$s->start_time(time-40);
+#print STDERR Data::Dumper->Dump([Project->pool], ['pool']), "\n";
+#print STDERR $p->sum_time(time-20,1),"\n";
