@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 1.6 1996/10/29 09:28:18 eserte Exp $
+# $Id: tktimex,v 1.7 1996/10/29 14:13:42 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -239,13 +239,15 @@ sub stop_project {
     }
     if (defined $current_project_index) {
 	$projects_in_text[$current_project_index]->end_time;
+	&act_time;
 	undef $current_project_index;
 	$projects_text->tagRemove('running', '1.0', 'end');
     }
 }
 
 sub act_time {
-    my $project_index = $current_project_index;
+    my $index = shift;
+    my $project_index = $index || $current_project_index;
     my $project = $projects_in_text[$project_index];
     while ($project) {
 	$projects_text->delete("time-$project_index.first",
@@ -321,6 +323,7 @@ sub save_file {
 	return;
     }
     $Data::Dumper::Purity = 1;
+    $Data::Dumper::Indent = 1;
     print OUT Data::Dumper->Dump([Project->pool], ['pool']), "\n";
     close OUT;
     $status_text->configure(-text => "Saved $datafile");
@@ -355,8 +358,8 @@ sub sec2time {
     my($day, $hour, $min);
     $day  = int($sec / 86400);
     $sec  = $sec % 86400;
-    $hour = int($sec / 1440);
-    $sec  = $sec % 1440;
+    $hour = int($sec / 3600);
+    $sec  = $sec % 3600;
     $min  = int($sec / 60);
     sprintf("%3dd %02d:%02d", $day, $hour, $min);
 #    sprintf("%02d:%02d:%02d", $hour, $min, $sec % 60); # XXX Test
