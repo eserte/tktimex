@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.57 2000/08/23 23:35:24 eserte Exp $
+# $Id: tktimex,v 4.58 2000/08/24 08:53:49 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -99,7 +99,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.57 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.58 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -136,6 +136,8 @@ my $inner_fg = "black";
 my $inner_bg = "white";
 my %history;
 my(%rcs_cache, @rcs_cache);
+my $ctrl_s = ($os eq 'win' ? 'Ctrl-' : 'C-');
+my $sbside = ($os eq 'win' ? 'e' : 'w');
 
 state_change("before Getopt definition");
 
@@ -343,7 +345,7 @@ $mb_project->command(-label => 'Undo',
 		     -command => \&undo);
 $mb_project->command(-label => 'Search',
 		     -command => \&search_project,
-		     -accelerator => 'C-s');
+		     -accelerator => $ctrl_s . 's');
 $top->bind('<Control-s>' => \&search_project);
 $mb_project->command(-label => 'Continue last',
 		     -command => \&cont_last);
@@ -351,7 +353,7 @@ $mb_project->command(-label => 'Attributes',
 		     -command => sub { show_attributes(undef) });
 $mb_project->command(-label => 'Intervals',
 		     -command => sub { show_intervals($top, undef) },
-		     -accelerator => 'C-i');
+		     -accelerator => $ctrl_s .'i');
 $top->bind('<Control-i>' => sub { show_intervals($top, undef) });
 ## Menü ist zu überladen...
 #$mb_project->command(-label => 'Note',
@@ -361,7 +363,7 @@ $mb_project->command(-label => 'Working time',
 		     -command => \&working_time);
 $mb_project->command(-label => 'Daily details',
 		     -command => \&show_one_day,
-		     -accelerator => 'C-d');
+		     -accelerator => $ctrl_s . 'd');
 $top->bind('<Control-d>' => \&show_one_day);
 
 my $mb_project_menu = $mb_project->cget(-menu);
@@ -508,7 +510,7 @@ $pf_cols = 5; # cannot change -columns of hlists...
 state_change("checkpoint 3");
 
 my $project_frame = $top->Scrolled
-  ('HList', -scrollbars => 'osow',
+  ('HList', -scrollbars => "oso$sbside",
    -bg => $inner_bg,
    -fg => $inner_fg,
    -columns => $pf_cols,
@@ -1256,7 +1258,7 @@ sub show_one_day {
 			  -columns => 2,
 			  -width => 40,
 			  -header => 1,
-			  -scrollbars => 'osow',
+			  -scrollbars => "oso$sbside",
 			  -selectmode => 'extended',
 			  -exportselection => 1,
 			  -command => sub {
@@ -1327,7 +1329,7 @@ sub daily_intervals {
     require POSIX;
     my $t = $top->Toplevel;
     $t->title(POSIX::strftime("%Y-%m-%d", localtime $begin_date));
-    my $lb = $t->Scrolled('HList', -scrollbars => 'osow',
+    my $lb = $t->Scrolled('HList', -scrollbars => "oso$sbside",
 			  -columns => 3,
 			  -width => 60,
 			 )->pack(-expand => 1, -fill => 'both');
@@ -2157,7 +2159,7 @@ sub show_intervals {
     my @rev;
     if ($project->rcsfile) {
 	eval {
-	    my $rcs = get_rcs_from_cache($project->rcsfile);
+	    my $rcs = get_rcs_from_cache($project);
 	    if ($rcs) {
 		foreach my $rev ($rcs->revisions) {
 		    push(@rev, [$rev->revision,
@@ -2205,7 +2207,7 @@ sub show_intervals {
 		    $t->bind('<Escape>' => sub { $ok->invoke });
 		    require Tk::ROText;
 		    my $ro = $t->Scrolled
-			("ROText", -scrollbars => "sow",
+			("ROText", -scrollbars => "so$sbside",
 			 -wrap => "none",
 			 )->pack(-fill => "both", -expand => 1);
 		    $ro->insert("end", $log_entries);
@@ -2312,7 +2314,7 @@ sub show_intervals {
     $no_cols ++   if $show_seconds; # für From/Date-Spalte
     $no_cols ++   if $show_seconds and !$group; # für To-Spalte
     $no_cols += 2 if @rev;
-    $lb = $w->Scrolled('HList', -scrollbars => 'osow',
+    $lb = $w->Scrolled('HList', -scrollbars => "oso$sbside",
 		       -bg => $inner_bg,
 		       -fg => $inner_fg,
 		       -columns => $no_cols,
@@ -2505,7 +2507,7 @@ sub show_note {
     }
 
     my $t = $top->Toplevel(-title => 'Note for ' . $project->pathname);
-    my $txt = $t->Scrolled('Text', -scrollbars => 'sow'
+    my $txt = $t->Scrolled('Text', -scrollbars => "so$sbside"
 			  )->pack(-fill => 'both', -expand => 1);
     $txt->focus;
     if ($project->has_note) {
@@ -2783,13 +2785,14 @@ sub tktimex_running {
 }
 
 sub get_rcs_from_cache {
+    my $project = shift;
     my $rcs;
-    if ($rcscache{$project->rcsfile}) {
-	$rcs = $rcscache{$project->rcsfile};
+    if ($rcs_cache{$project->rcsfile}) {
+	$rcs = $rcs_cache{$project->rcsfile};
     } else {
 	require Timex::Rcs;
 	$rcs = new Timex::Rcs $project->rcsfile;
-	$rcscache{$project->rcsfile} = $rcs;
+	$rcs_cache{$project->rcsfile} = $rcs;
     }
     $rcs;
 }
