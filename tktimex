@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.18 2003/09/01 18:58:26 eserte Exp $
+# $Id: tktimex,v 6.19 2003/09/01 18:59:56 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -22,11 +22,6 @@ BEGIN {
     $Devel::Trace::TRACE = 0;
     sub state_change { }
     state_change("before Tk");
-}
-
-BEGIN {
-    eval 'use blib "/home/e/eserte/src/perl/Patch-SREZIC-Tk"';
-    eval 'use Patch::SREZIC::Tk;';warn $@ if $@;
 }
 
 use Tk;
@@ -168,7 +163,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.18 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.19 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
