@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: timexserver,v 1.2 1999/10/25 23:53:38 eserte Exp $
+# $Id: timexserver,v 1.3 1999/10/26 00:27:57 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -23,6 +23,7 @@ use FindBin;
 use lib ("$FindBin::RealBin");
 use Timex::Project;
 use Timex::Server;
+#use Storable qw(nstore freeze);
 
 use strict;
 use vars qw($top $thisprog $homedir $assign_file
@@ -41,9 +42,12 @@ if ($> != 0) {
 	"Is the mode of $thisprog correctly set to setuid?\n";
 }
 
-my $use_gui = 0;
+my $use_gui      = 0;
+my $start_server = 0;
 
-GetOptions("gui!" => \$use_gui);
+GetOptions("gui!" => \$use_gui,
+	   "start!" => \$start_server,
+	  );
 
 if ($use_gui) {
     gui();
@@ -79,6 +83,10 @@ sub gui {
 			    })->pack;
 
     $top->protocol('WM_DELETE_WINDOW' => \&exit_app);
+
+    if ($start_server) {
+	$cb->invoke;
+    }
 
     Tk::MainLoop();
 
@@ -188,7 +196,9 @@ sub start_server {
 		 } else {
 		     $p->start_time;
 		     $p->set_current;
-		     $o->rpc('stop', $pn);
+		     #$o->rpc('stop', $pn);
+		     my $list = create_list($root);
+		     $o->rpc('list', $list);
 		 }
 	     }
 	 } },
@@ -206,7 +216,7 @@ sub start_server {
 		 } else {
 		     $p->end_time;
 		     $p->no_current;
-		     my $list = join("\0", map { $_->pathname } $root->all_subprojects);
+		     my $list = create_list($root);
 		     $o->rpc('list', $list);
 		 }
 	     }
@@ -220,12 +230,7 @@ sub start_server {
 		 $o->rpc('ok', 'No project file for ' . $args{-user});
 	     } else {
 		 my $root = $user_project{$args{-user}};
-		 my $list = join("\0\1", map {
-		     join("\0", 
-			  $_->pathname,
-			  defined $_->current && $_->current eq $_,
-			  $_->sum_time(0, undef, -recursive => 1))
-		 } sort $root->all_subprojects);
+		 my $list = create_list($root);
 		 $o->rpc('list', $list);
 	     }
 	 } },
@@ -266,6 +271,17 @@ sub auth_user {
 
     my($name,$passwd) = getpwnam($args{-user});
     crypt($args{-pw}, $passwd) eq $passwd;
+}
+
+sub create_list {
+    my $root = shift;
+#nstore($root);
+    join("\0\1", map {
+	join("\0", 
+	     $_->pathname,
+	     defined $_->current && $_->current eq $_,
+	     $_->sum_time(0, undef, -recursive => 1))
+    } sort $root->all_subprojects);
 }
 
 __END__
