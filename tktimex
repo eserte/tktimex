@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.28 1999/03/09 14:04:48 eserte Exp $
+# $Id: tktimex,v 4.29 1999/03/09 15:38:06 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -80,7 +80,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.28 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.29 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -767,7 +767,10 @@ sub working_time {
 }
 
 sub show_one_day {
-    eval { require Tk::Date };
+    eval {
+	require Tk::Date;
+	Tk::Date->VERSION(0.27);
+    };
     my $has_date = !$@;
     if (!$has_date) {
 	require Time::Local;
@@ -782,7 +785,7 @@ sub show_one_day {
 	   -value => 'now',
 	   -datefmt => "%12A, %2d.%2m.%4y",
 	   -choices => [qw(today yesterday),
-			['one week before' => sub { time()-86400*7}],
+			['one week before' => sub {time()-86400*7}],
 			['four weeks before' => sub { time()-86400*7*4}],
 		       ],
 	   -command => sub {
@@ -836,6 +839,7 @@ sub show_one_day {
 		      my $s_from;
 		      if ($has_date) {
 			  $s_from = $dw->get("%s");
+			  $s_from = Tk::Date::_begin_of_day($s_from);
 		      } else {
 			  my $s = $dw->get;
 			  my($d,$m,$y) = split(/\D/, $s);
@@ -1937,6 +1941,7 @@ sub minmaximze {
     } else {
 	$min_button->configure(-image => $up_photo);
 	$top->geometry($save_geometry);
+	$top->raise;
     }
 }
 
