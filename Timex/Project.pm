@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.42 2000/11/28 01:50:12 eserte Exp $
+# $Id: Project.pm,v 3.43 2000/12/12 23:34:09 eserte Exp $
 #
 
 =head1 NAME
@@ -28,7 +28,7 @@ use vars qw($magic $magic_template $emacsmode $pool @project_attributes);
 $magic = '#PJ1';
 $magic_template = '#PJT';
 $emacsmode = '-*- project -*-';
-@project_attributes = qw/archived rate rcsfile domain id/;
+@project_attributes = qw/archived rate rcsfile domain id notimes/;
 
 =head2 new
 
@@ -41,6 +41,7 @@ Construct a new Timex::Project object with label $label.
 sub new {
     my($pkg, $label) = @_;
     my $self = {};
+
     $self->{'label'} = $label;
     $self->{'subprojects'} = [];
     $self->{'archived'} = 0;
@@ -53,6 +54,7 @@ sub new {
     $self->{'separator'} = "/";
     $self->{'current'} = undef;
     $self->{'rate'} = undef;
+
     $pkg = ref $pkg if (ref $pkg);
     bless $self, $pkg;
 }
@@ -1137,6 +1139,17 @@ sub get_all_domains {
     keys %$list;
 }
 
+=head2 notimes
+
+    $notimes = $project->notimes
+    $project->notimes($notimes)
+
+Get or set the notimes flag for this project.
+
+=cut
+
+sub notimes { shift->_get_from_upper("notimes", @_) }
+
 =head2 separator
 
     $separator = $project->separator
@@ -1209,6 +1222,10 @@ sub dump_data {
     my $res;
     if (!$indent) {
 	$res = "$magic $emacsmode\n";
+	# XXX other root attributes too
+	if ($self->notimes) {
+	    $res .= "/notimes=1\n";
+	}
 	$indent = 0; # because of $^W
     } else {
 	$res .= (">" x $indent) . "$self->{'label'}\n";
@@ -1316,14 +1333,47 @@ sub interpret_data_project {
     my($parent, $data, $i, %args) = @_;
     my $root = $parent->root;
     my($indent, $self);
+
+    my $handle_attribute = sub {
+	my($rest, $attributes) = @_;
+	my(@attrpair) = split(/=/, $rest);
+	# handle multiple attributes:
+	if (exists $attributes->{$attrpair[0]}) {
+	    if (ref $attributes->{$attrpair[0]} eq 'ARRAY') {
+		push @{$attributes->{$attrpair[0]}}, $attrpair[1];
+	    } else {
+		$attributes->{$attrpair[0]} =
+		    [$attributes->{$attrpair[0]}, $attrpair[1]];
+	    }
+	} else {
+	    $attributes->{$attrpair[0]} = $attrpair[1];
+	}
+    };
+
     while(defined $data->[$i]) {
-	if ($data->[$i] !~ /^>+/) {
+	if ($data->[$i] =~ m|^/| && $root eq $parent) {
+	    # workaround: handle root attributes
+	    my %root_attributes;
+	    while(defined $data->[$i]) {
+		last if $data->[$i] !~ m|^/(.*)|;
+		$handle_attribute->($1, \%root_attributes);
+		$i++;
+	    }
+	    if (keys %root_attributes) {
+		foreach my $attr (@project_attributes) {
+		    $parent->{$attr} = delete $root_attributes{$attr};
+		}
+		# XXX check for superfluous attributes
+	    }
+	}
+
+	if ($data->[$i] !~ /^(>+)(.*)/) {
 	    $@ = 'Project does not begin with ">"';
 	    warn $@;
 	    return undef;
 	}
-	my $label = $';
-	my $newindent = length($&);
+	my $label = $2;
+	my $newindent = length($1);
 	if (!defined $indent) {
 	    $indent = $newindent;
 	} else {
@@ -1335,9 +1385,9 @@ sub interpret_data_project {
 		$i++;
 		my(%attributes, @times, @comment);
 		while(defined $data->[$i]) {
-		    $data->[$i] =~ /^./;
-		    my $first = $&;
-		    my $rest = $';
+		    $data->[$i] =~ /^(.)(.*)/;
+		    my $first = $1;
+		    my $rest = $2;
 		    last if $first eq '>';
 		    if ($first eq '|') {
 			if (!$args{-skeleton}) {
@@ -1347,18 +1397,7 @@ sub interpret_data_project {
 			    push @times, [@interval];
 			}
 		    } elsif ($first eq '/') {
-			my(@attrpair) = split(/=/, $rest);
-			# handle multiple attributes:
-			if (exists $attributes{$attrpair[0]}) {
-			    if (ref $attributes{$attrpair[0]} eq 'ARRAY') {
-				push @{$attributes{$attrpair[0]}}, $attrpair[1];
-			    } else {
-				$attributes{$attrpair[0]} =
-				  [$attributes{$attrpair[0]}, $attrpair[1]];
-			    }
-			} else {
-			    $attributes{$attrpair[0]} = $attrpair[1];
-			}
+			$handle_attribute->($rest, \%attributes);
 		    } elsif ($first eq '#') {
 			push @comment, $rest;
 		    } else {
