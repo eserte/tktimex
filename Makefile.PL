@@ -16,6 +16,7 @@ WriteMakefile(
 		    'Tk::Date'     => 0.21,
 		    'Data::Dumper' => 0,
 		   },
+    # COREQ: XML::Parser
     'AUTHOR' => 'Slaven Rezic (eserte@cs.tu-berlin.de)',
 );
 
