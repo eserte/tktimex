@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.8 1998/02/10 16:53:36 eserte Exp $
+# $Id: tktimex,v 4.9 1998/03/16 15:28:24 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -75,7 +75,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.8 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.9 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -100,10 +100,10 @@ my @opttable =
   (['file|f',             '=s', undef, 'subtype' => 'file'],
    ['autosave|as',        '!',  1, 'callback' => \&toggle_autosave ],
    ['update',             '=i', 60*10],
-   ['dateformat|df',      '=s', 'h',
-    'choices' => ['d'],
+   ['dateformat|df',      '=s', 'd',
+    'choices' => ['d', 'h', 'hs'],
     'strict' => 1,
-    'callback' => \&toggle_dateformat ],
+    'callback' => \&set_dateformat ],
    ['day8',               '!',  0, 'callback' => \&toggle_time_arbeitstag ],
    ['archived',           '!',  0, 'callback' => \&toggle_show_archived ],
    ['onlytop',            '!',  0, 'callback' => \&toggle_show_archived ],
@@ -174,12 +174,10 @@ $mb_options->checkbutton(-label => 'Autosave',
 			 -command => \&toggle_autosave,
 			 -variable => \$options->{'autosave'},
 			);
-$mb_options->checkbutton(-label => 'Dateformat H:M:S',
-			 -command => \&toggle_dateformat,
-			 -onvalue => 'd',
-			 -offvalue => 'h',
-			 -variable => \$options->{'dateformat'},
-			);
+$mb_options->cascade(-label => 'Dateformat');
+my $mb_options_menu = $mb_options->cget(-menu);
+my $dateformat_menu = $mb_options_menu->Menu;
+$mb_options->entryconfigure('Dateformat', -menu => $dateformat_menu);
 $mb_options->checkbutton(-label => 'day = 8h',
 			 -command => \&toggle_time_arbeitstag,
 			 -variable => \$options->{'day8'},
@@ -195,6 +193,22 @@ $mb_options->checkbutton(-label => 'Show only top',
 $mb_options->separator;
 $mb_options->command(-label => 'Option editor',
 		     -command => sub { $opt->option_editor($top) });
+
+$dateformat_menu->radiobutton(-label => 'H:M:S',
+			      -command => \&set_dateformat,
+			      -value => 'hs',
+			      -variable => \$options->{'dateformat'},
+			     );
+$dateformat_menu->radiobutton(-label => 'H:M',
+			      -command => \&set_dateformat,
+			      -value => 'h',
+			      -variable => \$options->{'dateformat'},
+			     );
+$dateformat_menu->radiobutton(-label => 'd H:M',
+			      -command => \&set_dateformat,
+			      -value => 'd',
+			      -variable => \$options->{'dateformat'},
+			     );
 
 my $mb_help = $menu_frame->Menubutton(-text => 'Help'
 				     )->pack(-side => 'left');
@@ -233,7 +247,7 @@ my $project_frame = $top->Scrolled('HList', -scrollbars => 'oe',
 $project_frame->header('create', 0, -text => 'Projects:');
 $project_frame->header('create', 1, -text => 'Session');
 $project_frame->header('create', 2, -text => 'Today');
-$project_frame->header('create', 3, -text => 'All');
+$project_frame->header('create', 3, -text => 'Total');
 
 my $orig_selectbg = $project_frame->cget(-selectbackground);
 
@@ -722,7 +736,7 @@ sub old_save_file {
 	return;
     }
     my $dd = new Data::Dumper [$root], ['root'];
-    $dd->Purity(1)->Indent(1);
+    eval { $dd->Purity(1)->Indent(1) }; # for versions before 2.081
     my $dump;
     eval { $dump = $dd->Dumpxs };
     if ($@) {
@@ -796,6 +810,7 @@ sub merge_file {
 	return;
     }
     my $diff = $root->merge($new_project);
+    &insert_all;
     $status_text->configure
       (-text => "Merge completed with $diff differences"); 
 }
@@ -847,7 +862,7 @@ sub toggle_autosave {
     &set_autosave;
 }
 
-sub toggle_dateformat {
+sub set_dateformat {
     &insert_all;
     if (&set_time_update) {
 	&set_timeout;
@@ -1105,7 +1120,7 @@ sub show_intervals {
 
 sub set_time_update {
     my $old_time_update = $time_update;
-    $time_update = ($options->{'dateformat'} eq 'd' ? 60 : 1);
+    $time_update = ($options->{'dateformat'} eq 'hs' ? 1 : 60);
     $time_update < $old_time_update;
 }
 
@@ -1181,6 +1196,8 @@ sub sec2time {
     $min  = int($sec / 60);
     if ($dateformat eq 'd') {
 	sprintf("%3dd %02d:%02d", $day, $hour, $min);
+    } elsif ($dateformat eq 'h') {
+	sprintf("%3d:%02d", $hour, $min);
     } else {
 	sprintf("%02d:%02d:%02d", $hour, $min, $sec % 60);
     }
