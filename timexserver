@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: timexserver,v 1.3 1999/10/26 00:27:57 eserte Exp $
+# $Id: timexserver,v 1.4 1999/11/02 23:57:29 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -26,16 +26,20 @@ use Timex::Server;
 #use Storable qw(nstore freeze);
 
 use strict;
-use vars qw($top $thisprog $homedir $assign_file
-	    %user_project);
+use vars qw($top $thisprog $homedir $assign_file $pw_file
+	    %current_project %user_project);
 
 $homedir     = _untaint((getpwuid($>))[7]);
 $thisprog    = _untaint($0);
 $assign_file = "$homedir/.timex_assignment";
+$pw_file     = "$homedir/.timex_pw";
+
+my @nowtime = localtime;
+my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
 
 my $first_user_id = 100;
 
-my(%user_assign);
+my(%user_assign, %user_pw);
 
 if ($> != 0) {
     die "The effective user id is not root.\n".
@@ -62,14 +66,6 @@ sub gui {
 
     $top = MainWindow->new;
 
-    my $hl = $top->Scrolled('HList',
-			    -scrollbars => "osoe",
-			    -columns => 2,
-			    )->pack(-expand => 1, -fill => "both");
-    fetch_all_users();
-    load_assign();
-    fill_assign($hl);
-
     my $cb;
     my $want_start_server;
     $cb = $top->Checkbutton(-text => "Start/Stop server",
@@ -80,7 +76,23 @@ sub gui {
 				} else {
 				    end_server();
 				}
-			    })->pack;
+			    })->pack(-side => "bottom");
+
+    my $hl = $top->Scrolled('HList',
+			    -scrollbars => "osoe",
+			    -header => 1,
+			    -columns => 3,
+			    -width => 40,
+			    )->pack(-expand => 1, -fill => "both");
+
+    $hl->header('create', 0, -text => 'User:');
+    $hl->header('create', 1, -text => 'Project file:');
+    $hl->header('create', 2, -text => 'Current project:');
+
+    fetch_all_users();
+    load_assign();
+    fill_assign($hl);
+    load_pw();
 
     $top->protocol('WM_DELETE_WINDOW' => \&exit_app);
 
@@ -109,6 +121,9 @@ sub fill_assign {
 			     }
 			 });
 	$hl->itemCreate($i, 1, -itemtype => "window", -window => $b);
+	my $l;
+	$l = $hl->Label(-textvariable => \$current_project{$user});
+	$hl->itemCreate($i, 2, -itemtype => "window", -window => $l);
 	$i++;
     }
 }
@@ -119,6 +134,17 @@ sub load_assign {
 	    chomp;
 	    my($k,$v) = split /\t/;
 	    $user_assign{$k} = $v;
+	}
+	close A;
+    }
+}
+
+sub load_pw {
+    if (open(A, $pw_file)) {
+	while(<A>) {
+	    chomp;
+	    my($k,$v) = split /\t/;
+	    $user_pw{$k} = $v;
 	}
 	close A;
     }
@@ -194,8 +220,13 @@ sub start_server {
 		 if (!$p) {
 		     $o->rpc('ok', "Can't find pathname $pn");
 		 } else {
+		     if (defined $p->current) {
+			 # already a project running
+			 $p->current->end_time;
+		     }
 		     $p->start_time;
 		     $p->set_current;
+		     $current_project{$args{-user}} = $pn;
 		     #$o->rpc('stop', $pn);
 		     my $list = create_list($root);
 		     $o->rpc('list', $list);
@@ -216,6 +247,7 @@ sub start_server {
 		 } else {
 		     $p->end_time;
 		     $p->no_current;
+		     $current_project{$args{-user}} = '';
 		     my $list = create_list($root);
 		     $o->rpc('list', $list);
 		 }
@@ -244,7 +276,6 @@ sub start_server {
 						   fd => $sock,
 						   api => $api);
 		     });
-
     if (defined $top and Tk::Exists($top)) {
 	Event->timer(interval => 1,
 		     cb => sub {
@@ -262,14 +293,27 @@ sub end_server {
     foreach (Event::all_watchers()) {
 	$_->cancel;
     }
+    end_all_projects();
     Event::unloop_all(0);
 }
 
 sub auth_user {
     my $o = shift;
     my(%args) = @_;
-
-    my($name,$passwd) = getpwnam($args{-user});
+    my($name,$passwd);
+    return 1 if (exists $user_pw{$name} && $user_pw{$name} eq $passwd);
+    if ($^O eq "linux" && -r "/etc/shadow" && open(SHADOW, "/etc/shadow")) {
+	while(<SHADOW>) {
+	    my($n,$p) = split(":", $_);
+	    if ($n eq $args{-user}) {
+		($name,$passwd) = ($n, $p);
+		last;
+	    }
+	}
+	close SHADOW;
+    } else {
+	($name,$passwd) = getpwnam($args{-user});
+    }
     crypt($args{-pw}, $passwd) eq $passwd;
 }
 
@@ -280,8 +324,20 @@ sub create_list {
 	join("\0", 
 	     $_->pathname,
 	     defined $_->current && $_->current eq $_,
-	     $_->sum_time(0, undef, -recursive => 1))
+	     $_->sum_time(0, undef, -recursive => 1),
+	     $_->sum_time($today_time, undef, -recursive => 1),
+	     )
     } sort $root->all_subprojects);
+}
+
+sub end_all_projects {
+    foreach (keys %user_project) {
+	if (defined $user_project{$_} and defined $user_project{$_}->current) {
+	    $user_project{$_}->current->end_time;
+	    $user_project{$_}->no_current;
+	    $current_project{$_} = '';
+	}
+    }
 }
 
 __END__
