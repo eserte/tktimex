@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.10 2001/10/21 20:22:54 eserte Exp $
+# $Id: tktimex,v 6.11 2001/10/22 11:00:50 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -46,6 +46,9 @@ use lib "/home/e/eserte/lib/perl";
 use Tk::App::Reloader;
 $Tk::App::Reloader::VERBOSE = 1;
 '; warn $@ if $@;
+
+eval 'use blib "/home/e/eserte/src/perl/Patch-SREZIC-Tk"';
+eval 'use Patch::SREZIC::Tk;';warn $@ if $@;
 
 state_change("all use's processed...");
 
@@ -162,7 +165,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.10 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.11 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -191,6 +194,7 @@ use vars qw($utmp
 	    $status_browse_entry
 	    %history %rcs_cache @rcs_cache
 	    $ctrl_s $sbside $use_enterprise
+	    $load_merge_filename $load_menu
 	   );
 
 $title = "tktimex $VERSION";
@@ -2596,7 +2600,8 @@ sub old_save_file {
 	return;
     }
     my $dd = new Data::Dumper [$root], ['root'];
-    eval { $dd->Purity(1)->Indent(1) }; # eval for versions before 2.081
+    # Indent(0) for buggy Data::Dumper on some ActivePerl versions
+    eval { $dd->Purity(1)->Indent(0) }; # eval for versions before 2.081
     my $dump;
     eval { $dump = $dd->Dumpxs };
     if ($@) {
@@ -3550,6 +3555,8 @@ sub show_intervals {
 		       -width => 80,
 		       -header => 1,
 		       -command => $double_click,
+		       -selectmode => 'extended',
+		       -exportselection => 1,
 		      )->pack(-fill => 'both', -expand => 1);
     $real_lb = $lb->Subwidget("scrolled");
     {
@@ -3693,6 +3700,12 @@ sub show_intervals {
     if ($group eq '' && !$subproj) {
 	$f->Button(-text => M"Del",
 		   -command => sub {
+		       return unless
+			   lc($f->messageBox
+			      (-icon => 'question',
+			       -title => M"Delete?",
+			       -message => M"Really delete?",
+			       -type => M"OkCancel")) eq lc(M"OK");
 		       $project->delete_times($lb->info('selection'));
 		       $modified++;
 		       $update->();
@@ -3739,7 +3752,12 @@ sub show_intervals {
     require Tk::Optionmenu;
     $f->Label(-text => " " . M"Group:")->pack(-side => 'left');
     my $om = $f->Optionmenu(-variable => \$group,
-			    -options => ['', qw/daily weekly monthly yearly/],
+			    -options => ['',
+					 [M"daily" => 'daily'],
+					 [M"weekly" => 'weekly'],
+					 [M"monthly" => 'monthly'],
+					 [M"yearly" => 'yearly'],
+					],
 			   )->pack(-side => "left");
     # -command cannot be specified at creation time, because this can
     # cause endless loops, at least in Tk 800.023
@@ -3982,39 +4000,53 @@ sub minmaximze {
 }
 
 sub accept_drop {
-    my($c, $seln) = @_;
+    my($w, $seln) = @_;
     my $filename;
-    my $own =  $c->SelectionExists('-selection'=>$seln);
-    my @targ = $c->SelectionGet('-selection'=>$seln,'TARGETS');
-    foreach (@targ) {
-	if (/FILE_NAME/) {
-	    $filename = $c->SelectionGet('-selection'=>$seln,'FILE_NAME');
-	    last;
+    eval {
+	my @targ = $w->SelectionGet('-selection'=>$seln,'TARGETS');
+	foreach (@targ) {
+	    if (/FILE_NAME/) {
+		$filename = $w->SelectionGet('-selection'=>$seln,$_);
+		last;
+	    } elsif ($Tk::platform eq 'MSWin32' && /STRING/) {
+		$filename = $w->SelectionGet('-selection'=>$seln,$_);
+		last;
+	    } elsif (/text\/uri-list/) { # gmc Xdnd
+		$filename = join "", map { chr } $w->SelectionGet('-selection'=>$seln,$_);
+		$filename =~ s/\0$//;
+		$filename = (split /\015\012/, $filename)[0];
+		$filename =~ s/^file://;
+		last;
+	    }
 	}
-	if ($os eq 'win' && /STRING/) {
-	    $filename = $c->SelectionGet('-selection'=>$seln,$_);
-	    last;
-	}
+    };
+    if ($@) {
+	# Konqueror 2 Xdnd
+        $filename = $w->SelectionGet('-selection'=>$seln);
+        $filename =~ s/^file://;
     }
     if (defined $filename) {
-	$c->after(10, sub {load_merge_popup($filename)});
+	$w->after(10, sub {load_merge_popup($filename)});
     }
 }
 
 sub load_merge_popup {
     my $filename = shift;
-    my $load_menu = $top->Menu(-tearoff => 0);
-    $load_menu->command(-label => M"Merge",
-			-command => sub {
-			    merge_file_noninteractive($filename);
-			});
-    $load_menu->command(-label => M"Load",
-			-command => sub {
-			    load_file_noninteractive($filename);
-			});
-    $load_menu->command(-label => M"Cancel",
-			-command => sub { });
-    $load_menu->Popup(-popover => 'cursor');
+    $load_merge_filename = $filename;
+    if (!Tk::Exists($load_menu)) {
+	$load_menu = $top->Menu(-tearoff => 0);
+	$load_menu->command(-label => M"Merge",
+			    -command => sub {
+				merge_file_noninteractive($filename);
+			    });
+	$load_menu->command(-label => M"Load",
+			    -command => sub {
+				load_file_noninteractive($filename);
+			    });
+	$load_menu->command(-label => M"Cancel",
+			    -command => sub { });
+    }
+    $load_menu->Post($top->pointerx, $top->pointery);
 }
 
 sub get_home_dir {
