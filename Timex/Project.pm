@@ -644,13 +644,19 @@ sub save {
 sub interpret_data {
     my($self, $data) = @_;
     my $i = $[;
-    
-    if ($data->[$i] !~ /^$magic/) {
-	$@ = "Wrong magic!";
+    my $found_magic = 0;
+    for(; $i < $#$data; $i++) {
+	if ($data->[$i] =~ /^$magic/) {
+	    $found_magic++;
+	    last;
+	}
+    }
+    $i++;
+    if (!$found_magic) {
+	$@ = "Can't find magic in data!";
 	warn $@;
 	return undef;
     }
-    $i++;
 
     $i = $self->interpret_data_project($data, $i);
     return undef if !defined $i;
@@ -694,7 +700,7 @@ sub interpret_data_project {
 		    } elsif ($first eq '#') {
 			push(@comment, $rest);
 		    } else {
-			warn "Unknown command $first";
+			warn "Unknown command $first, ignoring...\n";
 		    }
 		    $i++;
 		}
@@ -734,6 +740,7 @@ sub load {
 	while(<FILE>) {
 	    chomp;
 	    s/\r//g; # strip dos newlines
+	    next if /^\s*$/; # overread empty lines
 	    push(@data, $_);
 	}
 	close FILE;
