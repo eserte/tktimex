@@ -16,9 +16,10 @@ Project - manage a list of projects
 
 package Project;
 use strict;
-use vars qw($magic $pool);
+use vars qw($magic $emacsmode $pool);
 
 $magic = '#PJ1';
+$emacsmode = '-*- project -*-';
 
 sub new {
     my($pkg, $label) = @_;
@@ -251,7 +252,7 @@ sub dump_data {
     my($self, $indent) = @_;
     my $res;
     if (!$indent) {
-	$res = "$magic\n";
+	$res = "$magic $emacsmode\n";
     } else {
 	$res .= (">" x $indent) . "$self->{'label'}\n";
 	$res .= "/archived=$self->{'archived'}\n";
@@ -287,7 +288,7 @@ sub interpret_data {
     my($self, $data) = @_;
     my $i = $[;
     
-    if ($data->[$i] ne $magic) {
+    if ($data->[$i] !~ /^$magic/) {
 	warn "Wrong magic!";
 	return undef;
     }
