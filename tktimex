@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.31 1999/03/18 17:55:04 eserte Exp $
+# $Id: tktimex,v 4.32 1999/03/22 08:49:35 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -80,10 +80,10 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.31 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.32 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
-my $can_lock = ($os eq 'unix');
+my $can_lock = ($os eq 'unix'); # vielleicht geht's mit Win32+perl5.00555? XXX
 
 if ($Tk::VERSION <= 402.002) {
     Tk::HList->EnterMethods("Tk/HList.pm", qw(header));
@@ -172,6 +172,12 @@ $top->protocol('WM_SAVE_YOURSELF',
 		 });
 $top->title($title);
 $top->geometry($options->{'geometry'}) if $options->{'geometry'};
+# XXX no effect with KDE?!
+eval {
+    my $icon = $top->Pixmap(-file => Tk::findINC("mini-clock.xpm"));
+    $top->Icon(-image => $icon);
+};
+# XXX but iconbitmap works with KDE...
 
 my $is_archiv;
 my $balloon;
@@ -312,6 +318,8 @@ $mod_sub = sub {
 };
 eval {
     require Tie::Watch;
+    # earlier versions used Delete instad of Unwatch:
+    Tie::Watch->VERSION(0.99);
     $save_check = $menu_frame->Label(-padx => 4, -relief => 'raised');
  
     $mod_watch = Tie::Watch->new(-variable => \$root->{'modified'},
@@ -347,6 +355,7 @@ my $min_button = $menu_frame->Button(-image => $up_photo,
 				     -command => \&minmaximze,
 				     -relief => 'flat',
 				    )->pack(-side => 'right');
+$balloon->attach($min_button, -msg => 'Minimize');
 
 $menu_frame->pack(-fill => 'x');
 
@@ -960,7 +969,7 @@ sub load_file {
     &set_autosave;
     $root->modified(0);
     if ($mod_watch) {
-	$mod_watch->Delete;
+	$mod_watch->Unwatch;
 	$mod_watch = Tie::Watch->new(-variable => \$root->{'modified'},
 				     -store => $mod_sub,
 				    );
@@ -1987,16 +1996,20 @@ sub save_last_projects {
     close LAST;
 }
 
+# XXX bei KDE gibt es das Problem, daß beim ersten Minimize
+# das Fenster nach +0+0 springt ... fvwm2 hat damit keine Probleme (?)
 sub minmaximze {
     $minimized = !$minimized;
     if ($minimized) {
 	$min_button->configure(-image => $down_photo);
+	$balloon->attach($min_button, -msg => 'Maximize');
 	$save_geometry = $top->Width . "x" . $top->Height;
 	my $menu_height = $top->Height
 	  - $project_frame->Height - $status_frame->Height;
 	$top->geometry($top->Width . "x" . $menu_height);
     } else {
 	$min_button->configure(-image => $up_photo);
+	$balloon->attach($min_button, -msg => 'Minimize');
 	$top->geometry($save_geometry);
 	$top->raise;
     }
