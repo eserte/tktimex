@@ -35,8 +35,10 @@ WriteMakefile(
 		    'Tk::Date'     => 0.30,
 		    'Data::Dumper' => 0,
 		    'Date::Calc'   => 0,
-		    'XML::Parser'  => 0,
 		    'Mail::Send'   => 0,
+		    # These are only corequisites:
+		    'Spreadsheet::WriteExcel' => 0.42,
+	    	    'XML::Parser'  => 0,
 		   },
     'AUTHOR' => 'Slaven Rezic (slaven@rezic.de)',
 );
@@ -49,10 +51,25 @@ WriteMakefile(
 #}
 
 sub MY::postamble {
-    <<EOF;
+    if (defined $ENV{USER} && $ENV{USER} eq 'eserte') {
+	    <<'EOF';
 
 release:	dist
-	../sf-upload/sf-upload -project ptktools -package tktimex -release \$(VERSION) -file \$(DISTVNAME).tar\$(SUFFIX) -notesfile README -changes ""
+	../sf-upload/sf-upload -project ptktools -package tktimex -release $(VERSION) -file $(DISTVNAME).tar$(SUFFIX) -notesfile README -changes ""
+
+CVS_DIR=${HOME}/work/timex
+
+copy-to-cvs:
+	@echo "Really copy to ${CVS_DIR}? (Hit Ctrl-C otherwise) "
+	@read dummy
+	perl "-MExtUtils::Manifest=manicopy,maniread" -e "manicopy(maniread('MANIFEST'),'${CVS_DIR}', 'cp');"
+
+cvs-add-missing:
+	cd ${CVS_DIR} && cvsu | grep '^[\?D]' | cut -c2- | xargs cvs add -ko
+
+cvs-standard-commit:
+	cd ${CVS_DIR} && cvs -z9 commit -m ""
 
 EOF
+    }
 }
