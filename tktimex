@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 2.1 1996/12/12 20:16:55 eserte Exp $
+# $Id: tktimex,v 2.2 1996/12/12 21:45:11 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -13,8 +13,9 @@ package main;
 
 use Tk;
 use Tk::ROText;
-use Data::Dumper;
-BEGIN { $0 =~ m|^(.*)/.*$|; push(@INC, $1); }
+use FindBin;
+use lib "$FindBin::Bin";
+#BEGIN { $0 =~ m|^(.*)/.*$|; push(@INC, $1); }
 #use Project;
 use Project;
 use strict;
@@ -28,7 +29,9 @@ my $datafile = '/home/e/eserte/private/log/mytimex.pj1';
 my $current_project_index = undef;
 my $start_session_time = time;
 my $time_after;
-my $time_update = 1;
+my $dateformat = 'h'; # XXX erst wenn ich sicher bin: 'd';
+my $time_update;
+&set_time_update();
 my $autosave_after;
 my $autosave_update = 60*20;
 my $autosave = 1;
@@ -60,27 +63,43 @@ $top->protocol('WM_DELETE_WINDOW', \&quit_program);
 $top->title('tktimex');
 $top->geometry($xgeometry) if $xgeometry;
 
-#my $menu_frame = $top->Frame;
-#$menu_frame->pack(-expand => 1, -fill => 'x');
+my $menu_frame = $top->Frame(-relief => 'raised',
+			     -borderwidth => 2);
 
-my $buttons_frame = $top->Frame(-relief => 'ridge',
-				-bd => 1);
-$buttons_frame->pack(-expand => 1, -fill => 'x');
-$buttons_frame->Button(-text => 'New Project',
-		       -command => \&new_project)->pack(-side => 'left');
-$buttons_frame->Button(-text => 'Load',
-		       -command => \&load_file)->pack(-side => 'left');
-$buttons_frame->Button(-text => 'Save',
-		       -command => \&save_file)->pack(-side => 'left');
-$buttons_frame->Button(-text => 'Dump',
-		       -command => \&dump_data)->pack(-side => 'left');
-$buttons_frame->Button(-text => 'Pause',
-		       -command => \&pause)->pack(-side => 'left');
-$buttons_frame->Button(-text => 'Quit',
-		       -command => \&quit_program)->pack(-side => 'left');
-# XXX es reicht nicht, nur die Variable zu setzen ...
-$buttons_frame->Checkbutton(-text => 'Autosave',
-			    -variable => \$autosave)->pack(-side => 'left');
+my $mb_file = $menu_frame->Menubutton(-text => 'File')->pack(-side => 'left');
+$mb_file->command(-label => 'Load',
+		  -command => \&load_file);
+$mb_file->command(-label => 'Save',
+		  -command => \&save_file);
+$mb_file->command(-label => 'Dump',
+		  -command => \&dump_data);
+$mb_file->command(-label => 'Quit',
+		  -command => \&quit_program);
+
+my $mb_project = $menu_frame->Menubutton(-text => 'Project'
+					)->pack(-side => 'left');
+$mb_project->command(-label => 'New',
+		     -command => \&new_project);
+$mb_project->command(-label => 'Pause',
+		     -command => \&pause);
+
+my $mb_options = $menu_frame->Menubutton(-text => 'Options'
+					)->pack(-side => 'left');
+$mb_options->checkbutton(-label => 'Autosave',
+			 -command => \&toggle_autosave,
+			 -variable => \$autosave);
+$mb_options->checkbutton(-label => 'Dateformat H:M:S',
+			 -command => \&toggle_dateformat,
+			 -onvalue => 'd',
+			 -offvalue => 'h',
+			 -variable => \$dateformat);
+
+$menu_frame->Button(-text => 'Pause',
+		    -command => \&pause)->pack(-side => 'right');
+$menu_frame->Button(-text => 'Save',
+		    -command => \&save_file)->pack(-side => 'right');
+
+$menu_frame->pack(-expand => 1, -fill => 'x');
 
 my $project_frame = $top->Frame;
 $project_frame->pack(-expand => 1, -fill => 'both');
@@ -229,7 +248,7 @@ sub start_project {
 			   "label-$project_index.first",
 			   "label-$project_index.last");
     $projects_in_text[$current_project_index]->start_time;
-    &set_time_update();
+    &set_timeout();
 }
 
 sub pause {
@@ -257,21 +276,33 @@ sub act_time {
     return if !defined $project_index;
     my $project = $projects_in_text[$project_index];
     while ($project) {
-	$projects_text->delete("time-$project_index.first",
-			       "time-$project_index.last");
-	$projects_text->insert
-	  ("label-$project_index.last",
-	   "\t" . &sec2time($project->sum_time($start_session_time, 1)) .
-	   "\t" . &sec2time($project->sum_time($today_time, 1)) .
-	   "\t" . &sec2time($project->sum_time(0, 1)) . "\n",
-	   ["time-$project_index", "project-$project_index"]);
+	&act_time_project($project);
 	$project = ($project->level > 1 ? $project->parent : undef);
-	$project_index = $projects_in_text{$project} if $project;
     }
-    &set_time_update();
+    &set_timeout();
 }
 
-sub set_time_update {
+sub act_time_project {
+    my($project_index_or_ref) = @_;
+    my($project, $project_index);
+    if (ref $project_index_or_ref eq 'Project') {
+	$project = $project_index_or_ref;
+	$project_index = $projects_in_text{$project};
+    } else {
+	$project_index = $project_index_or_ref;
+	$project = $projects_in_text[$project_index];
+    }
+    $projects_text->delete("time-$project_index.first",
+			   "time-$project_index.last");
+    $projects_text->insert
+      ("label-$project_index.last",
+       "\t" . &sec2time($project->sum_time($start_session_time, 1)) .
+       "\t" . &sec2time($project->sum_time($today_time, 1)) .
+       "\t" . &sec2time($project->sum_time(0, 1)) . "\n",
+       ["time-$project_index", "project-$project_index"]);
+}
+
+sub set_timeout {
     if (defined $time_after) {
 	$time_after->cancel;
     }
@@ -285,13 +316,17 @@ sub load_file {
 	$status_text->configure(-text => "Can't load $datafile!");
 	return;
     }
+    &insert_all;
+    &set_autosave;
+}
+
+sub insert_all {
     $projects_text->delete('1.0', 'end');
     @projects_in_text = ();
     %projects_in_text = ();
     foreach (@{$root->subproject}) {
 	&insert_old_project($_, 0);
     }
-    &set_autosave;
 }
 
 sub insert_old_project {
@@ -314,6 +349,7 @@ sub old_save_file {
 	$status_text->configure(-text => "Can't write to $datafile.data");
 	return;
     }
+    require Data::Dumper;
     $Data::Dumper::Purity = 1;
     $Data::Dumper::Indent = 1;
     print OUT Data::Dumper->Dump([$root], ['root']), "\n";
@@ -357,6 +393,27 @@ sub set_autosave {
     }
 }
 
+sub toggle_autosave {
+    &set_autosave;
+    print STDERR "Autosave: $autosave\n";
+}
+
+sub toggle_dateformat {
+    my $project_index;
+    foreach $project_index (@projects_in_text) {
+	&act_time_project($project_index);
+    }
+    if (&set_time_update) {
+	&set_timeout;
+    }
+}
+
+sub set_time_update {
+    my $old_time_update = $time_update;
+    $time_update = ($dateformat eq 'd' ? 60 : 1);
+    $time_update < $old_time_update;
+}
+
 sub quit_program {
     require Tk::Dialog;
     if (!defined $quit_dialog) {
@@ -377,8 +434,11 @@ sub sec2time {
     $hour = int($sec / 3600);
     $sec  = $sec % 3600;
     $min  = int($sec / 60);
-    sprintf("%3dd %02d:%02d", $day, $hour, $min);
-    sprintf("%02d:%02d:%02d", $hour, $min, $sec % 60); # XXX Test
+    if ($dateformat eq 'd') {
+	sprintf("%3dd %02d:%02d", $day, $hour, $min);
+    } else {
+	sprintf("%02d:%02d:%02d", $hour, $min, $sec % 60);
+    }
 }
 
 # print out how to use this program.
