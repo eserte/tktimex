@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.19 1998/09/21 13:58:29 eserte Exp $
+# $Id: tktimex,v 4.20 1998/11/09 19:39:45 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -75,7 +75,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort XXX broken in FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.19 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.20 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -276,15 +276,17 @@ $menu_frame->Button(-text => 'Save',
 
 $menu_frame->pack(-fill => 'x');
 
-my $project_frame = $top->Scrolled('HList', -scrollbars => 'osoe',
-				   -columns => 4,
-				   -height => 1,
-				   -drawbranch => 1,
-				   -header => 1,
-				   -selectmode => 'single',
-				   -browsecmd => sub { &start_stop(@_) },
-				   -separator => $separator,
-				  )->pack(-expand => 1, -fill => 'both');
+my $project_frame = $top->Scrolled
+  ('HList', -scrollbars => 'osoe',
+   -columns => 4,
+   -height => 1,
+   -drawbranch => 1,
+   -header => 1,
+   -selectmode => 'single',
+   -browsecmd => sub { pause(); #&start_stop(@_)
+		   },
+   -separator => $separator,
+  )->pack(-expand => 1, -fill => 'both');
 $project_frame->header('create', 0, -text => 'Projects:');
 my $pf_time_index = 1;
 $project_frame->header('create', $pf_time_index, -text => 'Session');
@@ -293,10 +295,12 @@ $project_frame->header('create', $pf_time_index+2, -text => 'Total');
 
 my $orig_selectbg = $project_frame->cget(-selectbackground);
 
+$project_frame->bind("<Double-ButtonRelease-1>" =>
+		     sub { start_stop(shift->info('selection')) });
 $project_frame->bind("<Button-2>" =>
-		     sub { &show_attributes(get_entry(@_)) });
+		     sub { show_attributes(get_entry(@_)) });
 $project_frame->bind("<Button-3>" =>
-		     sub { &new_sub_project(get_entry(@_)) });
+		     sub { new_sub_project(get_entry(@_)) });
 
 my $status_frame = $top->Frame(-relief => 'ridge',
 			       -bd => 1);
@@ -618,22 +622,68 @@ sub working_time {
 			    -buttons => ['OK'],
 			    -popover => 'cursor',
 			   );
-    $d->add('Label', 
-	    -justify => 'left',
-	    -text  =>
-	    "Today\'s working time:                " .
-	    &sec2time($sum, 'h', 0) . "\n" . 
-	    "Yesterday\'s working time:            " . 
-	    &sec2time($yesterday_sum, 'h', 0) . "\n\n" .
-	    "Last week\'s working time (8h-day):   " .
-	    &sec2time($last_week_sum, 'd', 1) . "\n" .
-	    "  Average per working day:           " .
-	    &sec2time($last_week_sum/$week_work_days, 'h', 0) . "\n\n" .
-	    "Last 4 week\'s working time (8h-day): " .
-	    &sec2time($last_4week_sum, 'd', 1) . "\n" .
-	    "  Average per working day:           " .
-	    &sec2time($last_4week_sum/$month_work_days, 'h', 0)
-	   )->pack;
+    my $gridy = 0;
+    $d->add('Label',
+	    -text => "Today\'s working time:")->grid(-row => $gridy, 
+						     -column => 0,
+						     -sticky => 'w');
+    $d->add('Label',
+	    -text => sec2time($sum, 'h', 0))->grid(-row => $gridy,
+						   -column => 1,
+						   -sticky => 'w');
+    $gridy++;
+    $d->add('Label',
+	    -text => "Yesterday\'s working time:")->grid(-row => $gridy,
+							 -column => 0,
+							 -sticky => 'w');
+    $d->add('Label',
+	    -text => sec2time($yesterday_sum, 'h', 0))->grid(-row => $gridy,
+							     -column => 1,
+							     -sticky => 'w');
+    $gridy++;
+    $d->add('Label')->grid(-row => $gridy, -column => 0);
+    $gridy++;
+    $d->add('Label',
+	    -text => "Last week\'s working time (8h-day):"
+	   )->grid(-row => $gridy,
+		   -column => 0,
+		   -sticky => 'w');
+    $d->add('Label',
+	    -text => sec2time($last_week_sum, 'd', 1))->grid(-row => $gridy,
+							     -column => 1,
+							     -sticky => 'w');
+    $gridy++;
+    $d->add('Label',
+	    -text => "  Average per working day:")->grid(-row => $gridy,
+							 -column => 0,
+							 -sticky => 'w');
+    $d->add('Label',
+	    -text => sec2time($last_week_sum/$week_work_days, 'h', 0)
+	   )->grid(-row => $gridy,
+		   -column => 1,
+		   -sticky => 'w');
+    $gridy++;
+    $d->add('Label')->grid(-row => $gridy, -column => 0);
+    $gridy++;
+    $d->add('Label',
+	    -text => "Last 4 week\'s working time (8h-day): "
+	   )->grid(-row => $gridy,
+		   -column => 0,
+		   -sticky => 'w');
+    $d->add('Label',
+	    -text => sec2time($last_4week_sum, 'd', 1))->grid(-row => $gridy,
+							      -column => 1,
+							      -sticky => 'w');
+    $gridy++;
+    $d->add('Label',
+	    -text => "  Average per working day:")->grid(-row => $gridy,
+							 -column => 0,
+							 -sticky => 'w');
+    $d->add('Label',
+	    -text => sec2time($last_4week_sum/$month_work_days, 'h', 0)
+	   )->grid(-row => $gridy,
+		   -column => 1,
+		   -sticky => 'w');
     $d->Show;
 }
 
@@ -1050,6 +1100,7 @@ sub show_attributes {
     my($combo, %combo_args);
   TRYCOMBO: {
 	eval {
+	    die "Don't use ComboBox";
 	    require ComboBox; # XXX Tk::
 	    $combo = 'ComboBox'; 
 	    %combo_args = (-caseless => 'on', # XXX
@@ -1109,7 +1160,7 @@ sub show_attributes {
 	       -command => sub {
 		   show_intervals($f,
 				  $project,
-				  $readonly);
+				  -readonly => $readonly);
 	       })->grid(-row => $row, -column => 0,
 			-columnspan => 3, -sticky => 'w');
 
@@ -1163,14 +1214,17 @@ sub show_attributes {
 }
 
 sub show_intervals {
-    my($top, $project, $readonly) = @_;
+    my($top, $project, %args) = @_;
+
+    my $readonly      = $args{-readonly};
+    my $show_seconds  = $args{-show_seconds};
+    my $geometry      = $args{-geometry};
+    my $modified      = $args{-modified};
 
     if (!defined $project) {
 	$project = entry_to_project(get_sel_entry());
 	return if !defined $project;
     }
-
-    my(@saveargs) = ($top, $project, $readonly);
 
     my @rev;
     if ($project->rcsfile) {
@@ -1191,11 +1245,28 @@ sub show_intervals {
     }
 
     my($w, $lb);
+
+    my $update = sub {
+	my $t = shift;
+	$t->destroy if $t;
+	my $geometry = $w->geometry,
+	$w->destroy;
+	show_intervals($top, $project,
+		       -readonly     => $readonly,
+		       -show_seconds => $show_seconds,
+		       -modified     => $modified,
+		       # XXX geht nicht? -geometry     => $geometry,
+		      );
+    };
+
     my $interval_editor = sub {
 	my $i = shift;
 	return if $readonly;
 	require Tk::Date;
 	my $t = $w->Toplevel(-title => "Edit line $i");
+	if ($geometry) {
+	    $t->geometry($geometry);
+	}
 	my($from, $to) = @{$project->{'times'}[$i]};
 	$t->Label(-text => 'From:')->grid(-row => 0, -column => 0);
 	my $from_date = $t->Date(-variable => \$from,
@@ -1207,18 +1278,11 @@ sub show_intervals {
 			      )->grid(-row => 1, -column => 1);
 	my $f = $t->Frame->grid(-row => 2, -column => 0, -columnspan => 2);
 
-	my $update = sub {
-	    &insert_all;
-	    $t->destroy;
-	    $w->destroy;
-	    show_intervals(@saveargs);
-	};
-
 	my $okb = $f->Button
 	  (-text => 'OK',
 	   -command => sub {
 	       $project->set_times($i, $from, $to);
-	       $update->();
+	       $update->($t);
 	   },
 	  )->pack(-side => 'left');
 	my $cancelb = $f->Button
@@ -1231,7 +1295,7 @@ sub show_intervals {
 	  (-text => 'Delete',
 	   -command => sub {
 	       $project->delete_times($i);
-	       $update->();
+	       $update->($t);
 	   },
 	  )->pack(-side => 'left');
 	$t->bind('<Return>' => sub { $okb->invoke });
@@ -1240,18 +1304,27 @@ sub show_intervals {
     };
 
     $w = $top->Toplevel(-title => "Intervals for " . $project->pathname);
+    my $no_cols = 3;
+    $no_cols += 2 if $show_seconds;
+    $no_cols ++   if @rev;
     $lb = $w->Scrolled('HList', -scrollbars => 'osoe',
-		       -columns => 6,
+		       -columns => $no_cols,
 		       -width => 80,
 		       -header => 1,
 		       -command => $interval_editor,
 		      )->pack(-fill => 'both', -expand => 1);
-    $lb->header('create', 0, -text => 'From');
-    $lb->header('create', 1, -text => 'seconds');
-    $lb->header('create', 2, -text => 'To');
-    $lb->header('create', 3, -text => 'seconds');
-    $lb->header('create', 4, -text => 'Time');
-    $lb->header('create', 5, -text => 'RCS') if @rev;
+    {
+	my $col = 0;
+	$lb->header('create', $col++, -text => 'From');
+	$lb->header('create', $col++, -text => 'seconds')
+	  if $show_seconds;
+	$lb->header('create', $col++, -text => 'To');
+	$lb->header('create', $col++, -text => 'seconds')
+	  if $show_seconds;
+	$lb->header('create', $col++, -text => 'Time');
+	$lb->header('create', $col++, -text => 'RCS')
+	  if @rev;
+    }
     my $i = 0;
     foreach (@{$project->{'times'}}) {
 	my($from, $to) = @$_;
@@ -1261,7 +1334,9 @@ sub show_intervals {
 	my $fromdate = sprintf
 	  "%02d.%02d.%04d %02d:%02d:%02d", @fromdate[3,4,5,2,1,0];
 	$lb->add($i, -text => $fromdate);
-	$lb->itemCreate($i, 1, -text => $from);
+	my $col = 1;
+	$lb->itemCreate($i, $col++, -text => $from)
+	  if $show_seconds;
 
 	my(@todate, $todate);
 	if (defined $to) {
@@ -1270,9 +1345,10 @@ sub show_intervals {
 	    $todate[5]+=1900;
 	    $todate = sprintf
 	      "%02d.%02d.%04d %02d:%02d:%02d", @todate[3,4,5,2,1,0];
-	    $lb->itemCreate($i, 2, -text => $todate);
-	    $lb->itemCreate($i, 3, -text => $to);
-	    $lb->itemCreate($i, 4, -text => sec2time($to-$from, 'h', 0));
+	    $lb->itemCreate($i, $col++, -text => $todate);
+	    $lb->itemCreate($i, $col++, -text => $to)
+	      if $show_seconds;
+	    $lb->itemCreate($i, $col++, -text => sec2time($to-$from, 'h', 0));
 	    my @t;
 	    foreach my $rev (@rev) {
 		if ($rev->[1] >= $from and $rev->[1] <= $to) {
@@ -1281,9 +1357,9 @@ sub show_intervals {
 		    push(@t, $t);
 		}
 	    }
-	    if (@t) { $lb->itemCreate($i, 5, -text => join(", ", @t)) }
+	    if (@t) { $lb->itemCreate($i, $col++, -text => join(", ", @t)) }
 	} else {
-	    $lb->itemCreate($i, 2, -text => 'Running');
+	    $lb->itemCreate($i, $col++, -text => 'Running');
 	}
 	$i++;
     }
@@ -1291,12 +1367,50 @@ sub show_intervals {
     $w->withdraw;
 # $lb->idletasks; # XXX see-bug
     $lb->see($i-1) if $i > 1;
-    my $clb = $w->Button(-text => 'Close',
-			 -command => sub { $w->destroy })->pack;
+    my $f = $w->Frame->pack(-fill => 'x');
+    my $close_sub = sub {
+	&insert_all if $modified;
+	$w->destroy;
+    };
+    $w->protocol('WM_DELETE_WINDOW', $close_sub);
+    my $clb = $f->Button(-text => 'Close',
+			 -command => $close_sub,
+			)->pack(-side => 'left');
+    $f->Label(-text => '  ')->pack(-side => 'left');
+    $f->Button(-text => 'Delete',
+	       -command => sub { 
+		   $project->delete_times($lb->info('selection'));
+		   $modified++;
+		   $update->();
+	       }
+	      )->pack(-side => 'left');
+    $f->Button(-text => 'Insert',
+	       -command => sub {
+		   my @sel = $lb->info('selection');
+		   my $before = (!@sel ? -1 : $sel[$#sel]);
+		   $project->insert_times_after($before,
+						time, time);
+		   $modified++;
+		   $update->();
+	       }
+	      )->pack(-side => 'left');
+    $f->Button(-text => 'Re-Sort',
+	       -command => sub {
+		   $project->sort_times;
+		   # $modified++ nicht notwendig, weil sich nichts an der
+		   # Gesamtzeit ändert
+		   $update->();
+	       }
+	      )->pack(-side => 'left');
+    $f->Label(-text => '  ')->pack(-side => 'left');
+    $f->Checkbutton(-text => 'Show seconds',
+		    -variable => \$show_seconds,
+		    -command => sub { $update->() },
+		   )->pack(-side => 'left');
     $clb->focus;
     $w->bind('<Escape>' => sub { $clb->invoke });
-    $w->Popup(-popover => 'cursor');
-
+    $w->Popup(-popover => 'cursor')
+      unless $geometry;
 }
 
 sub set_time_update {
