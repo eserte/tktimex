@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.20 2003/09/30 19:02:34 eserte Exp $
+# $Id: tktimex,v 6.21 2005/03/05 23:32:18 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -163,7 +163,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.20 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.21 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -476,7 +476,8 @@ $top->bind("<Pause>" => sub {
 
 state_change("checkpoint 2");
 
-use vars qw($is_archiv $east %hl_entry $new_in_merge $changed_in_merge);
+use vars qw($is_archiv $east %hl_entry $new_in_merge $changed_in_merge
+	    $weekday_style $holiday_style);
 use vars qw($balloon);
 if ($Tk::VERSION >= 800.005) {
     require Tk::ItemStyle; # erst ab 800.005
@@ -493,6 +494,8 @@ if ($Tk::VERSION >= 800.005) {
 					-background => $inner_bg);
     $changed_in_merge = $top->ItemStyle($p_itemtype, -foreground => 'blue',
 					-background => $inner_bg);
+    $weekday_style    = $top->ItemStyle("text", -anchor => "e", -background => $inner_bg);
+    $holiday_style    = $top->ItemStyle("text", -anchor => "e", -foreground => "red", -background => $inner_bg);
 
     # altes Balloon und HList vertragen sich nicht miteinander
     require Tk::Balloon;
@@ -1027,8 +1030,24 @@ Tk::App::Reloader::check_loop() if defined &Tk::App::Reloader::check_loop;
 
 if ($options->{plugins}) {
     require Timex::Plugin;
-    foreach my $plugin (split /,/, $options->{plugins}) {
+    my @warnings;
+    local $SIG{__WARN__} = sub { push @warnings, @_ };
+    foreach my $plugin (split /\s*,\s*/, $options->{plugins}) {
 	Timex::Plugin::load_plugin($plugin);
+    }
+    if (@warnings) {
+	require Tk::DialogBox;
+	require Tk::ROText;
+	my $d = $top->DialogBox(-title => M"Error while loading plugins",
+				-buttons => [M"OK"],
+				-popover => 'cursor',
+			       );
+	my $txt = $d->add('ROText', -width => 40, -height => 10,
+			  -relief => "flat", -borderwidth => 0,
+			  -wrap => "word",
+			 )->pack(-expand => 1, -fill => "both");
+	$txt->insert("end", join("\n", @warnings));
+	$d->Show;
     }
 }
 
@@ -3171,7 +3190,8 @@ sub _all_projects_browseentry {
 sub show_attributes {
     my($path, $readonly) = @_;
 
-    if (defined $current_project) { $readonly = 1 }
+    my $readonly_some;
+    if (defined $current_project) { $readonly_some = 1 }
 
     if (!defined $path) {
 	$path = get_sel_entry();
@@ -3202,7 +3222,9 @@ sub show_attributes {
 				 -textvariable => \$label
 				)->pack(-side => "left");
     $name_entry->focus;
-    if ($readonly) { $name_entry->configure(-state => 'disabled') }
+    if ($readonly || $readonly_some) {
+	$name_entry->configure(-state => 'disabled');
+    }
 
     $f->Label(-text => M("Id").": " . $project->id)->grid(-row => $row,
 							  -column => 2,
@@ -3229,7 +3251,7 @@ sub show_attributes {
     my $browse = _all_projects_browseentry
 	($f,
 	 -variable => \$new_parent,
-	 $readonly ? (-state => 'disabled') : (),
+	 $readonly || $readonly_some ? (-state => 'disabled') : (),
 	);
     $browse->grid(-row => $row, -column => 1,
 		  -columnspan => 1, -sticky => 'w');
@@ -3352,6 +3374,20 @@ sub show_attributes {
 	}
     }
 
+    # Job number ##########
+    my $jobnumber = $project->jobnumber;
+    $row++;
+    $f->Label(-text => M("Job number").":")->grid(-row => $row,
+						  -column => 0,
+						  -sticky => "w");
+    my $jne = $f->Entry(-textvariable => \$jobnumber,
+			-bg => $inner_bg,
+			-fg => $inner_fg,
+		       )->grid(-row => $row,
+			       -column => 1,
+			       -sticky => "we");
+    if ($readonly) { $jne->configure(-state => 'disabled') }
+
     # Show intervals/Note ##########
     $row++;
     my $ff = $f->Frame->grid(-row => $row, -column => 0,
@@ -3412,6 +3448,8 @@ sub show_attributes {
 
 	   $project->icon($iconfile);
 
+	   $project->jobnumber($jobnumber);
+
 	   $insert_all++ if defined $old_rate && $rate ne $old_rate;
 	   $project->rate($rate);
 
@@ -3448,6 +3486,12 @@ sub show_intervals {
     my $modified      = $args{-modified};
     my $day           = $args{-day};
     my $subproj       = $args{-subproj};
+    my $w             = $args{-toplevel};
+    if (!Tk::Exists($w)) {
+	undef $w;
+    } else {
+	$_->destroy for ($w->children);
+    }
 
     if (!defined $project) {
 	$project = entry_to_project(get_sel_entry());
@@ -3486,17 +3530,14 @@ sub show_intervals {
 	$top->Unbusy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
     }
 
-    my($w, $lb, $real_lb, $times);
+    my($lb, $real_lb, $times);
 
     my $update = sub {
-	my $t = shift;
-	$t->destroy if $t;
-	$args{-geometry}     = $w->geometry;
+	$args{-toplevel}     = $w;
 	$args{-show_seconds} = $show_seconds;
 	$args{-group}        = $group;
 	$args{-modified}     = $modified;
 	$args{-subproj}      = $subproj;
-	$w->destroy;
 	show_intervals($top, $project,
 		       %args);
     };
@@ -3686,10 +3727,12 @@ sub show_intervals {
 	}
     };
 
-    $w = $top->Toplevel(-title => "Intervals for " . $project->pathname);
+    $w = $top->Toplevel(-title => "Intervals for " . $project->pathname)
+	if !defined $w;
     my $no_cols = 2;
     my $rev_lifetime_col;
     $no_cols ++   if !$group; # zusätzliche To-Spalte
+    $no_cols ++   if $group eq 'daily'; # weekday column
     $no_cols ++   if $show_seconds; # für From/Date-Spalte
     $no_cols ++   if $show_seconds and !$group; # für To-Spalte
     $no_cols ++;              # Annotations
@@ -3709,6 +3752,7 @@ sub show_intervals {
     {
 	my $col = 0;
 	if ($group eq 'daily') {
+	    $lb->header('create', $col++, -text => M"Wkday");
 	    $lb->header('create', $col++, -text => M"Day");
 	} elsif ($group eq 'weekly') {
 	    $lb->header('create', $col++, -text => M"Week");
@@ -3754,11 +3798,16 @@ sub show_intervals {
 	$fromdate[5]+=1900;
 
 	my $fromdate;
+	my $fromwkday;
 	if ($group eq '') {
 	    $fromdate = sprintf "%02d.%02d.%04d %02d:%02d:%02d",
 	                        @fromdate[3,4,5,2,1,0];
 	} elsif ($group eq 'daily') {
-	    $fromdate = sprintf "%02d.%02d.%04d", @fromdate[3,4,5];
+	    $fromwkday = # XXX use POSIX::strftime and locale settings!
+		[qw(Sun Mon Tue Wed Thu Fri Sat)]->[$fromdate[6]];
+	    $fromdate = sprintf("%02d.%02d.%04d",
+				@fromdate[3,4,5]
+			       );
 	} elsif ($group eq 'weekly') {
 	    my $wk = Date::Calc::Week_Number(@fromdate[5,4,3]);
 	    $fromdate = sprintf "%02d/%04d", $wk, $fromdate[5];
@@ -3768,8 +3817,20 @@ sub show_intervals {
 	    $fromdate = sprintf "%04d", $fromdate[5];
 	}
 
-	$lb->add($i, -text => $fromdate);
-	my $col = 1;
+	my $col = 0;
+	$lb->add($i);
+	if ($group eq 'daily') {
+	    $lb->itemCreate($i, $col++, -text => $fromwkday,
+			    ($fromwkday =~ /^(Sat|Sun)$/ && $holiday_style # XXX i18n! local holidays!
+			     ? (-style => $holiday_style)
+			     : ($weekday_style
+				? (-style => $weekday_style)
+				: ()
+			       )
+			    )
+			   );
+	}
+	$lb->itemCreate($i, $col++, -text => $fromdate);
 	$lb->itemCreate($i, $col++, -text => $from)
 	  if $show_seconds;
 
@@ -3918,12 +3979,17 @@ sub show_intervals {
 	$lb_popup_menu->command
 	    (-label => M"Move",
 	     -command => sub {
+		 # BrowseEntry destroys the selection, so remember as
+		 # early as possible...
+		 my(@current_indexes) = $real_lb->info("selection");
 		 my $t2 = $lb->Toplevel(-title => M"Move interval");
-		 $t2->Label(-text => M"New Parent")->pack;
+		 my $f0 = $t2->Frame->pack(-fill => 'x', -expand => 1);
+		 $f0->Label(-text => M"New Parent")->pack(-side => "left");
 		 my $new_project;
 		 my $be = _all_projects_browseentry
-		     ($t2, -variable => \$new_project, -excluderoot => 1);
-		 $be->pack;
+		     ($f0, -variable => \$new_project, -excluderoot => 1,
+		      -exportselection => 0);
+		 $be->pack(-side => "left", -fill => "x", -expand => 1);
 		 my $f = $t2->Frame->pack(-fill => 'x', -expand => 1);
 		 my $ok = $f->Button
 		     (-command => sub {
@@ -3932,11 +3998,33 @@ sub show_intervals {
 			      die "Can't find parent $new_project";
 			  }
 			  my $new_times = $new_project_p->interval_times("", -asref => 1);
-			  $new_project_p->insert_times_after($#$new_times, @{ $times->[$current_index] });
-			  $project->delete_times($current_index);
+			  if (@current_indexes == 0) {
+			      @current_indexes = $current_index;
+			  } elsif (@current_indexes == 1) {
+			      if ($current_index != $current_indexes[0]) {
+				  warn "Strange mismatch between current_index ($current_index) and current_indexes (@current_indexes)\n";
+				  @current_indexes = $current_index;
+			      }
+			  } else {
+			      my $yesno = $real_lb->messageBox
+				  (-message => Mfmt("Really move %d entry/ies to $new_project?", scalar @current_indexes),
+				   -icon => 'question',
+				   -title => M"Move",
+				   -type => 'YesNo',
+				  );
+			      if ($yesno !~ /yes/i) {
+				  return 0;
+			      }
+			  }
+
+                          # make sure to start from end while processing indexes:
+			  foreach my $index (sort { $b <=> $a } @current_indexes) {
+			      $new_project_p->insert_times_after($#$new_times, @{ $times->[$index] });
+			      $project->delete_times($index);
+			  }
 			  $update->();
 			  # XXX destroy problem?!
-			  $lb->afterIdle(sub { warn $t2; $t2->destroy; warn "ok" });
+			  $lb->afterIdle(sub { $t2->destroy if Tk::Exists($t2); });
 		      })->pack(-side => "left");
 		 set_text_or_image($ok, "yes.gif", M"OK");
 		 my $cancel = $f->Button(-command => sub { $t2->destroy() }
@@ -3959,8 +4047,10 @@ sub show_intervals {
 		 $current_index = $lb->nearest($y);
 		 if (defined $current_index) {
 		     $lb->anchorSet($current_index);
-		     $lb->selectionClear;
-		     $lb->selectionSet($current_index);
+		     if (!$lb->selectionIncludes($current_index)) {
+			 $lb->selectionClear;
+			 $lb->selectionSet($current_index);
+		     }
 		     my $from = $lb->itemCget($current_index, 0, -text);
 		     my $to   = $lb->itemCget($current_index, 1, -text);
 		     $lb_popup_menu->entryconfigure(0, -label => "$from - $to");
@@ -4011,14 +4101,9 @@ sub show_intervals {
 			-command => sub { $update->() },
 			)->pack(-side => 'left');
     }
-    $f->Label(-text => ' ')->pack(-side => 'left');
-    $f->Checkbutton(-text => M"Subprojects",
-		    -variable => \$subproj,
-		    -command => sub { $update->() },
-		   )->pack(-side => 'left');
+#    $f->Label(-text => ' ')->pack(-side => 'left');
 
     require Tk::Optionmenu;
-    $f->Label(-text => " " . M"Group:")->pack(-side => 'left');
     my $om = $f->Optionmenu(-variable => \$group,
 			    -textvariable => \$group,
 			    -options => ['',
@@ -4027,7 +4112,14 @@ sub show_intervals {
 					 [M"monthly" => 'monthly'],
 					 [M"yearly" => 'yearly'],
 					],
-			   )->pack(-side => "left");
+			   )->pack(-side => "right");
+    $f->Label(-text => " " . M"Group:")->pack(-side => 'right');
+
+    $f->Checkbutton(-text => M"Subprojects",
+		    -variable => \$subproj,
+		    -command => sub { $update->() },
+		   )->pack(-side => 'right');
+
     # -command cannot be specified at creation time, because this can
     # cause endless loops, at least in Tk 800.023
     $f->afterIdle(sub {$om->configure(-command => sub { $update->() })});
