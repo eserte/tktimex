@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: XML.pm,v 1.4 2000/09/01 23:35:23 eserte Exp $
+# $Id: XML.pm,v 1.5 2000/09/20 19:47:42 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -41,13 +41,13 @@ if ($@) {
 }
 
 sub load {
-    my($self, $file) = @_;
-    $self->_common_load(File => $file);
+    my($self, $file, %args) = @_;
+    $self->_common_load(File => $file, %args);
 }
 
 sub interpret_data {
-    my($self, $data) = @_;
-    $self->_common_load(Data => $data);
+    my($self, $data, %args) = @_;
+    $self->_common_load(Data => $data, %args);
 }
 
 sub _common_load { # XXX error handling
@@ -57,8 +57,10 @@ sub _common_load { # XXX error handling
     if (exists $args{Data}) {
 	$tree = $p1->parse(join("\n", @{ $args{Data} }),
 			   ProtocolEncoding => 'ISO-8859-1');
+	delete $args{Data};
     } elsif (exists $args{File}) {
 	$tree = $p1->parsefile($args{File});
+	delete $args{File};
     } else {
 	die "Neither Data nor File fiven in _common_load";
     }
@@ -66,7 +68,7 @@ sub _common_load { # XXX error handling
 	die "This is not timexdata";
     }
     $tree = $tree->[1];
-    $self->interpret_tree($tree);
+    $self->interpret_tree($tree, %args);
 }
 
 sub dump_data {
@@ -103,7 +105,7 @@ sub dump_data_subproject { # XXX note is missing...
 }
 
 sub interpret_tree {
-    my($self, $tree) = @_;
+    my($self, $tree, %args) = @_;
 
     my $attributes = $tree->[0];
     $self->label(convert2(delete $attributes->{'name'}));
@@ -123,11 +125,13 @@ sub interpret_tree {
 	} elsif ($tree->[$i] eq 'times') {
 	    my $slices = $tree->[$i+1];
 	    my @times;
-	    for(my $j = 1; $j<=$#$slices; $j+=2) {
-		if ($slices->[$j] eq 'timeslice') {
-		    push @times, [$slices->[$j+1][0]{'from'},
-				  $slices->[$j+1][0]{'to'},
-				 ];
+	    if (!$args{-skeleton}) {
+		for(my $j = 1; $j<=$#$slices; $j+=2) {
+		    if ($slices->[$j] eq 'timeslice') {
+			push @times, [$slices->[$j+1][0]{'from'},
+				      $slices->[$j+1][0]{'to'},
+				      ];
+		    }
 		}
 	    }
 	    $self->{'times'} = \@times;
