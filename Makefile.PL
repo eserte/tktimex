@@ -20,7 +20,7 @@ WriteMakefile(
 );
 
 sub MY::top_targets {
-    'ci ::
+    'ci :
 	@echo Do not use because of symlinks
 
 ';
