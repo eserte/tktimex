@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 2.5 1997/04/24 13:35:15 eserte Exp $
+# $Id: tktimex,v 2.6 1997/04/24 14:25:58 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -13,6 +13,7 @@ package main;
 
 use Tk;
 use Tk::ROText;
+use Tk::BrowseEntry;
 use FindBin;
 use lib "$FindBin::Bin";
 use Project;
@@ -479,12 +480,24 @@ sub show_attributes {
     $f->Label(-text => 'Name: ')->pack(-side => 'left');
     my $label = $project->label;
     $f->Entry(-textvariable => \$label)->pack(-side => 'left');
+
     if ($project->parent) {
 	$attribute_top->Label(-text => 'Parent: ' .
 			      ($project->parent eq $root ?
 			       '(Root)' : $project->parent->label)
 			     )->pack(-anchor => 'w');
     }
+
+    my $new_parent;
+    my $browse = $attribute_top->BrowseEntry(-label => "New Parent",
+					     -variable => \$new_parent);
+    my @all_labels = @{$root->all_labels};
+    foreach (@all_labels) {
+	$_ = '(Root)' if $_ eq '';
+	$browse->insert("end", $_);
+    }
+    $browse->pack;
+
     my $archived = $project->{'archived'};
     $attribute_top->Checkbutton(-text => 'Archived',
 				-variable => \$archived
@@ -497,6 +510,27 @@ sub show_attributes {
 	   if ($label && $label ne $project->label) {
 	       $project->label($label);
 	       $insert_all++;
+	   }
+	   if (defined $new_parent && grep($_ eq $new_parent, @all_labels)) {
+	       my $new_parent_p;
+	       if ($new_parent eq '(Root)') {
+		   $new_parent_p = $root;
+	       } else {
+		   $new_parent_p = $root->find_by_label($new_parent);
+	       }
+	       if ($new_parent_p) {
+		   if ($project->reparent($new_parent_p)) {
+		       $insert_all++;
+		   } else {
+		       require Tk::Dialog;
+		       $attribute_top->Dialog
+			 (-title => 'Warning',
+			  -text  => 
+			  "Can't reparent " . $project->label . " to " .
+			  $new_parent_p->label
+			 )->Show;
+		   }
+	       }
 	   }
 	   $insert_all++ if ($archived && !$project->{'archived'});
 	   $project->archived($archived);
