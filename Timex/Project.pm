@@ -292,6 +292,24 @@ sub sorted_subprojects {
     }
 }
 
+=head2 all_subprojects
+
+    @sub = $root->all_subprojects()
+
+Return all projects below $root (recurse into tree) as an array of Projects.
+
+=cut
+
+sub all_subprojects {
+    my($self) = @_;
+    my @res;
+    push @res, $self;
+    foreach ($self->subproject) {
+	push @res, $_->all_subprojects;
+    }
+    @res;
+}
+
 sub _in_interval {
     my($myfrom, $myto, $from, $to) = @_;
     return undef if !defined $myfrom || !defined $myto;
@@ -429,23 +447,26 @@ sub set_times {
 
     $root->delete_times($index1, $index2 ...)
 
-Delete the times definitions by the given indexes.
+Delete the times definitions by the given indexes. If index is "all", then
+all times definitions are deleted.
 
 =cut
 
 sub delete_times {
     my($self, @i) = @_;
     return if !@i;
-    @i = sort { $a <=> $b } @i;
     my @res;
-    for(my $i = 0; $i<=$#{ $self->{'times'} }; $i++) {
-	if (!@i) {
-	    push @res, @{$self->{'times'}}[$i .. $#{ $self->{'times'} }];
-	    last;
-	} elsif ($i == $i[0]) {
-	    shift @i;
-	} else {
-	    push @res, $self->{'times'}[$i];
+    if (!(@i == 1 && $i[0] eq 'all')) {
+	@i = sort { $a <=> $b } @i;
+	for(my $i = 0; $i<=$#{ $self->{'times'} }; $i++) {
+	    if (!@i) {
+		push @res, @{$self->{'times'}}[$i .. $#{ $self->{'times'} }];
+		last;
+	    } elsif ($i == $i[0]) {
+		shift @i;
+	    } else {
+		push @res, $self->{'times'}[$i];
+	    }
 	}
     }
     @{ $self->{'times'} } = @res;
