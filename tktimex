@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.10 1998/05/07 18:34:17 eserte Exp $
+# $Id: tktimex,v 4.11 1998/05/24 21:44:35 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -75,7 +75,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.10 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.11 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -129,6 +129,14 @@ $top->geometry($options->{'geometry'}) if $options->{'geometry'};
 
 # altes Balloon und HList vertragen sich nicht miteinander
 my $b = $top->Balloon if $Tk::VERSION >= 800.005;
+
+my $is_archiv;
+if ($Tk::VERSION >= 800.005) {
+    require Tk::ItemStyle;
+    $is_archiv = $top->ItemStyle('text',
+				 -foreground => 'red',
+				 -anchor => 'c');
+}
 
 my $menu_frame = $top->Frame(-relief => 'raised',
 			     -borderwidth => 2);
@@ -238,7 +246,7 @@ $menu_frame->Button(-text => 'Save',
 $menu_frame->pack(-fill => 'x');
 
 my $project_frame = $top->Scrolled('HList', -scrollbars => 'osoe',
-				   -columns => 4,
+				   -columns => 5,
 				   -height => 1,
 				   -drawbranch => 1,
 				   -header => 1,
@@ -247,9 +255,11 @@ my $project_frame = $top->Scrolled('HList', -scrollbars => 'osoe',
 				   -separator => $separator,
 				  )->pack(-expand => 1, -fill => 'both');
 $project_frame->header('create', 0, -text => 'Projects:');
-$project_frame->header('create', 1, -text => 'Session');
-$project_frame->header('create', 2, -text => 'Today');
-$project_frame->header('create', 3, -text => 'Total');
+$project_frame->header('create', 1, -text => '');
+my $pf_time_index = 2;
+$project_frame->header('create', $pf_time_index, -text => 'Session');
+$project_frame->header('create', $pf_time_index+1, -text => 'Today');
+$project_frame->header('create', $pf_time_index+2, -text => 'Total');
 
 my $orig_selectbg = $project_frame->cget(-selectbackground);
 
@@ -376,17 +386,23 @@ sub insert_project {
 			-text => $p->label,
 			-itemtype => 'text',
 			-data => $p);
+    if ($options->{'archived'} && $p->archived) {
+	$project_frame->itemCreate
+	  ($path, 1, -itemtype => 'text', -text => '*',
+	   ($is_archiv ? (-style => $is_archiv) : ()),
+	  );
+    }
     $project_frame->itemCreate
-      ($path, 1, -itemtype => 'text',
+      ($path, $pf_time_index, -itemtype => 'text',
        -text => &sec2time($p->sum_time($start_session_time, undef, 1)));
     $project_frame->itemCreate
-      ($path, 2, -itemtype => 'text',
+      ($path, $pf_time_index+1, -itemtype => 'text',
        -text => &sec2time($p->sum_time($today_time, undef, 1)));
     $project_frame->itemCreate
-      ($path, 3, -itemtype => 'text',
+      ($path, $pf_time_index+2, -itemtype => 'text',
        -text => &sec2time($p->sum_time(0, undef, 1)));
 
-    for (1 .. 3) {
+    for ($pf_time_index .. $pf_time_index+1) {
 	$project_frame->columnWidth($_, '');
 # XXX geht nur über DiStyle
 #	$project_frame->itemConfigure($path, $_, -anchor => 'e');
@@ -503,12 +519,14 @@ sub act_time_project {
     my $path = make_path($p);
     return if !$path;
     $project_frame->itemConfigure
-      ($path, 1, -text => &sec2time($p->sum_time($start_session_time, 
-						 undef, 1)));
+      ($path, $pf_time_index,
+       -text => &sec2time($p->sum_time($start_session_time, undef, 1)));
     $project_frame->itemConfigure
-      ($path, 2, -text => &sec2time($p->sum_time($today_time, undef, 1)));
+      ($path, $pf_time_index+1,
+       -text => &sec2time($p->sum_time($today_time, undef, 1)));
     $project_frame->itemConfigure
-      ($path, 3, -text => &sec2time($p->sum_time(0, undef, 1)));
+      ($path, $pf_time_index+2,
+       -text => &sec2time($p->sum_time(0, undef, 1)));
 }
 
 sub set_timeout {
@@ -892,7 +910,15 @@ sub not_running {
 }
 
 sub toggle_show_archived {
-    &not_running(\$options->{'archived'}) && &insert_all;
+    if (&not_running(\$options->{'archived'})) {
+	$project_frame->header('configure', 1,
+			       -text => ($options->{'archived'}
+					 ? 'Archiv'
+					 : ''
+					),
+			      );
+	&insert_all;
+    }
 }
 
 sub toggle_show_only_top {
