@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 5.2 2000/11/24 23:14:35 eserte Exp $
+# $Id: tktimex,v 5.3 2000/11/28 01:49:40 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -14,6 +14,8 @@
 
 #use blib qw(/home/e/eserte/src/perl/Devel-SRT);
 #use Devel::SRT;
+
+#BEGIN { eval q{ use utf8 } }
 
 BEGIN {
     sub state_change { }
@@ -102,7 +104,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 5.2 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 5.3 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -565,7 +567,7 @@ eval {
     # earlier versions used Delete instad of Unwatch:
     Tie::Watch->VERSION(0.99);
     $save_check = $menu_frame->Label(-padx => 4, -relief => 'raised');
- 
+
     $mod_watch = Tie::Watch->new(-variable => \$root->{'modified'},
 				 -store => $mod_sub,
 				);
@@ -596,7 +598,7 @@ my $save_button = $menu_frame->Button(-text => 'Save',
 				      -command => \&save_file
 				     )->pack(-side => 'right');
 $balloon->attach($save_button, -msg => 'Save project data') if $balloon;
- 
+
 my $minimized = 0;
 my $save_geometry;
 my($up_photo, $down_photo);
@@ -1557,7 +1559,7 @@ sub show_one_day {
 		     },
 		     ($has_date_entry ? (-state => 'disabled') : ()),
 		    )->pack(-side => 'left');
-    $no_interval_cb = 
+    $no_interval_cb =
 	$ff->Checkbutton(-text => 'no interval',
 			 -variable => \$one_day_only,
 			 -command => sub {
@@ -2606,48 +2608,56 @@ sub show_attributes {
     my $attribute_top = $top->Toplevel(-title => "Attributes");
     my $f = $attribute_top->Frame->pack(-fill => 'both', -expand => 1);
     my $row = 0;
+
+    my $fix_be = sub {
+	$_[0]->Subwidget("entry")->Subwidget("entry")->configure
+	    (-bg => $inner_bg, -fg => $inner_fg);
+    };
+    my $dframe = sub {
+	my $ff = $f->Frame->grid(-padx => 1,
+				 -row => $row, -column => 1, -sticky => 'w');
+	$ff->Label->pack(-side => "left");
+	$ff;
+    };
+
+    # Name/Id ##########
     $f->Label(-text => 'Name: ')->grid(-row => $row, -column => 0,
 				       -sticky => 'w');
     my $label = $project->label;
-    my $name_entry = $f->Entry(-bg => $inner_bg,
-			       -fg => $inner_fg,
-			       -textvariable => \$label
-			      )->grid(-row => $row, -column => 1,
-				      -sticky => 'w');
+    my $ff1 = $dframe->();
+    my $name_entry = $ff1->Entry(-bg => $inner_bg,
+				 -fg => $inner_fg,
+				 -textvariable => \$label
+				)->pack(-side => "left");
     $name_entry->focus;
     if ($readonly) { $name_entry->configure(-state => 'disabled') }
 
+    $f->Label(-text => "Id: " . $project->id)->grid(-row => $row,
+						    -column => 2,
+						    -sticky => "e");
+
+    # Old parent ##########
     if ($project->parent) {
 	$row++;
 	$f->Label(-text => 'Parent:')->grid(-row => $row,
 					    -column => 0,
 					    -sticky => 'w');
-	$f->Label(-text => ($project->parent eq $root ?
-			    '(Root)' : $project->parent->label)
-		 )->grid(-row => $row, -column => 1,
-			 -sticky => 'w');
+	$ff1 = $dframe->();
+	$ff1->Label(-text => ($project->parent eq $root ?
+			      '(Root)' : $project->parent->label)
+		   )->pack(-side => "left");
     }
 
-    my $new_parent;
-    my($combo, %combo_args);
-  TRYCOMBO: {
-	eval {
-	    die "Don't use ComboBox";
-	    require ComboBox; # XXX Tk::
-	    $combo = 'ComboBox';
-	    %combo_args = (-caseless => 'on', # XXX
-			   -match => 'on');
-	};
-	last TRYCOMBO if (defined $combo);
-	require Tk::BrowseEntry;
-	$combo = 'BrowseEntry';
-    }
+    # New parent ##########
     $row++;
-    my $browse = $f->$combo(-label => "New Parent",
-			    -variable => \$new_parent,
-			    -bg => $inner_bg,
-			    -fg => $inner_fg,
-			    %combo_args);
+    my $new_parent;
+    $f->Label(-text => "New Parent")->grid(-row => $row,
+					   -column => 0,
+					   -sticky => 'w');
+    require Tk::BrowseEntry;
+    my $browse = $f->BrowseEntry(-variable => \$new_parent,
+				);
+    $fix_be->($browse);
     if ($readonly) {
 	$browse->configure(-state => 'disabled')
     }
@@ -2662,10 +2672,10 @@ sub show_attributes {
 	$_ = '(Root)' if !defined $_ || $_ eq '';
 	$browse->insert("end", $_);
     }
-    $browse->grid(-row => $row, -column => 0,
-		  -columnspan => 3, -sticky => 'w');
+    $browse->grid(-row => $row, -column => 1,
+		  -columnspan => 1, -sticky => 'w');
 
-    # Rate
+    # Rate ##########
     my $rate = my $old_rate = $project->{'rate'};
     $row++;
     $f->Label(-text => 'Rate' .
@@ -2673,27 +2683,27 @@ sub show_attributes {
 	       ? " (" . $options->{'currency'} . ")"
 	       : "")
 	     )->grid(-row => $row, -column => 0, -sticky => 'w');
-    my $rate_entry = $f->Entry
+    $ff1 = $dframe->();
+    my $rate_entry = $ff1->Entry
 	(-textvariable => \$rate,
 	 -bg => $inner_bg,
 	 -fg => $inner_fg,
-	)->grid(-row => $row, -column => 1, -sticky => 'w');
+	)->pack(-side => "left");
     if ($readonly) { $rate_entry->configure(-state => 'disabled') }
 
-    # Domain
+    # Domain ##########
     my $domain = my $old_domain = $project->{'domain'};
     $row++;
     $f->Label(-text => 'Domain'
 	     )->grid(-row => $row, -column => 0, -sticky => 'w');
     my $domain_entry = $f->BrowseEntry
 	(-textvariable => \$domain,
-	 -bg => $inner_bg,
-	 -fg => $inner_fg,
 	 -choices => ["", @all_domains],
-	)->grid(-row => $row, -column => 1, -sticky => 'w');
+	)->grid(-row => $row, -column => 1, -columnspan => 1, -sticky => 'w');
     if ($readonly) { $domain_entry->configure(-state => 'disabled') }
+    $fix_be->($domain_entry);
 
-    # Archived
+    # Archived ##########
     my $archived = $project->{'archived'};
     $row++;
     my $arch_check = $f->Checkbutton
@@ -2702,16 +2712,16 @@ sub show_attributes {
       )->grid(-row => $row, -column => 0, -sticky => 'w');
     if ($readonly) { $arch_check->configure(-state => 'disabled') }
 
-    # RCS/CVS file
+    # RCS/CVS file ##########
     my $rcsfile = $project->rcsfile;
     $row++;
     $f->Label(-text => 'RCS/CVS file:'
 	     )->grid(-row => $row, -column => 0, -sticky => 'w');
-    my $rcs_entry = $f->Entry(-bg => $inner_bg,
-			      -fg => $inner_fg,
-			      -textvariable => \$rcsfile
-			     )->grid(-row => $row, -column => 1,
-				     -sticky => 'w');
+    $ff1 = $dframe->();
+    my $rcs_entry = $ff1->Entry(-bg => $inner_bg,
+				-fg => $inner_fg,
+				-textvariable => \$rcsfile
+			       )->pack(-side => "left");
     my $browse_entry = $f->Button
 	(-text => 'Browse...',
 	 -command => sub {
@@ -2731,7 +2741,7 @@ sub show_attributes {
 	$browse_entry->configure(-state => 'disabled');
     }
 
-    # Show intervals
+    # Show intervals/Note ##########
     $row++;
     my $ff = $f->Frame->grid(-row => $row, -column => 0,
 			     -columnspan => 3, -sticky => "w");
@@ -2750,6 +2760,7 @@ sub show_attributes {
 		    show_note($top);
 		})->pack(-side => "left");
 
+    # OK/Cancel ##########
     my $command_frame = $attribute_top->Frame->pack(-fill => 'x',
 						    -expand => 1);
     my $ok = $command_frame->Button
@@ -2884,7 +2895,7 @@ sub show_intervals {
 		    my $t = $w->Toplevel
 			(-title => "Log entries for "
 			 . $project->pathname . " "
-			 . join(" - ", map { scalar localtime $_ } 
+			 . join(" - ", map { scalar localtime $_ }
 				       @{$times->[$i]}[0..1]));
 		    my $ok = $t->Button(-text => 'OK',
 					-command => sub {
@@ -3472,7 +3483,7 @@ sub accept_drop {
 	if ($os eq 'win' && /STRING/) {
 	    $filename = $c->SelectionGet('-selection'=>$seln,$_);
 	    last;
-	} 
+	}
     }
     if (defined $filename) {
 	$c->after(10, sub {load_merge_popup($filename)});
