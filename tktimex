@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.18 1998/09/13 20:54:41 eserte Exp $
+# $Id: tktimex,v 4.19 1998/09/21 13:58:29 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -68,13 +68,14 @@ use File::Basename;
 use FindBin;
 use lib ("$FindBin::RealBin");
 use lib ("/home/e/eserte/lib/perl");
+use lib ("/home/e/eserte/devel"); # XXX für ComboBox
 eval { require Tk::UnderlineAll };
 use Timex::Project;
 use strict;
 use vars qw($VERSION);
-use locale; # for sort
+use locale; # for sort XXX broken in FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.18 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.19 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -1046,10 +1047,22 @@ sub show_attributes {
     }
 
     my $new_parent;
-    require Tk::BrowseEntry;
+    my($combo, %combo_args);
+  TRYCOMBO: {
+	eval {
+	    require ComboBox; # XXX Tk::
+	    $combo = 'ComboBox'; 
+	    %combo_args = (-caseless => 'on', # XXX
+			   -match => 'on');
+	};
+	last TRYCOMBO if (defined $combo);
+	require Tk::BrowseEntry;
+	$combo = 'BrowseEntry';
+    }
     $row++;
-    my $browse = $f->BrowseEntry(-label => "New Parent",
-				 -variable => \$new_parent);
+    my $browse = $f->$combo(-label => "New Parent",
+			    -variable => \$new_parent,
+			    %combo_args);
     if ($readonly) {
 	$browse->configure(-state => 'disabled')
     }
