@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.75 2000/09/30 10:16:18 eserte Exp $
+# $Id: tktimex,v 4.76 2000/10/02 22:29:59 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -102,7 +102,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.75 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.76 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -113,7 +113,9 @@ if ($Tk::VERSION <= 402.002) {
     Tk::HList->EnterMethods("Tk/HList.pm", qw(header));
 }
 
-my $root = new Timex::Project;
+use vars qw($root $utmp);
+
+$root = new Timex::Project;
 my $templates_root;
 
 my $quit_dialog;
@@ -136,6 +138,9 @@ my $undo_register;
 my $status_edit = 0;
 my $last_projects;
 my $max_last_projects = 4;
+my $username = eval { local $SIG{__DIE__};
+		      (getpwuid($<))[0];
+	       };
 my $home = get_home_dir();
 my $inner_fg = "black";
 my $inner_bg = "white";
@@ -144,6 +149,24 @@ my %history;
 my(%rcs_cache, @rcs_cache);
 my $ctrl_s = ($os eq 'win' ? 'Ctrl-' : 'C-');
 my $sbside = ($os eq 'win' ? 'e' : 'w');
+
+eval {
+    require Timex::Utmp;
+    $utmp = new Timex::Utmp;
+    $utmp->init;
+}; warn $@ if $@;
+
+my $date_require = <<'EOF';
+	require Tk::Date;
+	Tk::Date->VERSION(0.27);
+	if ($Tk::Date::VERSION >= 0.30) {
+	    ($inner_bg_opt, $inner_fg_opt) = ('-innerbg', '-innerfg');
+	}
+	if ($Tk::Date::VERSION >= 0.33) {
+	    %date_args = (-allarrows => 1);
+	}
+	$has_date = 1;
+EOF
 
 state_change("before Getopt definition");
 
@@ -1359,15 +1382,11 @@ sub working_time {
 
 sub show_one_day {
     my($inner_bg_opt, $inner_fg_opt) = ('-bg', '-fg');
-    eval {
-	require Tk::Date;
-	Tk::Date->VERSION(0.27);
-	if ($Tk::Date::VERSION >= 0.30) {
-	    ($inner_bg_opt, $inner_fg_opt) = ('-innerbg', '-innerfg');
-	}
-    };
+    my %date_args;
+    my $has_date;
+    eval $date_require;
+
     my $one_day_only = 1;
-    my $has_date = !$@;
     my $has_date_entry;
     if (!$has_date) {
 	eval {
@@ -1391,6 +1410,7 @@ sub show_one_day {
 	$dw = $df->Date
 	  ($inner_bg_opt => $inner_bg,
 	   $inner_fg_opt => $inner_fg,
+	   %date_args,
 	   -fields => 'date',
 	   -value => 'now',
 	   -datefmt => "%12A, %2d.%2m.%4y",
@@ -1409,6 +1429,7 @@ sub show_one_day {
 	$dw_to = $df->Date
 	    ($inner_bg_opt => $inner_bg,
 	     $inner_fg_opt => $inner_fg,
+	     %date_args,
 	     -fields => 'date',
 	     -value => 'now',
 	     -datefmt => "%12A, %2d.%2m.%4y",
@@ -1601,14 +1622,12 @@ sub daily_intervals {
     };
 
     my @utmp_lines;
-    eval {
-	require Timex::Utmp;
-	my $utmp = new Timex::Utmp;
-	$utmp->init;
-	@utmp_lines = $utmp->restrict(User => ((getpwuid($<))[0]),
+    if ($utmp) {
+	$utmp->update_if_necessary(300);
+	@utmp_lines = $utmp->restrict(User => $username,
 				      From => $begin_date,
 				      To   => $end_date);
-    }; warn $@ if $@;
+    }
 
     $lb = $t->Scrolled
 	('HList', -scrollbars => "oso$sbside",
@@ -2238,7 +2257,7 @@ sub save_sos {
     eval {
 	require Mail::Send;
 	my $msg = Mail::Send->new;
-	$msg->to((getpwuid($<))[0]);
+	$msg->to($username);
 	$msg->subject("tktimex: sos file");
 	my $fh = $msg->open;
 	print $fh <<EOF;
@@ -2593,7 +2612,7 @@ sub show_attributes {
 	$browse->configure(-state => 'disabled')
     }
     # Verwendung des Schwartzian Transform wegen Problemen mit lc.
-    # Es ist vielleich auch marginal schneller.
+    # Es ist vielleicht auch marginal schneller.
     my(@all_labels) =
 	map { $_->[1] }
         sort { $a->[0] cmp $b->[0] }
@@ -2846,25 +2865,46 @@ sub show_intervals {
 
     my $interval_editor = sub {
 	my $i = shift;
+	my %args = @_;
 	return if $readonly;
-	my $has_date;
+
 	my($inner_bg_opt, $inner_fg_opt) = ('-bg', '-fg');
-	eval {
-	    require Tk::Date;
-	    $has_date = 1 if !$@;
-	    if ($Tk::Date::VERSION >= 0.30) {
-		($inner_bg_opt, $inner_fg_opt) = ('-innerbg', '-innerfg');
-	    }
-	};
+	my %date_args;
+	my $has_date;
+	eval $date_require;
+
 	my $t = $w->Toplevel(-title => "Edit line $i for "
 			               . $project->pathname);
 	my($from, $to) = @{$times->[$i]};
+
+	my $date_choices = ['now'];
+	if ($utmp) {
+	    $utmp->update_if_necessary(300);
+	    my @utmp_lines = $utmp->restrict(User => $username,
+					     From => $today_time,
+					     To => time,
+					    );
+	    if (@utmp_lines) {
+		push @$date_choices,
+		    ['Today login'  => $utmp_lines[-1]->{Begin}],
+		    ['Today logout' => $utmp_lines[0]->{End}];
+	    }
+	    @utmp_lines = $utmp->restrict(User => $username,
+					  From => $today_time-86400,
+					  To   => $today_time-1);
+	    if (@utmp_lines) {
+		push @$date_choices,
+		    ['Yesterday login'  => $utmp_lines[-1]->{Begin}],
+		    ['Yesterday logout' => $utmp_lines[0]->{End}];
+	    }
+	};
 	$t->Label(-text => 'From:')->grid(-row => 0, -column => 0);
 	my $from_date = ($has_date
 			 ? $t->Date($inner_bg_opt => $inner_bg,
 				    $inner_fg_opt => $inner_fg,
+				    %date_args,
 				    -variable => \$from,
-				    -choices => 'now',
+				    -choices => $date_choices,
 				    )
 			 : $t->Entry(-bg => $inner_bg,
 				     -fg => $inner_fg,
@@ -2875,13 +2915,14 @@ sub show_intervals {
 	my $to_date = ($has_date
 		       ? $t->Date($inner_bg_opt => $inner_bg,
 				  $inner_fg_opt => $inner_fg,
+				  %date_args,
 				  -variable => \$to,
-				  -choices => 'now',
-				  )
+				  -choices => $date_choices,
+				 )
 		       : $t->Entry(-bg => $inner_bg,
 				   -fg => $inner_fg,
 				   -textvariable => \$to)
-		       );
+		      );
 	$to_date->grid(-row => 1, -column => 1);
 	my $f = $t->Frame->grid(-row => 2, -column => 0, -columnspan => 2);
 
@@ -2895,6 +2936,9 @@ sub show_intervals {
 	my $cancelb = $f->Button
 	  (-text => 'Cancel',
 	   -command => sub {
+	       if ($args{-cancelcommand}) {
+		   $args{-cancelcommand}->($i);
+	       }
 	       $t->destroy;
 	   },
 	  )->pack(-side => 'left');
@@ -3105,8 +3149,11 @@ sub show_intervals {
 		       $project->insert_times_after($before,
 						    time, time);
 		       $modified++;
-		       $interval_editor->($before+1);
-		       #$update->();
+		       $interval_editor->($before+1,
+			    -cancelcommand => sub {
+				$project->delete_times($before+1);
+				$modified--;
+			    });
 		   }
 		   )->pack(-side => 'left');
     }
