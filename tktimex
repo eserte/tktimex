@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.4 1998/01/29 14:38:10 eserte Exp $
+# $Id: tktimex,v 4.5 1998/01/30 15:04:34 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -74,7 +74,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.4 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.5 $ =~ /(\d+)\.(\d+)/);
 
 my $root = new Timex::Project;
 
@@ -94,22 +94,23 @@ my $status_edit = 0;
 
 my $options = {};
 my @opttable =
-  (['file|f', '=s', undef,
-   {'subtype' => 'file'}],
-   ['autosave|as', '!', 1, {'callback' => \&toggle_autosave }],
-   ['update', '=i', 60*10],
-   ['dateformat|df', '=s', 'h', {'choices' => ['d'],
-				 'strict' => 1,
-				 'callback' => \&toggle_dateformat }],
-   ['day8', '!', 0, {'callback' => \&toggle_time_arbeitstag }],
-   ['archived', '!', 0, {'callback' => \&toggle_show_archived }],
-   ['onlytop', '!', 0, {'callback' => \&toggle_show_archived }],
-   ['sort', '=s', '', {'choices' => ['nothing', 'name', 'time'],
-		       'strict' => 1,
-		       'callback' => \&insert_all,
-		      }],
-   ['oneday-immediately', '!', 1],
-   ['geometry', '=s', "500x230"], # XXX
+  (['file|f',             '=s', undef, 'subtype' => 'file'],
+   ['autosave|as',        '!',  1, 'callback' => \&toggle_autosave ],
+   ['update',             '=i', 60*10],
+   ['dateformat|df',      '=s', 'h',
+    'choices' => ['d'],
+    'strict' => 1,
+    'callback' => \&toggle_dateformat ],
+   ['day8',               '!',  0, 'callback' => \&toggle_time_arbeitstag ],
+   ['archived',           '!',  0, 'callback' => \&toggle_show_archived ],
+   ['onlytop',            '!',  0, 'callback' => \&toggle_show_archived ],
+   ['sort',               '=s', '',
+    'choices' => ['nothing', 'name', 'time'],
+    'strict' => 1,
+    'callback' => \&insert_all,
+   ],
+   ['oneday-immediately', '!',  1],
+   ['geometry',           '=s', "500x230"], # XXX
   );
 my $opt = new Tk::Getopt(-opttable => \@opttable,
 			 -options  => $options,
@@ -294,6 +295,8 @@ if (!$options->{'file'}) {
 load_file(0);
 
 $project_frame->focus;
+
+$top->repeat(5*60*1000, \&check_still_today);
 
 MainLoop;
 
@@ -1087,6 +1090,18 @@ sub sec2time {
     }
 }
 
+# XXX testen!
+sub check_still_today {
+    my @new_nowtime = localtime;
+    my $new_today_time = 
+      time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
+    if ($new_today_time != $today_time) {
+	$today_time = $new_today_time;
+	@nowtime = @new_nowtime;
+	insert_all();
+    }
+}
+
 sub adjust_filename {
     my($file) = @_;
     if ($file !~ /\.pj1$/) {
@@ -1155,6 +1170,8 @@ Possible options are:
         --[no]day8
         --[no]archived
         --[no]onlytop
+        --sort
+        --[no]oneday-immediately         (default: 1)
         --geometry       (default: 500x230) 
 
 =head1 DESCRIPTION
