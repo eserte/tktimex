@@ -19,10 +19,10 @@ WriteMakefile(
     'AUTHOR' => 'Slaven Rezic (eserte@cs.tu-berlin.de)',
 );
 
-sub MY::top_targets {
-    'ci :
-	@echo Do not use because of symlinks
-
-';
-}
+#sub MY::top_targets {
+#    'ci :
+#	@echo Do not use because of symlinks
+#
+#';
+#}
 
