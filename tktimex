@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.11 2001/10/22 11:00:50 eserte Exp $
+# $Id: tktimex,v 6.12 2001/10/22 11:31:30 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -165,7 +165,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.11 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.12 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -195,6 +195,7 @@ use vars qw($utmp
 	    %history %rcs_cache @rcs_cache
 	    $ctrl_s $sbside $use_enterprise
 	    $load_merge_filename $load_menu
+	    $p_itemtype %icons
 	   );
 
 $title = "tktimex $VERSION";
@@ -221,6 +222,7 @@ $inner_bg = "white";
 $ctrl_s = ($os eq 'win' ? 'Ctrl-' : 'C-');
 $sbside = ($os eq 'win' ? 'e' : 'w');
 $use_enterprise = 0;
+$p_itemtype = 'imagetext';
 
 eval {
     require Timex::Utmp;
@@ -461,18 +463,18 @@ use vars qw($is_archiv $east %hl_entry $new_in_merge $changed_in_merge);
 use vars qw($balloon);
 if ($Tk::VERSION >= 800.005) {
     require Tk::ItemStyle; # erst ab 800.005
-    $is_archiv = $top->ItemStyle('text', -foreground => 'red',
+    $is_archiv = $top->ItemStyle($p_itemtype, -foreground => 'red',
 				 -background => $inner_bg);
     $east = $top->ItemStyle('text', -anchor => 'e',
 			    -background => $inner_bg,
 			    -foreground => $inner_fg);
 
-    $hl_entry{"red"}  = $top->ItemStyle('text', -foreground => 'red');
-    $hl_entry{"blue"} = $top->ItemStyle('text', -foreground => 'blue');
+    $hl_entry{"red"}  = $top->ItemStyle($p_itemtype, -foreground => 'red');
+    $hl_entry{"blue"} = $top->ItemStyle($p_itemtype, -foreground => 'blue');
 
-    $new_in_merge     = $top->ItemStyle('text', -foreground => 'green3',
+    $new_in_merge     = $top->ItemStyle($p_itemtype, -foreground => 'green3',
 					-background => $inner_bg);
-    $changed_in_merge = $top->ItemStyle('text', -foreground => 'blue',
+    $changed_in_merge = $top->ItemStyle($p_itemtype, -foreground => 'blue',
 					-background => $inner_bg);
 
     # altes Balloon und HList vertragen sich nicht miteinander
@@ -1255,8 +1257,19 @@ sub insert_project {
 	($path,
 	 (defined $args{-after} ? (-after => $args{-after}) : ()),
 	 -text => $p->label,
-	 -itemtype => 'text',
+	 -itemtype => $p_itemtype,
 	 -data => $p);
+
+    if ($p_itemtype eq 'imagetext' && $p->icon) {
+	if (!$icons{$path}) {
+	    eval {
+		$icons{$path} = $project_frame->Photo(-file => $p->icon);
+	    }; warn $@ if $@;
+	}
+	if ($icons{$path}) {
+	    $project_frame->itemConfigure($path, 0, -image => $icons{$path});
+	}
+    }
 
     if ($p->archived && $is_archiv) {
 	$project_frame->itemConfigure($path, 0, -style => $is_archiv);
@@ -2927,6 +2940,16 @@ sub get_filename {
 		push @$types, [M"Timex XML files", '.xml'];
 	    } elsif ($type eq 'pjt') {
 		push @$types, [M"Timex Template files", '.pjt'];
+	    } elsif ($type eq 'gif') {
+		push @$types, [M"GIF images", '.gif'];
+	    } elsif ($type eq 'xpm') {
+		push @$types, [M"X11 pixmaps", '.xpm'];
+	    } elsif ($type eq 'xbm') {
+		push @$types, [M"X11 bitmaps", '.xbm'];
+	    } elsif ($type eq 'ppm') {
+		push @$types, [M"PPM images", '.ppm'];
+	    } elsif ($type eq 'images') {
+		push @$types, [M"Images", ['.ppm','.gif','.xpm','.xbm']];
 	    }
 	}
     }
@@ -3185,16 +3208,21 @@ sub show_attributes {
       )->grid(-row => $row, -column => 0, -sticky => 'w');
     if ($readonly) { $arch_check->configure(-state => 'disabled') }
 
+    my $PathEntry = "Entry";
+    if (eval 'require Tk::PathEntry; 1') {
+	$PathEntry = 'PathEntry';
+    }
+
     # RCS/CVS file ##########
     my $rcsfile = $project->rcsfile;
     $row++;
     $f->Label(-text => M("RCS/CVS file").":"
 	     )->grid(-row => $row, -column => 0, -sticky => 'w');
     $ff1 = $dframe->();
-    my $rcs_entry = $ff1->Entry(-bg => $inner_bg,
-				-fg => $inner_fg,
-				-textvariable => \$rcsfile
-			       )->pack(-side => "left");
+    my $rcs_entry = $ff1->$PathEntry(-bg => $inner_bg,
+				     -fg => $inner_fg,
+				     -textvariable => \$rcsfile
+				    )->pack(-side => "left");
     my $browse_entry = $f->Button
 	(-text => M("Browse")."...",
 	 -command => sub {
@@ -3214,6 +3242,45 @@ sub show_attributes {
     if ($readonly) {
 	$rcs_entry->configure(-state => 'disabled');
 	$browse_entry->configure(-state => 'disabled');
+    }
+
+    # Icon ##########
+    my $iconfile = $project->icon;
+    $row++;
+    $f->Label(-text => M("Icon file").":"
+	     )->grid(-row => $row, -column => 0, -sticky => 'w');
+    $ff1 = $dframe->();
+    my $icon_entry = $ff1->$PathEntry(-bg => $inner_bg,
+				      -fg => $inner_fg,
+				      -textvariable => \$iconfile
+				     )->pack(-side => "left");
+    my $icon_browse_entry = $f->Button
+	(-text => M("Browse")."...",
+	 -command => sub {
+	     my($file, $path) = fileparse($iconfile) if $iconfile;
+	     my $newfile = get_filename
+		 ($attribute_top,
+		  -Title  => M"Icon file",
+		  ($rcsfile ? (-File   => $file,
+			       -Path   => $path) : ()),
+		  -Create => 0,
+		  -filetypes => [qw/images xpm gif xbm ppm/],
+		 );
+	     if ($newfile) {
+		 $iconfile = $newfile;
+	     }
+	 })->grid(-row => $row, -column => 2, -sticky => 'w');
+    if ($readonly) {
+	$icon_entry->configure(-state => 'disabled');
+	$icon_browse_entry->configure(-state => 'disabled');
+    }
+
+    if ($PathEntry eq 'PathEntry') {
+	foreach my $w ($rcs_entry, $icon_entry) {
+	    foreach my $k (qw/Return Escape/) {
+		$w->bind("<$k>" => [$w, 'Finish']);
+	    }
+	}
     }
 
     # Show intervals/Note ##########
@@ -3273,6 +3340,8 @@ sub show_attributes {
 	   $project->archived($archived);
 
 	   $project->rcsfile($rcsfile);
+
+	   $project->icon($iconfile);
 
 	   $insert_all++ if defined $old_rate && $rate ne $old_rate;
 	   $project->rate($rate);
