@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.34 2000/09/01 23:53:28 eserte Exp $
+# $Id: Project.pm,v 3.35 2000/09/02 02:17:06 eserte Exp $
 #
 
 =head1 NAME
@@ -90,26 +90,46 @@ sub clone {
 
 =head2 concat
 
-    $project = concat Timex::Project $proj1, $proj2 ...
+    $project = concat Timex::Project [-flat => 1,] $proj1, $proj2 ...
 
 Concats the specified projects and create a new one. The concatenated
 projects are not cloned.
+
+If -flat is set to a true value, then projects are not seen as
+complete project hierarchies (i.e. root element is not a real project).
 
 =cut
 
 sub concat {
     my $class = shift;
+
+    my %args;
+    while (@_ && $_[0] =~ /^-/) {
+	my $key = shift;
+	$args{$key} = shift;
+    }
     my @p = @_;
+
     my $project = $class->new;
     my %seen;
     foreach my $p (@p) {
-	foreach my $subp ($p->subproject) {
-	    my $label = $subp->label;
-	    if ($seen{$label}) {
-		warn "There is already a project labelled $label\n";
+	if ($args{-flat}) {
+	    my $path = $p->pathname;
+	    if ($seen{$path}) {
+		warn "There is already a project with path $path";
 	    } else {
-		$project->subproject($subp);
-		$seen{$label}++;
+		$project->subproject($p);
+		$seen{$path}++;
+	    }
+	} else {
+	    foreach my $subp ($p->subproject) {
+		my $path = $subp->pathname;
+		if ($seen{$path}) {
+		    warn "There is already a project with path $path";
+		} else {
+		    $project->subproject($subp);
+		    $seen{$path}++;
+		}
 	    }
 	}
     }
