@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: XML.pm,v 1.3 1999/11/07 02:35:08 eserte Exp $
+# $Id: XML.pm,v 1.4 2000/09/01 23:35:23 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -67,7 +67,6 @@ sub _common_load { # XXX error handling
     }
     $tree = $tree->[1];
     $self->interpret_tree($tree);
-    
 }
 
 sub dump_data {
@@ -115,7 +114,7 @@ sub interpret_tree {
     }
     warn "Unknown attributes: " . join(" ", %$attributes)
       if %$attributes;
-    
+
     for(my $i = 1; $i<=$#$tree; $i+=2) {
 	if ($tree->[$i] eq 'project') {
 	    my $new_sub = new Timex::Project::XML;
