@@ -1,0 +1,17 @@
+# KDE Config File
+[KDE Desktop Entry]
+SwallowExec=
+SwallowTitle=
+BinaryPattern=
+Name=Timex
+MiniIcon=mini-clock.xpm
+Protocols=
+MimeType=
+Comment=Timex
+Name[de]=Timex
+Exec=tktimex -geometry 480x215+540+530
+Icon=mini-clock.xpm
+TerminalOptions=
+Path=
+Type=Application
+Terminal=0
