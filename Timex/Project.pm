@@ -67,6 +67,12 @@ sub end_time {
     $times[$#times]->[1] = $time;
 }
 
+sub unend_time {
+    my $self = shift;
+    my @times = @{$self->{'times'}};
+    pop(@{$times[$#times]});
+}
+
 sub sum_time {
     my($self, $since, $recursive) = @_;
     my $sum = 0;
