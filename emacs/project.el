@@ -1,7 +1,7 @@
 ;;; -*- emacs-lisp -*-
 
 ;;;
-;;; $Id: project.el,v 1.4 1999/08/21 12:27:26 eserte Exp $
+;;; $Id: project.el,v 1.5 2000/09/12 05:34:35 eserte Exp $
 ;;; Author: Slaven Rezic
 ;;;
 ;;; Copyright © 1997 Slaven Rezic. All rights reserved.
@@ -225,7 +225,7 @@ If SEPARATORS is absent, it defaults to \"[ \\f\\t\\n\\r\\v]+\"."
   (interactive)
   (save-excursion
     (goto-char (point-min))
-    (and (not (looking-at "^#PJ1"))
+    (and (not (looking-at "^#PJ[1T]"))
 	 (error "This is not a project file")))
   (setq mode-name "Project")
   (setq major-mode 'project-mode)
