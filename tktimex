@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.70 2000/09/19 07:54:35 eserte Exp $
+# $Id: tktimex,v 4.71 2000/09/19 23:40:03 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -101,7 +101,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.70 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.71 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -151,6 +151,7 @@ my @opttable =
   ('General',
    ['file|f',             '=s', undef, 'subtype' => 'file',
     'longhelp' => "Default project file to load on startup"],
+   ['mergedir',           '=s', undef, 'subtype' => 'file', 'nogui' => 1],
    ['lock',               '!',  1,
     'longhelp' => "Set to false if you don't want file locking."],
    ['one-instance',     '!',  0,
@@ -2165,13 +2166,18 @@ sub save_xml {
 
 sub merge_file {
     my $path;
-    (undef, $path) = fileparse($options->{'file'});
+    $path = $options->{'mergedir'};
+    if (!defined $path || !-d $path) {
+	(undef, $path) = fileparse($options->{'file'});
+    }
     my $file = get_filename($top,
 			    -Title => 'Enter project file for merge',
 			    -Path => $path,
 			    -FPat => '*.pj1',
 			    -Create => 0);
     return unless $file;
+
+    $options->{'mergedir'} = dirname($file);
 
     merge_file_noninteractive($file);
 }
