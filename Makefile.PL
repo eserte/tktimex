@@ -38,7 +38,7 @@ WriteMakefile(
 		    'XML::Parser'  => 0,
 		    'Mail::Send'   => 0,
 		   },
-    'AUTHOR' => 'Slaven Rezic (slaven.rezic@berlin.de)',
+    'AUTHOR' => 'Slaven Rezic (slaven@rezic.de)',
 );
 
 #sub MY::top_targets {
@@ -48,3 +48,11 @@ WriteMakefile(
 #';
 #}
 
+sub MY::postamble {
+    <<EOF .
+
+release:	dist
+	../sf-upload/sf-upload -project ptktools -package tktimex -release \$(VERSION) -file \$(DISTVNAME).tar\$(SUFFIX) -notesfile README -changes ""
+
+EOF
+}
