@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.16 2003/03/28 16:49:32 eserte Exp $
+# $Id: tktimex,v 6.17 2003/07/24 20:02:10 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -168,7 +168,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.16 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.17 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -901,6 +901,7 @@ if ($real_project_frame->can("menu") &&
 	my $e = $w->XEvent;
 	$popup_entry = $w->GetNearest($e->y, 0);
 	return unless defined $popup_entry;
+	$w->anchorSet($popup_entry);
 	$popup_project = entry_to_project($popup_entry);
 	return unless $popup_project;
 	$popup_menu->entryconfigure(0, -label => $popup_project->label);
@@ -3129,6 +3130,38 @@ sub toggle_time_arbeitstag {
     insert_all();
 }
 
+sub _fix_be {
+    $_[0]->Subwidget("entry")->Subwidget("entry")->configure
+	(-bg => $inner_bg, -fg => $inner_fg);
+};
+
+sub _all_labels {
+    map { $_->[1] }
+        sort { $a->[0] cmp $b->[0] }
+	    map { [lc($_), $_] }
+		$root->all_pathnames;
+}
+
+sub _all_projects_browseentry {
+    my($parent, %args) = @_;
+
+    my $exclude_root = delete $args{-excluderoot};
+
+    require Tk::BrowseEntry;
+    my $browse = $parent->BrowseEntry(%args);
+    _fix_be($browse);
+    # Verwendung des Schwartzian Transform wegen Problemen mit lc.
+    # Es ist vielleicht auch marginal schneller.
+    foreach (_all_labels) {
+	if (!defined $_ || $_ eq '') {
+	    next if $exclude_root;
+	    $_ = '(Root)'
+	}
+	$browse->insert("end", $_);
+    }
+    $browse;
+}
+
 sub show_attributes {
     my($path, $readonly) = @_;
 
@@ -3146,10 +3179,6 @@ sub show_attributes {
     my $f = $attribute_top->Frame->pack(-fill => 'both', -expand => 1);
     my $row = 0;
 
-    my $fix_be = sub {
-	$_[0]->Subwidget("entry")->Subwidget("entry")->configure
-	    (-bg => $inner_bg, -fg => $inner_fg);
-    };
     my $dframe = sub {
 	my $ff = $f->Frame->grid(-padx => 1,
 				 -row => $row, -column => 1, -sticky => 'w');
@@ -3191,24 +3220,11 @@ sub show_attributes {
     $f->Label(-text => M("New Parent"))->grid(-row => $row,
 					      -column => 0,
 					      -sticky => 'w');
-    require Tk::BrowseEntry;
-    my $browse = $f->BrowseEntry(-variable => \$new_parent,
-				);
-    $fix_be->($browse);
-    if ($readonly) {
-	$browse->configure(-state => 'disabled')
-    }
-    # Verwendung des Schwartzian Transform wegen Problemen mit lc.
-    # Es ist vielleicht auch marginal schneller.
-    my(@all_labels) =
-	map { $_->[1] }
-        sort { $a->[0] cmp $b->[0] }
-        map { [lc($_), $_] }
-        $root->all_pathnames;
-    foreach (@all_labels) {
-	$_ = '(Root)' if !defined $_ || $_ eq '';
-	$browse->insert("end", $_);
-    }
+    my $browse = _all_projects_browseentry
+	($f,
+	 -variable => \$new_parent,
+	 $readonly ? (-state => 'disabled') : (),
+	);
     $browse->grid(-row => $row, -column => 1,
 		  -columnspan => 1, -sticky => 'w');
 
@@ -3244,7 +3260,7 @@ sub show_attributes {
 	 -choices => ["", @all_domains],
 	)->grid(-row => $row, -column => 1, -columnspan => 1, -sticky => 'w');
     if ($readonly) { $domain_entry->configure(-state => 'disabled') }
-    $fix_be->($domain_entry);
+    _fix_be($domain_entry);
 
     # Archived ##########
     my $archived = $project->{'archived'};
@@ -3359,7 +3375,7 @@ sub show_attributes {
 	       $project->label($label);
 	       $insert_all++;
 	   }
-	   if (defined $new_parent && grep($_ eq $new_parent, @all_labels)) {
+	   if (defined $new_parent && grep($_ eq $new_parent, _all_labels)) {
 	       my $new_parent_p;
 	       if ($new_parent eq '(Root)') {
 		   $new_parent_p = $root;
@@ -3800,6 +3816,135 @@ sub show_intervals {
 	   -text => sec2time(time-$last_rev_def->{'Time'}, 'dd', 0));
     }
 
+    my $delete = sub {
+	return unless
+	    lc($lb->messageBox
+	       (-icon => 'question',
+		-title => M"Delete?",
+		-message => M"Really delete?",
+		-type => M"OkCancel")) eq lc(M"OK");
+	$project->delete_times($lb->info('selection'));
+	$modified++;
+	$update->();
+    };
+
+    my $insert = sub {
+	my($before_or_after) = @_;
+	my @sel = $lb->info('selection');
+	my $before;
+	if (defined $before_or_after) {
+	    if ($before_or_after eq 'before') {
+		$before = $sel[$#sel]-1;
+	    } else {
+		$before = $sel[$#sel];
+	    }
+	} else {
+	    $before = (!@sel ? -1 : $sel[$#sel]);
+	}
+	$project->insert_times_after($before,
+				     time, time);
+	$modified++;
+	$interval_editor->($before+1,
+			   -cancelcommand => sub {
+			       $project->delete_times($before+1);
+			       $modified--;
+			   });
+    };
+
+    if ($lb->can("menu") and
+	$lb->can("PostPopupMenu")
+	and $Tk::VERSION >= 800) {
+
+	my $lb_popup_menu;
+	$lb_popup_menu = $lb->Menu(-title => M"Interval menu",
+				   -disabledforeground => "darkblue",
+				   -tearoff => 0);
+
+	my $current_index = undef;
+
+	$lb_popup_menu->command(-label => "Interval:",
+				-state => "disabled");
+
+	$lb_popup_menu->command
+	    (-label => M"Delete",
+	     -command => sub {
+		 $delete->();
+	     },
+	    );
+	$lb_popup_menu->command
+	    (-label => M"Insert before",
+	     -command => sub {
+		 $insert->("before");
+	     },
+	    );
+	$lb_popup_menu->command
+	    (-label => M"Insert after",
+	     -command => sub {
+		 $insert->("after");
+	     },
+	    );
+	$lb_popup_menu->command
+	    (-label => M"Move",
+	     -command => sub {
+		 my $t2 = $lb->Toplevel(-title => M"Move interval");
+		 $t2->Label(-text => M"New Parent")->pack;
+		 my $new_project;
+		 my $be = _all_projects_browseentry
+		     ($t2, -variable => \$new_project, -excluderoot => 1);
+		 $be->pack;
+		 my $f = $t2->Frame->pack(-fill => 'x', -expand => 1);
+		 my $ok = $f->Button
+		     (-command => sub {
+			  my $new_project_p = $root->find_by_pathname($new_project);
+			  if (!defined $new_project_p) {
+			      die "Can't find parent $new_project";
+			  }
+			  my $new_times = $new_project_p->interval_times("", -asref => 1);
+			  $new_project_p->insert_times_after($#$new_times, @{ $times->[$current_index] });
+			  $project->delete_times($current_index);
+			  $update->();
+			  # XXX destroy problem?!
+			  $lb->afterIdle(sub { warn $t2; $t2->destroy; warn "ok" });
+		      })->pack(-side => "left");
+		 set_text_or_image($ok, "yes.gif", M"OK");
+		 my $cancel = $f->Button(-command => sub { $t2->destroy() }
+					)->pack(-side => 'left');
+		 $t2->bind('<Escape>' => sub { $cancel->invoke });
+		 set_text_or_image($cancel, "no.gif", M"Cancel");
+	     },
+	    );
+	$lb_popup_menu->command
+	    (-label => M"Annotate",
+	     -command => sub { die "NYI" },
+	    );
+
+	$lb->menu($lb_popup_menu);
+	$lb->Subwidget("scrolled")->bind
+	    ('<3>' => sub {
+		 my $e = $_[0]->XEvent;
+
+		 $lb_popup_menu->entryconfigure(0, -label => "???");
+		 for my $i (1 .. $lb_popup_menu->index("last")) {
+		     $lb_popup_menu->entryconfigure($i, -state => "disabled");
+		 }
+		 my $y = $e->y;
+		 $current_index = $lb->nearest($y);
+		 if (defined $current_index) {
+		     $lb->anchorSet($current_index);
+		     $lb->selectionClear;
+		     $lb->selectionSet($current_index);
+		     my $from = $lb->itemCget($current_index, 0, -text);
+		     my $to   = $lb->itemCget($current_index, 1, -text);
+		     $lb_popup_menu->entryconfigure(0, -label => "$from - $to");
+		     for my $i (1 .. $lb_popup_menu->index("last")) {
+			 $lb_popup_menu->entryconfigure($i, -state => "normal");
+		     }
+		 }
+
+		 $_[0]->PostPopupMenu($e->X, $e->Y);
+	     });
+    }
+
     $w->withdraw;
     $lb->see($i-1) if $i > 1;
     my $f = $w->Frame->pack(-fill => 'x');
@@ -3815,32 +3960,11 @@ sub show_intervals {
     $f->Label(-text => '  ')->pack(-side => 'left');
     if ($group eq '' && !$subproj) {
 	$f->Button(-text => M"Del",
-		   -command => sub {
-		       return unless
-			   lc($f->messageBox
-			      (-icon => 'question',
-			       -title => M"Delete?",
-			       -message => M"Really delete?",
-			       -type => M"OkCancel")) eq lc(M"OK");
-		       $project->delete_times($lb->info('selection'));
-		       $modified++;
-		       $update->();
-		   }
-		   )->pack(-side => 'left');
+		   -command => $delete,
+		  )->pack(-side => 'left');
 	$f->Button(-text => M"Ins",
-		   -command => sub {
-		       my @sel = $lb->info('selection');
-		       my $before = (!@sel ? -1 : $sel[$#sel]);
-		       $project->insert_times_after($before,
-						    time, time);
-		       $modified++;
-		       $interval_editor->($before+1,
-			    -cancelcommand => sub {
-				$project->delete_times($before+1);
-				$modified--;
-			    });
-		   }
-		   )->pack(-side => 'left');
+		   -command => sub { $insert->() },
+		  )->pack(-side => 'left');
     }
     if (!$subproj) {
 	$f->Button(-text => M"Re-Sort",
