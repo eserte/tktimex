@@ -155,6 +155,45 @@ sub last_time_subprojects {
     return $last;
 }
 
+=head2 daily_times
+
+    @times = $project->daily_times;
+
+Return the @times array (like $project->{'times'}) aggregated to days.
+
+=cut
+
+sub daily_times {
+    my $self = shift;
+    require Time::Local;
+    my @times = @{$self->{'times'}};
+    my @res;
+    my($last_wday, $last_year);
+    for(my $i = 0; $i<=$#times; $i++) {
+	my $d = $times[$i];
+	next if !defined $d->[1]; # ignore running project
+	my(@a1) = localtime $d->[0];
+	my(@a2) = localtime $d->[1];
+	if ($a1[7] != $a2[7]) {
+	    # split into today and tomorrow
+	    my $old_end = $d->[1];
+	    $d->[1] = Time::Local::timelocal(59,59,23,$a1[3],$a1[4],$a1[5]);
+	    splice @times, $i+1, 0, [$d->[1]+1, $old_end];
+	}
+	my $interval = $d->[1] - $d->[0];
+	if (defined $last_wday &&
+	    $last_wday == $a1[7] && $last_year == $a1[7]) {
+	    $res[$#res]->[1] = $d->[1]; # correct end time
+	    $res[$#res]->[2] += $interval; # update daily interval
+	} else {
+	    push @res, [$d->[0], $d->[1], $interval];
+	}
+	$last_wday = $a1[7];
+	$last_year = $a1[7];
+    }
+    @res;
+}
+
 sub parent {
     my($self, $parent) = @_;
     if (defined $parent) {
