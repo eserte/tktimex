@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.56 2000/08/01 23:50:03 eserte Exp $
+# $Id: tktimex,v 4.57 2000/08/23 23:35:24 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -99,7 +99,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.56 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.57 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -135,6 +135,7 @@ my $home = get_home_dir();
 my $inner_fg = "black";
 my $inner_bg = "white";
 my %history;
+my(%rcs_cache, @rcs_cache);
 
 state_change("before Getopt definition");
 
@@ -258,7 +259,11 @@ $top->protocol('WM_SAVE_YOURSELF',
 		     $top->command("$^X $0 $options->{'file'}");
 		     $top->destroy;
 		 });
-$SIG{'HUP'} = sub { save_sos(); };
+# SIGHUP is not defined on Windows
+eval {
+    local $^W = undef;
+    $SIG{'HUP'} = sub { save_sos(); };
+};
 
 $top->title($title);
 $top->geometry($options->{'geometry'}) if $options->{'geometry'};
@@ -337,13 +342,17 @@ $mb_project->command(-label => 'Delete',
 $mb_project->command(-label => 'Undo',
 		     -command => \&undo);
 $mb_project->command(-label => 'Search',
-		     -command => \&search_project);
+		     -command => \&search_project,
+		     -accelerator => 'C-s');
+$top->bind('<Control-s>' => \&search_project);
 $mb_project->command(-label => 'Continue last',
 		     -command => \&cont_last);
 $mb_project->command(-label => 'Attributes',
 		     -command => sub { show_attributes(undef) });
 $mb_project->command(-label => 'Intervals',
-		     -command => sub { show_intervals($top, undef) });
+		     -command => sub { show_intervals($top, undef) },
+		     -accelerator => 'C-i');
+$top->bind('<Control-i>' => sub { show_intervals($top, undef) });
 ## Menü ist zu überladen...
 #$mb_project->command(-label => 'Note',
 #		     -command => sub { show_note($top) });
@@ -351,7 +360,9 @@ $mb_project->separator;
 $mb_project->command(-label => 'Working time',
 		     -command => \&working_time);
 $mb_project->command(-label => 'Daily details',
-		     -command => \&show_one_day);
+		     -command => \&show_one_day,
+		     -accelerator => 'C-d');
+$top->bind('<Control-d>' => \&show_one_day);
 
 my $mb_project_menu = $mb_project->cget(-menu);
 
@@ -451,11 +462,13 @@ if (!$mod_watch || $@) {
     $save_check->bindtags([]);
 }
 $save_check->pack(-side => 'right');
-$balloon->attach($save_check, -msg => 'File modified indicator') if $balloon;
+$balloon->attach($save_check, -msg => 'Timex data modified indicator')
+  if $balloon;
 
 my $pause_cont_button = $menu_frame->Button
   (-text => 'Pause',
    -fg => 'red',
+   -width => 5,
    -command => \&pause_or_cont)->pack(-side => 'right');
 
 my $save_button = $menu_frame->Button(-text => 'Save',
@@ -495,7 +508,7 @@ $pf_cols = 5; # cannot change -columns of hlists...
 state_change("checkpoint 3");
 
 my $project_frame = $top->Scrolled
-  ('HList', -scrollbars => 'osoe',
+  ('HList', -scrollbars => 'osow',
    -bg => $inner_bg,
    -fg => $inner_fg,
    -columns => $pf_cols,
@@ -626,20 +639,27 @@ sub enter_label {
     $status_text->configure(-text => $label);
     my $Entry = "Entry";
     my @extra_args;
+    my $this_history_file;
     eval {
 	require Tk::HistEntry;
 	Tk::HistEntry->VERSION(0.33);
 	$Entry = "SimpleHistEntry";
 	@extra_args = (-match => 1, -dup => 0);
+	$this_history_file = "$home/.tktimex_hist";
     };
     my $entry = $status_frame->$Entry(-bg => $inner_bg,
 				      -fg => $inner_fg,
 				      -textvariable => \$res,
 				      -width => 30,
 				      @extra_args);
-    if ($entry->can('history') and ref $history{$caller} eq 'ARRAY') {
+
+    $entry->bindtags(['Tk::HistEntry::Simple', $entry]);
+    if ($entry->can('historyMergeFromFile')) {
+	$entry->historyMergeFromFile($this_history_file);
+    } elsif ($entry->can('history') and ref $history{$caller} eq 'ARRAY') {
 	$entry->history($history{$caller});
     }
+
     $entry->pack(-side => 'left');
     $entry->waitVisibility;
     $entry->grab;
@@ -654,13 +674,18 @@ sub enter_label {
     if ($action eq 'yes') {
 	if ($entry->can('historyAdd')) {
 	    $entry->historyAdd();
-	    $history{$caller} = [ $entry->history ];
+	    if ($entry->can('historySave')) {
+		$entry->historySave($this_history_file);
+	    } else {
+		$history{$caller} = [ $entry->history ];
+	    }
 	}
     }
 
     $entry->destroy;
     $status_text->configure(-text => "Current file: " .
 			    ($options->{file} || ""));
+    $project_frame->focus;
     if ($action eq 'yes') {
 	$res =~ s/$separator//g; # sicherheitshalber ...
 	$res;
@@ -876,6 +901,7 @@ sub get_project_from_selection {
 
 sub update_pause_cont_balloon {
     my $txt = $pause_cont_button->cget(-text);
+    if ($txt eq 'Cont') { $txt = 'Continue' }
     if ($balloon) {
 	my $p = get_project_from_selection();
 	if ($p) {
@@ -892,16 +918,6 @@ sub gui_set_pause_or_cont {
 				  -fg => ($txt eq 'Cont' ? 'green4' : 'red'));
     update_pause_cont_balloon();
 
-## Pause/Cont-Eintrag ist aus dem Menü rausgenommen worden
-#     my $search_txt = ($txt eq 'Cont' ? 'Pause' : 'Cont');
-#     my $i;
-#     for $i (0 .. $mb_project_menu->index('end')) {
-# 	if ($mb_project_menu->type($i) eq 'command' &&
-# 	    $mb_project_menu->entrycget($i, -label) eq $search_txt) {
-# 	    $mb_project_menu->entryconfigure($i, -label => $txt);
-# 	    last;
-# 	}
-#     }
 }
 
 sub stop_project {
@@ -959,8 +975,8 @@ sub undo {
 sub search_project {
     my $regex = enter_label("Search:", 'search');
     if ($regex && $root) {
-	# XXX vielleicht ein eval, um regex-Fehler abzufangen
-	my @res = $root->find_by_regex("(?i)$regex");
+	# XXX vielleicht ein eval, um regex-Fehler abzufangen; \Q/\E geht nicht
+	my @res = $root->find_by_regex_pathname("(?i)$regex");
 	foreach my $r (@res) {
 	    my $path = make_path($r);
 	    # überprüfen, ob das Projekt überhaupt sichtbar ist:
@@ -1240,7 +1256,7 @@ sub show_one_day {
 			  -columns => 2,
 			  -width => 40,
 			  -header => 1,
-			  -scrollbars => 'osoe',
+			  -scrollbars => 'osow',
 			  -selectmode => 'extended',
 			  -exportselection => 1,
 			  -command => sub {
@@ -1311,7 +1327,7 @@ sub daily_intervals {
     require POSIX;
     my $t = $top->Toplevel;
     $t->title(POSIX::strftime("%Y-%m-%d", localtime $begin_date));
-    my $lb = $t->Scrolled('HList', -scrollbars => 'osoe',
+    my $lb = $t->Scrolled('HList', -scrollbars => 'osow',
 			  -columns => 3,
 			  -width => 60,
 			 )->pack(-expand => 1, -fill => 'both');
@@ -1820,6 +1836,7 @@ sub get_filename {
 	   -title => $args{-Title},
 	   ($Tk::VERSION >= 800.012 && $args{'-FPat'} =~ /pj1/ ?
 	    (-filetypes => [['Timex files', '.pj1'],
+			    ['Timex XML files', '.xml'], # XXX well...
 			    ['All files',  '*']])
 	    : ()
 	   ),
@@ -1959,6 +1976,7 @@ sub show_attributes {
 			       -textvariable => \$label
 			      )->grid(-row => $row, -column => 1,
 				      -sticky => 'w');
+    $name_entry->focus;
     if ($readonly) { $name_entry->configure(-state => 'disabled') }
 
     if ($project->parent) {
@@ -2019,7 +2037,7 @@ sub show_attributes {
 
     my $rcsfile = $project->rcsfile;
     $row++;
-    $f->Label(-text => 'RCS file:'
+    $f->Label(-text => 'RCS/CVS file:'
 	     )->grid(-row => $row, -column => 0, -sticky => 'w');
     $f->Entry(-bg => $inner_bg,
 	      -fg => $inner_fg,
@@ -2030,7 +2048,7 @@ sub show_attributes {
        -command => sub {
 	   my($file, $path) = fileparse($rcsfile) if $rcsfile;
 	   my $newfile = get_filename($attribute_top,
-				      -Title  => 'RCS file',
+				      -Title  => 'RCS/CVS file',
 				      ($rcsfile ? (-File   => $file,
 						   -Path   => $path) : ()),
 				      -Create => 0,
@@ -2050,7 +2068,11 @@ sub show_attributes {
 				   $project,
 				  -readonly => $readonly);
 		})->pack(-side => "left");
-    $ff->Button(-text => 'Note',
+    my $note_label = "Note";
+    if ($project->has_note) {
+	$note_label .= " *";
+    }
+    $ff->Button(-text => $note_label,
 		-command => sub {
 		    show_note($top);
 		})->pack(-side => "left");
@@ -2095,6 +2117,7 @@ sub show_attributes {
       );
     set_text_or_image($ok, "yes.gif", "OK");
     $ok->pack(-side => 'left');
+    if ($readonly) { $ok->focus }
     my $cancel = $command_frame->Button
       (-command => sub { $attribute_top->destroy() }
       );
@@ -2111,20 +2134,30 @@ sub show_intervals {
 
     my $readonly      = $args{-readonly};
     my $show_seconds  = $args{-show_seconds};
-    my $daily         = $args{-daily};
+    my $group         = $args{-group} || '';
     my $geometry      = $args{-geometry};
     my $modified      = $args{-modified};
     my $day           = $args{-day};
+
     if (!defined $project) {
 	$project = entry_to_project(get_sel_entry());
 	return if !defined $project;
     }
 
+    if ($group eq 'weekly') {
+	eval {
+	    require Date::Calc;
+	};
+	if ($@) {
+	    warn "$@. Reverting to daily";
+	    $group = "daily";
+	}
+    }
+
     my @rev;
     if ($project->rcsfile) {
 	eval {
-	    require Timex::Rcs;
-	    my $rcs = new Timex::Rcs $project->rcsfile;
+	    my $rcs = get_rcs_from_cache($project->rcsfile);
 	    if ($rcs) {
 		foreach my $rev ($rcs->revisions) {
 		    push(@rev, [$rev->revision,
@@ -2132,24 +2165,54 @@ sub show_intervals {
 				$rcs->symbolic_name($rev)]);
 		}
 	    } else {
-		die "Can't create rcs object";
+		die "Can't create rcs/cvs object";
 	    }
 	};
 	warn $@ if $@;
     }
 
-    my($w, $lb);
+    my($w, $lb, $real_lb, $times);
 
     my $update = sub {
 	my $t = shift;
 	$t->destroy if $t;
 	$args{-geometry}     = $w->geometry;
 	$args{-show_seconds} = $show_seconds;
-	$args{-daily}        = $daily;
+	$args{-group}        = $group;
 	$args{-modified}     = $modified;
 	$w->destroy;
 	show_intervals($top, $project,
 		       %args);
+    };
+
+    my $log_viewer = sub {
+	my $i = shift;
+	if ($project->rcsfile) {
+	    eval {
+		my $rcs = get_rcs_from_cache($project);
+		if ($rcs) {
+		    my $log_entries = $rcs->get_log_entries
+			(@{$times->[$i]}[0..1]);
+		    my $t = $w->Toplevel
+			(-title => "Log entries for "
+			 . $project->pathname . " "
+			 . join(" - ", map { scalar localtime $_ } 
+				       @{$times->[$i]}[0..1]));
+		    my $ok = $t->Button(-text => 'OK',
+					-command => sub {
+					    $t->destroy;
+					})->pack(-side => "bottom");
+		    $t->bind('<Escape>' => sub { $ok->invoke });
+		    require Tk::ROText;
+		    my $ro = $t->Scrolled
+			("ROText", -scrollbars => "sow",
+			 -wrap => "none",
+			 )->pack(-fill => "both", -expand => 1);
+		    $ro->insert("end", $log_entries);
+		    $ok->focus;
+		}
+	    }
+	}
     };
 
     my $interval_editor = sub {
@@ -2164,8 +2227,9 @@ sub show_intervals {
 		($inner_bg_opt, $inner_fg_opt) = ('-innerbg', '-innerfg');
 	    }
 	};
-	my $t = $w->Toplevel(-title => "Edit line $i");
-	my($from, $to) = @{$project->{'times'}[$i]};
+	my $t = $w->Toplevel(-title => "Edit line $i for "
+			               . $project->pathname);
+	my($from, $to) = @{$times->[$i]};
 	$t->Label(-text => 'From:')->grid(-row => 0, -column => 0);
 	my $from_date = ($has_date
 			 ? $t->Date($inner_bg_opt => $inner_bg,
@@ -2205,6 +2269,7 @@ sub show_intervals {
 	       $t->destroy;
 	   },
 	  )->pack(-side => 'left');
+	$cancelb->focus;
 	my $deleteb = $f->Button
 	  (-text => 'Delete',
 	   -command => sub {
@@ -2217,38 +2282,66 @@ sub show_intervals {
 	$t->Popup(-popover => 'cursor');
     };
 
+    my $double_click = sub {
+	my $i = shift;
+
+	my $e = $real_lb->XEvent;
+	my $x = $e->x;
+	my $col_width = 0;
+	my $lb_column;
+	foreach my $lb_i (0 .. $lb->cget(-columns)-1) {
+	    my $old_col_width = $col_width;
+	    $col_width += $lb->columnWidth($lb_i);
+	    if ($x >= $old_col_width and $x <= $col_width) {
+		$lb_column = $lb_i;
+		last;
+	    }
+	}
+
+	if ($group eq '' && (!defined $lb_column || $lb_column < 3)) {
+	    $interval_editor->($i);
+	} else {
+	    $log_viewer->($i);
+	}
+    };
+
     $w = $top->Toplevel(-title => "Intervals for " . $project->pathname);
     my $no_cols = 2;
     my $rev_lifetime_col;
-    $no_cols ++   if !$daily; # zusätzliche To-Spalte
+    $no_cols ++   if !$group; # zusätzliche To-Spalte
     $no_cols ++   if $show_seconds; # für From/Date-Spalte
-    $no_cols ++   if $show_seconds and !$daily; # für To-Spalte
+    $no_cols ++   if $show_seconds and !$group; # für To-Spalte
     $no_cols += 2 if @rev;
-    $lb = $w->Scrolled('HList', -scrollbars => 'osoe',
+    $lb = $w->Scrolled('HList', -scrollbars => 'osow',
 		       -bg => $inner_bg,
 		       -fg => $inner_fg,
 		       -columns => $no_cols,
 		       -width => 80,
 		       -header => 1,
-		       -command => $interval_editor,
+		       -command => $double_click,
 		      )->pack(-fill => 'both', -expand => 1);
+    $real_lb = $lb->Subwidget("scrolled");
     {
 	my $col = 0;
-	if ($daily) {
+	if ($group eq 'daily') {
 	    $lb->header('create', $col++, -text => 'Day');
+	} elsif ($group eq 'weekly') {
+	    $lb->header('create', $col++, -text => 'Week');
+	} elsif ($group eq 'monthly') {
+	    $lb->header('create', $col++, -text => 'Month');
 	} else {
 	    $lb->header('create', $col++, -text => 'From');
 	}
 	$lb->header('create', $col++, -text => 'seconds')
 	  if $show_seconds;
-	if (!$daily) {
+	if (!$group) {
 	    $lb->header('create', $col++, -text => 'To');
 	    $lb->header('create', $col++, -text => 'seconds')
 	      if $show_seconds;
 	}
 	$lb->header('create', $col++, -text => 'Time');
 	if (@rev) {
-	    $lb->header('create', $col++, -text => 'RCS');
+	    $lb->header('create', $col++, -text => 'RCS/CVS');
 	    $rev_lifetime_col = $col++;
 	    $lb->header('create', $rev_lifetime_col,
 			-text => 'Version lifetime');
@@ -2258,18 +2351,33 @@ sub show_intervals {
     my $anchor_set = 0;
     my $last_rev_def;
     my $i = 0;
-    my @times = ($daily
-		 ? $project->daily_times
-		 : @{$project->{'times'}}
-		);
-    foreach (@times) {
+    $times = ($group eq ''
+	      ? $project->{'times'}
+	      : [ $project->interval_times($group) ]
+	      );
+
+    foreach (@$times) {
 	my($from, $to, $interval) = @$_;
+
 	my(@fromdate) = localtime($from);
 	$fromdate[4]++;
 	$fromdate[5]+=1900;
-	my $fromdate = sprintf
-	  "%02d.%02d.%04d" . (!$daily ? " %02d:%02d:%02d" : ""),
-	  @fromdate[3,4,5,2,1,0];
+
+	my $fromdate;
+	if ($group eq '') {
+	    $fromdate = sprintf "%02d.%02d.%04d %02d:%02d:%02d",
+	                        @fromdate[3,4,5,2,1,0];
+	} elsif ($group eq 'daily') {
+	    $fromdate = sprintf "%02d.%02d.%04d", @fromdate[3,4,5];
+	} elsif ($group eq 'weekly') {
+	    my $wk = Date::Calc::Week_Number(@fromdate[5,4,3]);
+	    $fromdate = sprintf "%02d/%04d", $wk, $fromdate[5];
+	} elsif ($group eq 'monthly') {
+	    $fromdate = sprintf "%02d.%04d", @fromdate[4,5];
+	} elsif ($group eq 'yearly') {
+	    $fromdate = sprintf "%04d", $fromdate[5];
+	}
+
 	$lb->add($i, -text => $fromdate);
 	my $col = 1;
 	$lb->itemCreate($i, $col++, -text => $from)
@@ -2287,12 +2395,12 @@ sub show_intervals {
 	    $todate[5]+=1900;
 	    $todate = sprintf
 	      "%02d.%02d.%04d %02d:%02d:%02d", @todate[3,4,5,2,1,0];
-	    if (!$daily) {
+	    if (!$group) {
 		$lb->itemCreate($i, $col++, -text => $todate);
 		$lb->itemCreate($i, $col++, -text => $to)
 		  if $show_seconds;
 	    }
-	    $interval = $to-$from if !$daily;
+	    $interval = $to-$from if !$group;
 	    $lb->itemCreate($i, $col++, -text => sec2time($interval, 'h', 0));
 	    my @t;
 	    foreach my $rev (@rev) {
@@ -2334,24 +2442,26 @@ sub show_intervals {
 			 -command => $close_sub,
 			)->pack(-side => 'left');
     $f->Label(-text => '  ')->pack(-side => 'left');
-    $f->Button(-text => 'Delete',
-	       -command => sub {
-		   $project->delete_times($lb->info('selection'));
-		   $modified++;
-		   $update->();
-	       }
-	      )->pack(-side => 'left');
-    $f->Button(-text => 'Insert',
-	       -command => sub {
-		   my @sel = $lb->info('selection');
-		   my $before = (!@sel ? -1 : $sel[$#sel]);
-		   $project->insert_times_after($before,
-						time, time);
-		   $modified++;
-		   $interval_editor->($before+1);
-		   #$update->();
-	       }
-	      )->pack(-side => 'left');
+    if ($group eq '') {
+	$f->Button(-text => 'Delete',
+		   -command => sub {
+		       $project->delete_times($lb->info('selection'));
+		       $modified++;
+		       $update->();
+		   }
+		   )->pack(-side => 'left');
+	$f->Button(-text => 'Insert',
+		   -command => sub {
+		       my @sel = $lb->info('selection');
+		       my $before = (!@sel ? -1 : $sel[$#sel]);
+		       $project->insert_times_after($before,
+						    time, time);
+		       $modified++;
+		       $interval_editor->($before+1);
+		       #$update->();
+		   }
+		   )->pack(-side => 'left');
+    }
     $f->Button(-text => 'Re-Sort',
 	       -command => sub {
 		   $project->sort_times;
@@ -2360,16 +2470,21 @@ sub show_intervals {
 		   $update->();
 	       }
 	      )->pack(-side => 'left');
-    $f->Label(-text => '  ')->pack(-side => 'left');
-    $f->Checkbutton(-text => 'Show seconds',
-		    -variable => \$show_seconds,
-		    -command => sub { $update->() },
-		   )->pack(-side => 'left');
-    $f->Label(-text => '  ')->pack(-side => 'left');
-    $f->Checkbutton(-text => 'Group daily',
-		    -variable => \$daily,
-		    -command => sub { $update->() },
-		   )->pack(-side => 'left');
+    $f->Label(-text => ' ')->pack(-side => 'left');
+    if ($group eq '') {
+	$f->Checkbutton(-text => 'Show seconds',
+			-variable => \$show_seconds,
+			-command => sub { $update->() },
+			)->pack(-side => 'left');
+    }
+
+    require Tk::Optionmenu;
+    $f->Label(-text => ' Group:')->pack(-side => 'left');
+    $f->Optionmenu(-variable => \$group,
+		   -options => ['', qw/daily weekly monthly yearly/],
+		   -command => sub { $update->() },
+		   )->pack(-side => "left");
+
     $clb->focus;
     $w->bind('<Escape>' => sub { $clb->invoke });
 
@@ -2390,9 +2505,10 @@ sub show_note {
     }
 
     my $t = $top->Toplevel(-title => 'Note for ' . $project->pathname);
-    my $txt = $t->Scrolled('Text', -scrollbars => 'osoe'
+    my $txt = $t->Scrolled('Text', -scrollbars => 'sow'
 			  )->pack(-fill => 'both', -expand => 1);
-    if ($project->note) {
+    $txt->focus;
+    if ($project->has_note) {
 	foreach ($project->note) {
 	    $txt->insert('end', $_ . "\n");
 	}
@@ -2401,11 +2517,13 @@ sub show_note {
     $f->Button(-text => 'OK',
 	       -command => sub {
 		   my $s = $txt->get('1.0', 'end');
-		   $project->note(split(/\n/, $s));
+		   $project->set_note(split(/\n/, $s));
 		   $t->destroy;
 	       })->pack(-side => 'left');
-    $f->Button(-text => 'Cancel',
+    my $cancel = $f->Button(-text => 'Cancel',
 	       -command => sub { $t->destroy })->pack(-side => 'left');
+    $t->bind('<Escape>' => sub { $cancel->invoke });
+    $t->Popup(-popover => 'cursor');
 }
 
 sub set_time_update {
@@ -2664,6 +2782,18 @@ sub tktimex_running {
     return $r;
 }
 
+sub get_rcs_from_cache {
+    my $rcs;
+    if ($rcscache{$project->rcsfile}) {
+	$rcs = $rcscache{$project->rcsfile};
+    } else {
+	require Timex::Rcs;
+	$rcs = new Timex::Rcs $project->rcsfile;
+	$rcscache{$project->rcsfile} = $rcs;
+    }
+    $rcs;
+}
+
 sub show_about {
     my $dia = $top->Toplevel(-title => 'Copyright');
     $dia->Label(-text  => <<'EOF',
@@ -2793,7 +2923,7 @@ recommended due to cpu waste. Better leave the option at "d" or "h".
 
 =head1 SEE ALSO
 
-perl(1), Tk(3), rcsintro(1), Timex::Project(3)
+perl(1), Tk(3), rcsintro(1), cvs(1), Timex::Project(3)
 
 =head1 AUTHOR
 
