@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Plugin.pm,v 1.1 2003/09/30 19:02:43 eserte Exp $
+# $Id: Plugin.pm,v 1.2 2005/03/05 23:32:40 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2003 Slaven Rezic. All rights reserved.
@@ -29,8 +29,15 @@ sub load_plugin {
 	@plugin_args = split / /, $2;
     }
     my $mod;
-    if ($file =~ /::/ && eval qq{ require $file; 1 }) {
-	$mod = $file;
+    if ($file =~ /::/) {
+	if (eval qq{ require $file; 1 }) {
+	    $mod = $file;
+	} else {
+	    if ($@) {
+		warn sprintf("Das Modul %s konnte nicht geladen werden. Grund: %s", $file, $@);
+		return;
+	    }
+	}
     } else {
 	$file .= ".pm" if ($file !~ /\.pm$/);
 	($mod) = fileparse($file, '\..*');
