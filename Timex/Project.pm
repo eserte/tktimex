@@ -959,6 +959,14 @@ sub traverse {
     }
 }
 
+=head2 last_project
+
+    $last_project = $root->last_project
+
+Return the last running project.
+
+=cut
+
 sub last_project {
     my $self = shift;
     my($last_project, $last_time) = @_;
@@ -975,6 +983,31 @@ sub last_project {
     };
     $self->traverse($sub, \$last_project, \$last_time);
     $last_project;
+}
+
+=head2 last_project
+
+    $last_project = $root->last_projects([$nr])
+
+Return the $nr last projects as an array. If $nr is not defined, return
+the last project (same as the last_project method).
+
+=cut
+
+sub last_projects {
+    my($self, $number) = @_;
+    $number = 1 if !$number;
+    my(@all);
+    foreach ($self->all_subprojects) {
+	my $end_time_pair = $_->{'times'}[$#{$_->{'times'}}];
+	my $end_time = $end_time_pair->[$#{$end_time_pair}];
+	if (defined $_->parent) {
+	    $end_time = 0 if !defined $end_time;
+	    push @all, [$_, $end_time];
+	}
+    } 
+    @all = map { $_->[0] } sort { $b->[1] <=> $a->[1] } @all;
+    splice @all, 0, $number;
 }
 
 sub merge {
