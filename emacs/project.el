@@ -1,7 +1,7 @@
 ;;; -*- emacs-lisp -*-
 
 ;;;
-;;; $Id: project.el,v 1.2 1997/04/29 14:16:21 eserte Exp $
+;;; $Id: project.el,v 1.3 1997/04/29 18:53:25 eserte Exp $
 ;;; Author: Slaven Rezic
 ;;;
 ;;; Copyright © 1997 Slaven Rezic. All rights reserved.
@@ -112,6 +112,7 @@
 (defun project-show-time ()
   (interactive)
   (save-excursion
+    (set-buffer project-buffer)
     (beginning-of-line)
     (if (looking-at "^|\\([0-9]+\\)-\\([0-9]+\\)")
 	(let* ((from-time (string-to-number
@@ -129,7 +130,9 @@
 	       (lo-from (floor (mod from-time 65536)))
 	       (hi-to (floor (/ to-time 65536)))
 	       (lo-to (floor (mod to-time 65536))))
-	  (message (concat (format-time-string "%d.%m.%y %T - "
+	  (message (concat project-current-project
+			   ": "
+			   (format-time-string "%d.%m.%y %T - "
 					       (list hi-from lo-from))
 			   (format-time-string "%d.%m.%y %T"
 					       (list hi-to lo-to))
