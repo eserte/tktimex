@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.7 2001/06/14 22:01:42 eserte Exp $
+# $Id: tktimex,v 6.8 2001/06/15 22:07:29 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -162,7 +162,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.7 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.8 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -3700,10 +3700,12 @@ sub show_intervals {
 
     require Tk::Optionmenu;
     $f->Label(-text => " " . M"Group:")->pack(-side => 'left');
-    $f->Optionmenu(-variable => \$group,
-		   -options => ['', qw/daily weekly monthly yearly/],
-		   -command => sub { $update->() },
-		   )->pack(-side => "left");
+    my $om = $f->Optionmenu(-variable => \$group,
+			    -options => ['', qw/daily weekly monthly yearly/],
+			   )->pack(-side => "left");
+    # -command cannot be specified at creation time, because this can
+    # cause endless loops, at least in Tk 800.023
+    $f->afterIdle(sub {$om->configure(-command => sub { $update->() })});
 
     $clb->focus;
     $w->bind('<Escape>' => sub { $clb->invoke });
