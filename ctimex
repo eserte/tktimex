@@ -1,0 +1,77 @@
+#!/usr/local/bin/perl
+# -*- perl -*-
+
+#
+# $Id: ctimex,v 1.1 1996/12/12 21:49:51 eserte Exp $
+# Author: Slaven Rezic
+# Mail: <URL:mailto:eserte@cs.tu-berlin.de>
+# WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
+# Talk: <URL:telnet://ole.cs.tu-berlin.de:1211>
+#
+
+
+use Term::Complete;
+use Data::Dumper;
+use Project;
+
+do $ARGV[0] || "/home/e/eserte/private/log/mytimex.data";
+Project->pool($pool);
+my $p;
+foreach $p (@$pool) {
+    push_warn(\@list_of_projects, $p);
+    @sub_projects = &get_subprojects($p);
+    if (@sub_projects != ()) {
+	push(@list_of_projects, @sub_projects);
+    }
+}
+
+use POSIX;
+foreach $p (@list_of_projects) {
+    print "Project: ", $p->[0], "\n";
+    @times = @{$p->[1]->{'times'}};
+    foreach $t (@times) {
+	print strftime("%c", localtime $t->[0]), " - ",
+		strftime("%c", localtime $t->[1]), "\n";
+    }
+}
+exit;
+
+$input = Complete("project: ", map { $_->[0] } @list_of_projects);
+foreach (@$pool) {
+    if ($input eq $_->label) {
+	print $_->label, ": ";
+	$t = $_->sum_time(0, 1);
+	printf("%02d:%02d:%02d\n", $t/3600, ($t%3600)/60, (($t%3600)%60));
+    }
+}
+
+sub get_subprojects {
+    my $p = shift;
+    my @res;
+    my @sub_projects;
+    my $pp;
+    foreach $pp (@{$p->subproject}) {
+	push_warn(\@res, $pp);
+	@sub_projects = &get_subprojects($pp);
+	if (@sub_projects != ()) {
+	    push(@res, @sub_projects);
+	}
+    }
+    @res;
+}
+
+sub push_warn {
+    my($arrref, $obj) = @_;
+    my $label = $obj->label;
+    if (exists $labels{$label}) {
+	warn "$label " . ($labels{$label}+1) . "x defined!";
+    }
+    push(@$arrref, [$label, $obj]);
+    $labels{$label}++;
+}
+
+=head1 TODO
+
+ - actually implement it!
+
+=cut
