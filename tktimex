@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 3.18 1998/01/03 20:29:34 eserte Exp $
+# $Id: tktimex,v 3.19 1998/01/23 23:10:43 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about
@@ -435,7 +435,7 @@ sub show_one_day {
     my $b;
     my @p; # project array for one day
     my $dw = $f->Date(-fields => 'date',
-		      -date => 'now',
+		      -value => 'now',
 		      -datefmt => "%12A, %2d.%2m.%4y",
 		      -choices => [qw(today yesterday)],
 		      -command => sub {
