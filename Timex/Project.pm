@@ -90,6 +90,34 @@ sub rcsfile {
     }
 }
 
+=head2 note
+
+    $project->note("First note", "Second note");
+    $project->note(["First note", "Second note"]);
+    @notes = $project->note;
+
+=cut
+
+sub note {
+    my($self, @note_lines) = @_;
+    if (@note_lines == 0) {
+	if ($self->{'note'}) {
+	    @{$self->{'note'}};
+	} else {
+	    ();
+	}
+    } else {
+	if (ref $note_lines[0] eq 'ARRAY') {
+	    @note_lines = @{$note_lines[0]};
+	}
+	foreach (@note_lines) {
+	    s/[\r\n]/_/g;
+	}
+	$self->{'note'} = [@note_lines];
+	$self->modified(1);
+    }
+}
+
 =head2 last_times
 
     $time_ref = $project->last_times;
@@ -599,6 +627,9 @@ sub dump_data {
 	$res .= (">" x $indent) . "$self->{'label'}\n";
 	$res .= "/archived=$self->{'archived'}\n";
 	$res .= "/rcsfile=" . $self->rcsfile . "\n" if $self->rcsfile;
+	if ($self->note) {
+	    $res .= join("\n", map { "/note=" . $_ } $self->note) . "\n";
+	}
 	if (!$args{'-skeleton'}) {
 	    my $time;
 	    foreach $time (@{$self->{'times'}}) {
@@ -696,7 +727,17 @@ sub interpret_data_project {
 			push(@times, [@interval]);
 		    } elsif ($first eq '/') {
 			my(@attrpair) = split(/=/, $rest);
-			$attributes{$attrpair[0]} = $attrpair[1];
+			# handle multiple attributes:
+			if (exists $attributes{$attrpair[0]}) {
+			    if (ref $attributes{$attrpair[0]} eq 'ARRAY') {
+				push @{$attributes{$attrpair[0]}}, $attrpair[1];
+			    } else {
+				$attributes{$attrpair[0]} =
+				  [$attributes{$attrpair[0]}, $attrpair[1]];
+			    }
+			} else {
+			    $attributes{$attrpair[0]} = $attrpair[1];
+			}
 		    } elsif ($first eq '#') {
 			push(@comment, $rest);
 		    } else {
@@ -709,6 +750,10 @@ sub interpret_data_project {
 		$self->{'times'} = \@times;
 		$self->{'archived'} = delete $attributes{'archived'};
 		$self->{'rcsfile'}  = delete $attributes{'rcsfile'};
+		if (defined $attributes{'note'}) {
+		    $self->note($attributes{'note'});
+		    delete $attributes{'note'};
+		}
 		warn "Unknown attributes: " . join(" ", %attributes)
 		  if %attributes;
 		$parent->subproject($self);
@@ -744,7 +789,7 @@ sub load {
 	    push(@data, $_);
 	}
 	close FILE;
-	&interpret_data($self, \@data);
+	$self->interpret_data(\@data);
     }
 }
 
