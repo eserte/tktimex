@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.45 2001/04/04 22:39:24 eserte Exp $
+# $Id: Project.pm,v 3.46 2001/10/21 20:22:16 eserte Exp $
 #
 
 =head1 NAME
@@ -28,7 +28,7 @@ use vars qw($magic $magic_template $emacsmode $pool @project_attributes);
 $magic = '#PJ1';
 $magic_template = '#PJT';
 $emacsmode = '-*- project -*-';
-@project_attributes = qw/archived rate rcsfile domain id notimes/;
+@project_attributes = qw/archived rate rcsfile domain id notimes closed/;
 
 sub Timex_Project_API { 1 }
 
@@ -219,6 +219,16 @@ sub rcsfile {
 	$self->modified(1);
     } else {
 	$self->{'rcsfile'};
+    }
+}
+
+sub closed {
+    my($self, $closed) = @_;
+    if (defined $closed) {
+	$self->{'closed'} = $closed;
+	$self->modified(1);
+    } else {
+	$self->{'closed'};
     }
 }
 
