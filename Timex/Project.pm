@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.47 2001/10/22 11:31:39 eserte Exp $
+# $Id: Project.pm,v 3.48 2003/09/01 18:58:55 eserte Exp $
 #
 
 =head1 NAME
@@ -23,7 +23,9 @@ and tktimex. This module supports the following methods:
 
 package Timex::Project;
 use strict;
-use vars qw($magic $magic_template $emacsmode $pool @project_attributes);
+use vars qw($VERSION $magic $magic_template $emacsmode $pool @project_attributes);
+
+$VERSION = sprintf("%d.%02d", q$Revision: 3.48 $ =~ /(\d+)\.(\d+)/);
 
 $magic = '#PJ1';
 $magic_template = '#PJT';
@@ -344,12 +346,29 @@ weekly, monthly and yearly.
 
 Further options:
 
--recursive: if given and true, sum times for all subprojects too.
+=over
 
--asref: if given and true, then the returned value is a reference to
+=item -recursive
+
+If given and true, sum times for all subprojects too.
+
+=item -asref
+
+If given and true, then the returned value is a reference to
 an array. This is useful for the "" interval, because it returns the
 @times array of the project itself, which makes it easier for
 manipulation.
+
+=item -annotations
+
+Include annotations as 3th element in times array.
+
+=back
+
+COMPATIBILITY: In Timex::Project prior 3.48, the order of an element
+array was: [from_time, to_time, interval] (interval only with
+aggregation). Since 3.48, this is [from_time, to_time, annotation,
+interval].
 
 =cut
 
@@ -361,6 +380,7 @@ sub interval_times {
     my $times;
 
     my $as_ref = $args{'-asref'};
+    my $do_annotations = $args{'-annotations'};
 
     if ($args{'-recursive'}) {
 
@@ -408,12 +428,23 @@ sub interval_times {
 
     require Data::Dumper;
     my $t;
-    my $tc = Data::Dumper->new([$times], ['t'])->Dump;
+    my $tc = Data::Dumper->new([$times], ['t'])->Dump; # clone
     my(@times) = eval "$tc;" . '@$t';
     die @$ if $@;
 
     my @res;
     my($last_wday); # not really wday... for weeks this is the week number etc.
+
+    my %annotations;
+    my $out_annotations = sub {
+require Data::Dumper; print STDERR "Line " . __LINE__ . ", File: " . __FILE__ . "\n" . Data::Dumper->new([\%annotations],[])->Indent(1)->Useqq(1)->Dump; # XXX
+
+	if ($do_annotations) {
+	    join "; ", sort keys %annotations;
+	} else {
+	    undef;
+	}
+    };
 
     for(my $i = 0; $i<=$#times; $i++) {
 	my @d = @{ $times[$i] }; # important: don't operate on ref!
@@ -424,7 +455,7 @@ sub interval_times {
 	    # split into today and tomorrow
 	    my $old_end = $d[1];
 	    $d[1] = Time::Local::timelocal(59,59,23,$a1[3],$a1[4],$a1[5]);
-	    splice @times, $i+1, 0, [$d[1]+1, $old_end];
+	    splice @times, $i+1, 0, [$d[1]+1, $old_end, $out_annotations->()];
 	}
 	my $interval = $d[1] - $d[0];
 
@@ -445,9 +476,13 @@ sub interval_times {
 
 	if (defined $last_wday && $last_wday == $this_wday) {
 	    $res[$#res]->[1] = $d[1]; # correct end time
-	    $res[$#res]->[2] += $interval; # update daily/weekly... interval
+	    $annotations{$d[2]}++ if defined $d[2];
+	    $res[$#res]->[2] = $out_annotations->();
+	    $res[$#res]->[3] += $interval; # update daily/weekly... interval
 	} else {
-	    push @res, [$d[0], $d[1], $interval]; # new interval
+	    %annotations = ();
+	    $annotations{$d[2]}++ if defined $d[2];
+	    push @res, [$d[0], $d[1], $d[2], $interval]; # new interval
 	}
 	$last_wday = $this_wday;
     }
@@ -815,12 +850,15 @@ sub unend_time {
 }
 
 sub set_times {
-    my($self, $i, $start, $end) = @_;
+    my($self, $i, $start, $end, $annotation) = @_;
     if (defined $start) {
 	$self->{'times'}[$i][0] = $start;
     }
     if (defined $end) {
 	$self->{'times'}[$i][1] = $end;
+    }
+    if (defined $annotation) {
+	$self->{'times'}[$i][2] = $annotation;
     }
     $self->update_cached_time;
     $self->modified(1);
@@ -1273,6 +1311,11 @@ sub dump_data {
 		if (defined $time->[1]) {
 		    $res .= "-" . $time->[1];
 		}
+		if (defined $time->[2]) {
+		    # For now only one-liners are permitted. This may change.
+		    (my $annotation = $time->[2]) =~ s/\n/ /gs;
+		    $res .= " # $annotation";
+		}
 		$res .= "\n";
 	    }
 	}
@@ -1420,10 +1463,17 @@ sub interpret_data_project {
 		    last if $first eq '>';
 		    if ($first eq '|') {
 			if (!$args{-skeleton}) {
+			    my $annotation;
+			    if ($rest =~ /^(.*?)\s*\#\s*(.*)$/) {
+				$rest = $1;
+				$annotation = $2;
+			    }
 			    my(@interval) = split(/-/, $rest);
 			    warn "Interval must be two values"
 				if $#interval != 1;
-			    push @times, [@interval];
+			    push @times, [@interval,
+					  (defined $annotation ? $annotation : ())
+					 ];
 			}
 		    } elsif ($first eq '/') {
 			$handle_attribute->($rest, \%attributes);
