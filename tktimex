@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.74 2000/09/26 08:49:58 eserte Exp $
+# $Id: tktimex,v 4.75 2000/09/30 10:16:18 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -102,7 +102,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.74 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.75 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -298,6 +298,16 @@ eval {
     my $icon = $top->Pixmap(-file => Tk::findINC("mini-clock.xpm"));
     $top->Icon(-image => $icon);
 };
+
+$top->bind("<Pause>" => sub {
+	       eval {
+		   require Tk::WidgetDump;
+		   $top->WidgetDump;
+	       }; warn $@ if $@;
+	       require Config;
+	       my $perldir = $Config::Config{'scriptdir'};
+	       require "$perldir/ptksh";
+	   });
 
 state_change("checkpoint 2");
 
@@ -3511,7 +3521,8 @@ tktimex - project time manager
 
 B<tktimex> is a project time manager. Its purpose is to record working
 times for projects. Projects may be grouped hierarchically with
-subprojects. It is also possible to get some statistics.
+subprojects. It is also possible to get some daily/weekey/monthly
+statistics.
 
 =head2 QUICK OVERVIEW
 
@@ -3520,7 +3531,8 @@ B<New>.
 
 To start the timer on a particular project, select the project from
 the list by mouse click and click on the B<Cont> button. To stop the
-timer, click on the B<Pause> button.
+timer, click on the B<Pause> button. You can also double-click on a
+project to start/stop the timer.
 
 If autosaving is on, after each click on B<Pause>, the project list
 will be updated on disk, and so will every 10 minutes. If autosaving
@@ -3532,30 +3544,35 @@ the command line:
 
 	tktimex projectfile.pj1
 
-If Tk::Getopt is installed on your system, you can set the default
-project list file in the B<Option editor> (menu B<Options>).
+If Tk::Getopt is installed on your system (recommended!), you can set
+the default project list file in the B<Option editor> (menu
+B<Options>).
 
 =head1 COMMAND LINE OPTIONS
 
 Possible options are:
 
 	--file
-	--[no]lock       (default: 1)
-  	--[no]one-instance
-  	--[no]as, --[no]autosave         (default: 1)
-  	--update         (default: 600)
-  	--[no]oneday-immediately         (default: 1)
-  	--geometry       (default: 500x230)
-  	--[no]securesave
-  	--df, --dateformat       (default: h)
-  	--[no]day8
-  	--[no]archived
-  	--[no]onlytop
-  	--sort
-  	--[no]busyind
-  	--autoscroll     (default: none)
-  	--hourlyrate
-  	--currency       (default: DEM)
+    	--mergedir
+    	--[no]lock       (default: 1)
+    	--[no]one-instance
+    	--[no]as, --[no]autosave         (default: 1)
+    	--update         (default: 600)
+    	--[no]oneday-immediately         (default: 1)
+    	--geometry       (default: 500x230)
+    	--[no]securesave
+    	--enterpriseprojects
+    	--enterprisedefaults
+    	--df, --dateformat       (default: h)
+    	--[no]day8       (default: 1)
+    	--[no]archived
+    	--[no]onlytop
+    	--domain
+    	--sort   (default: name)
+    	--[no]busyind
+    	--autoscroll     (default: none)
+    	--hourlyrate
+    	--currency       (default: DEM)
 
 =head1 TODO
 
