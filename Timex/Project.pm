@@ -110,6 +110,17 @@ sub subproject {
     }
 }
 
+sub sorted_subprojects {
+    my($self, $sorted_by) = @_;
+    if (!$sorted_by || $sorted_by =~ /^nothing$/i) {
+	$self->subproject;
+    } elsif ($sorted_by =~ /^name$/i) {
+	sort { lc($a->label) cmp lc($b->label) } $self->subproject;
+    } else {
+	die "Unknown sort type: <$sorted_by>";
+    }
+}
+
 sub level {
     my $self = shift;
     if (!defined $self->{'parent'}) {
