@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.3 2000/07/06 00:48:09 eserte Exp $
+# $Id: Rcs.pm,v 1.4 2000/08/23 23:31:43 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -41,14 +41,24 @@ sub unixtime {
 	die "Can't parse date: $date";
     }
 }
+# static method
+sub unixtime2rcsdate {
+    my $unixtime = shift;
+    my @l = localtime $unixtime;
+    sprintf "%04d-%02d-%02d %02d:%02d:%02d", $l[5]+1900, $l[4]+1, $l[3],
+                                             $l[2], $l[1], $l[0];
+}
 sub author   { $_[0]->{Author} }
 sub desc     { $_[0]->{Desc} }
 
-package Timex::Rcs;
+######################################################################
+
+package Timex::RcsFile;
 use strict;
 use File::Basename;
 
 my $delim_regex = "^----------------------------\$";
+my $file_delim_regex = "^=============================================================================\$";
 
 sub new {
     my($pkg, $file) = @_;
@@ -58,25 +68,48 @@ sub new {
 		Basename => $base,
 	       };
     bless $self, $pkg;
+    $self->_get_vcs_type;
     $self->parse_rcsfile;
     $self;
 }
 
+# RLOG is opened ...
+sub _open_log {
+    my $self = shift;
+    my %log_args = @_;
+
+    my $extra_args = "";
+    if ($log_args{-from} and $log_args{-to}) {
+	$extra_args .=
+	    " -d'" . Timex::Rcs::Revision::unixtime2rcsdate($log_args{-from})
+	           . "<"
+		   . Timex::Rcs::Revision::unixtime2rcsdate($log_args{-to})
+	           . "'";
+    }
+
+    my $file;
+    if (exists $self->{Files}) {
+	$file = join(" ", @{ $self->{Files} });
+    } else {
+	$file = $self->{File};
+    }
+    my $cmd;
+    if ($self->{VCS_Type} eq 'CVS') {
+	$cmd = "cvs log $extra_args $file|";
+    } else {
+	$cmd = "rlog $extra_args $file|";
+    }
+    open(RLOG, $cmd) or die "$cmd: $!";
+}
+
 sub parse_rcsfile {
     my $self = shift;
-    my $file = $self->{File};
     $self->{Symbolic_Names} = [];
     $self->{Revisions} = [];
     my $stage    = 'header';
     my $substage = '';
     my $curr_revision = new Timex::Rcs::Revision;
-    if (-d dirname($file) . "/CVS" and
-	!-d dirname($file) . "/RCS") {
-	# try CVS instead of RCS
-	open(RLOG, "cvs log $file|") or die "$file: $!";
-    } else {
-	open(RLOG, "rlog $file|") or die "$file: $!";
-    }
+    $self->_open_log;
     while(<RLOG>) {
 	chomp;
 	if ($stage eq 'header') {
@@ -88,7 +121,9 @@ sub parse_rcsfile {
 		}
 	    } elsif ($substage eq 'symnames') {
 		if (/^\t(.*):\s*(.*)$/) {
-		    push(@{$self->{Symbolic_Names}}, [$1, $2]);
+		    # Symbolic_Names: array of [Symbolic, Revision] items
+		    # XXX create also (or only?) hashref
+		    push @{$self->{Symbolic_Names}}, [$1, $2];
 		} else {
 		    $substage = '';
 		    redo;
@@ -101,10 +136,13 @@ sub parse_rcsfile {
 		$substage = 'symnames';
 	    }
 	} elsif ($stage eq 'desc') {
-	    if (/$delim_regex/) {
-		push(@{$self->{Revisions}}, $curr_revision);
+	    if (/$delim_regex/ || /$file_delim_regex/) {
+		push @{$self->{Revisions}}, $curr_revision;
 		$curr_revision = new Timex::Rcs::Revision;
 		$substage = '';
+		if (/$file_delim_regex/) {
+		    $stage = 'header';
+		}
 	    } elsif ($substage eq 'desc') {
 		$curr_revision->{Desc} .= $_ . "\n";
 	    } elsif (/^revision\s+(\S+)/) {
@@ -134,6 +172,121 @@ sub symbolic_name  {
     }
 }
 sub revisions      { @{$_[0]->{Revisions}} }
+
+sub get_log_entries {
+    my($self, $from_date, $to_date) = @_;
+    $self->_open_log(-from => $from_date, -to => $to_date);
+    local $/ = undef;
+    my $log_entries = <RLOG>;
+    close RLOG;
+    $log_entries;
+}
+
+sub _get_vcs_type {
+    my $self = shift;
+    my $dir = $self->{Dirname};
+
+    if (-d "$dir/CVS" and !-d "$dir/RCS") {
+	$self->{VCS_Type} = "CVS";
+    } else {
+	$self->{VCS_Type} = "RCS";
+    }
+
+    $self->{VCS_Type};
+}
+
+######################################################################
+
+package Timex::RcsDir;
+use base qw(Timex::RcsFile);
+use strict;
+use File::Find;
+
+sub new {
+    my($pkg, $dir) = @_;
+    my $self = {Dirname => $dir};
+    bless $self, $pkg;
+
+    $self->{Files} = [];
+
+    my $wanted_rcs = sub {
+	if (-f $_ and $File::Find::name =~ m|^(.*)/RCS/(.*),v$|) {
+	    my $orig_file = "$1/$2";
+	    push @{ $self->{Files} }, $orig_file if (-f $orig_file);
+	}
+    };
+
+    my $wanted_cvs = sub {
+	if (-f $_ and $File::Find::name =~ m|^(.*)/CVS/Entries$|) {
+	    my $cvsdir = $1;
+	    if (!open(ENTRIES, $_)) {
+		warn "Can't open $File::Find::name: $!";
+	    } else {
+		while(<ENTRIES>) {
+		    chomp;
+		    if (m|^/([^/]+)|) {
+			my $orig_file = "$cvsdir/$1";
+			push @{ $self->{Files} }, $orig_file
+			    if (-f $orig_file);
+		    }
+		}
+		close ENTRIES;
+	    }
+	}
+    };
+
+    $self->_get_vcs_type;
+    if ($self->{VCS_Type} eq 'CVS') {
+	find($wanted_cvs, $self->{Dirname});
+    } else {
+	find($wanted_rcs, $self->{Dirname});
+    }
+
+    $self->parse_rcsfile;
+    $self->create_pseudo_revisions;
+
+    $self;
+}
+
+# for multiple files, it is better to use symbolic names instead of revisions
+# XXX this probably needs a lot of work...
+sub create_pseudo_revisions {
+    my $self = shift;
+    my @pseudo_revisions;
+    my %already_seen;
+    foreach my $rev ($self->Timex::RcsFile::revisions) {
+	my $sym_name = $self->Timex::RcsFile::symbolic_name($rev);
+	if (defined $sym_name && !$already_seen{$sym_name}) {
+	    my $pseudo_rev = new Timex::Rcs::Revision;
+	    $pseudo_rev->{Desc}     = $rev->{Desc};
+	    $pseudo_rev->{Revision} = $sym_name;
+	    $pseudo_rev->{Date}     = $rev->{Date};
+	    $pseudo_rev->{Author}   = $rev->{Author};
+	    push @pseudo_revisions, $pseudo_rev;
+	    $already_seen{$sym_name}++;
+	}
+    }
+    $self->{Pseudo_Revisions} = \@pseudo_revisions;
+}
+
+sub revisions     { @{ $_[0]->{Pseudo_Revisions} } }
+sub symbolic_name { undef }
+
+######################################################################
+
+package Timex::Rcs;
+use strict;
+
+sub new {
+    my($class, $file) = @_;
+    if (-d $file) {
+	new Timex::RcsDir $file;
+    } else {
+	new Timex::RcsFile $file;
+    }
+}
+
+######################################################################
 
 return 1 if caller();
 
