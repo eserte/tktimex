@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: ExcelExport.pm,v 1.2 2000/08/01 19:32:40 eserte Exp $
+# $Id: ExcelExport.pm,v 1.3 2000/08/18 00:35:38 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2000 Slaven Rezic. All rights reserved.
@@ -20,6 +20,8 @@ use FindBin;
 use Date::Calc qw(Week_Number);
 use strict;
 
+my $excel;
+
 sub save_dialog {
     my($top, $root_project, %args) = @_;
     my $t = $top->Toplevel;
@@ -28,15 +30,25 @@ sub save_dialog {
 
     my $f = $t->Frame->pack(-fill => "x");
     $f->Label(-text => "Export file:")->pack(-side => "left");
-    $f->Entry(-textvariable => \$file)->pack(-side => "left");
+    my $fe = $f->Entry(-textvariable => \$file)->pack(-side => "left");
+    $fe->focus;
+
+    my $can_xls = can_xls();
+    my $def_ext = ($can_xls ? ".xls" : ".csv");
+    my @filetypes =  (['CSV files', '.csv'],
+		      ['All files',  '*'],
+		      );
+    if ($can_xls) {
+	unshift @filetypes, ['Excel files', '.xls'];
+    }
+
     $f->Button(-text => "Browse",
 	       -command => sub {
 		   $file = $f->getSaveFile
-		       (-defaultextension => 'csv',
+		       (-defaultextension => $def_ext,
 			-title => 'Excel export',
-			-filetypes => [['CSV files', '.csv'],
-				       ['All files',  '*']],
-			);
+			-filetypes => \@filetypes,
+		       );
 	       })->pack(-side => "left");
 
     my %date;
@@ -81,10 +93,37 @@ sub save_dialog {
 	       })->pack(-side => "left");
 }
 
+sub can_xls {
+    eval {
+	require Win32::OLE;
+	$excel = Win32::OLE->GetActiveObject('Excel.Application');
+	unless (defined $excel) {
+	    $excel = Win32::OLE->new('Excel.Application', sub { $_[0]->Quit });
+	}
+    };
+    defined $excel;
+}
+
+sub _excel_print_row {
+    my $sheet = shift;
+    my $row = shift;
+    my $s = shift;
+    my @s = split(/;/, $s);
+    return if !@s;
+    my $range = "A$row:" . chr(ord("A")-1+scalar @s).$row;
+    $sheet->Range($range)->{Value} = [\@s];
+}
+
 sub save {
     my($root_project, $file, $from, $to, %args) = @_;
     my(@sub_projects) = $root_project->projects_by_interval($from, $to);
-    my $name = ((getpwuid($<))[6]);
+    my $name;
+    eval {
+	$name = ((getpwuid($<))[6]);
+    };
+    if (!defined $name) {
+	$name = $ENV{USERNAME} || $ENV{USER} || "";
+    }
     my $rate = $args{-hourlyrate};
     my $template_file = $args{-templatefile} || "Timex/de_template.csv";
     my(@l) = localtime $from;
@@ -94,14 +133,43 @@ sub save {
     if ($to_week != $weeknumber) {
 	$weeknumber .= " - $to_week";
     }
+
+    my $do_excel = (defined $excel && $file =~ /\.xls$/i);
+    my($book, $sheet);
     my $sum = 0;
-    open(S, ">$file") or die $!;
+
+    if ($do_excel) {
+
+	# write .xls file
+	if (-f $file) {
+	    $book = $excel->Workbooks->Open($file);
+	    if (!$book) {
+		die "Can't open Workbook $file: " . Win32::OLE::LastError();
+	    }
+	} else {
+	    $book = $excel->Workbooks->Add;
+	    if (!$book) {
+		die "Can't create Workbook: " . Win32::OLE::LastError();
+	    }
+	    $book->SaveAs($file);
+	}
+	$sheet = $book->Worksheets(1);
+	
+    } else {
+
+	# write .csv file
+	open(S, ">$file") or die $!;
+    }
+
     $template_file = _find_template_file($template_file);
     if (!$template_file) {
 	die "Can't find template_file in @INC";
     }
+
+    my $row = 0;
     open(T, $template_file) or die "Can't open $template_file: $!";
     while(<T>) {
+	$row++;
 	if (/%%PROJECTNAME%%/) {
 	    my $template_line = $_;
 	    foreach my $p (@sub_projects) {
@@ -119,25 +187,47 @@ sub save {
 		$sum += $projectsum;
 
 		# fix for german excel XXX
-		$hours       =~ s/\./,/;
-		$rate        =~ s/\./,/;
-		$projectsum  =~ s/\./,/;
+		if (1||!$do_excel) {
+		    $hours       =~ s/\./,/;
+		    $rate        =~ s/\./,/;
+		    $projectsum  =~ s/\./,/;
+		}
 
 		$this_line =~ s/%%PROJECTNAME%%/$label/g;
 		$this_line =~ s/%%HOURS%%/$hours/g;
 		$this_line =~ s/%%RATE%%/$rate/g;
 		$this_line =~ s/%%PROJECTSUM%%/$projectsum/g;
-		print S $this_line;
+		if ($do_excel) {
+		    chomp $this_line;
+		    _excel_print_row($sheet, $row, $this_line);
+		} else {
+		    print S $this_line;
+		}
 	    }
 	} else {
 	    s/%%NAME%%/$name/g;
 	    s/%%WEEK%%/$weeknumber/g;
 	    s/%%SUM%%/$sum/g;
-	    print S $_;
+
+	    if ($do_excel) {
+		chomp;
+		_excel_print_row($sheet, $row, $_);
+	    } else {
+		print S $_;
+	    }
 	}
     }
     close T;
-    close S;
+
+    if ($do_excel) {
+	$book->Save;
+	$book->Close;
+	undef $sheet;
+	undef $book;
+	undef $excel;
+    } else {
+	close S;
+    }
 }
 
 sub _find_template_file {
