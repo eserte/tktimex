@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Utmp.pm,v 1.2 2000/09/20 19:47:29 eserte Exp $
+# $Id: Utmp.pm,v 1.3 2000/10/02 22:30:20 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2000 Slaven Rezic. All rights reserved.
@@ -47,7 +47,8 @@ sub init {
     my $cmd = "last " . ($has_s ? "-s " : "");
     open(LAST, "$cmd|");
     while(<LAST>) {
-	next if (/^(reboot|shutdown)\b/); # XXX
+	next if (/^(reboot|shutdown)\b/);
+	next if (/^(\s*$|wtmp begins)/);
 	chomp;
 	my $user = substr($_, 0, $username_length);
 	$user =~ s/\s+$//;
@@ -80,7 +81,17 @@ sub init {
     }
     close LAST;
 
+    $self->{Timestamp} = time;
     $self->{All} = \@lines;
+}
+
+sub update_if_necessary {
+    my($self, $timeout) = @_;
+    if (!defined $self->{Timestamp} ||
+	time >= $self->{Timestamp}+$timeout) {
+	$self->init;
+    }
+    $self;
 }
 
 sub restrict {
