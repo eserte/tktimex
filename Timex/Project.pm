@@ -652,6 +652,40 @@ sub update_cached_time {
     }
 }
 
+=head2 restricted_times
+
+    @flattimes = $project->restricted_times($since, $until)
+
+Return the times from the given project and subprojects since $since
+until $until. If $until is undefined, return the time until now. The
+returned array consists of elements with the following form:
+
+   [$project, $from, $to]
+
+=cut
+
+sub restricted_times {
+    my($self, $since, $until) = @_;
+    my @times;
+    foreach (@{$self->subproject}) {
+	push @times, $_->restricted_times($since, $until);
+    }
+    foreach (@{$self->{'times'}}) {
+	my($from, $to) = ($_->[0], $_->[1]);
+	if (defined $from) {
+	    if (!defined $to) {
+		$to = time;
+	    }
+	}
+	if ($since <= $from &&
+	    (!defined $until || ($until >= $to))) {
+	    push @times, [$self, $from, $to];
+	}
+    }
+
+    sort { $a->[1] <=> $b->[1] } @times;
+}
+
 =head2 archived
 
     $archived = $project->archived
