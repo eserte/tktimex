@@ -7,6 +7,7 @@ Timex/Project.pm
 Timex/Project/Export.pm
 Timex/Project/XML.pm
 Timex/Rcs.pm
+Timex/Svn.pm
 Timex/Server.pm
 Timex/Utmp.pm
 Timex/de_template.csv
