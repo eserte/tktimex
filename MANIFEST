@@ -7,3 +7,7 @@ Timex/Project.pm
 Timex/Rcs.pm
 Timex/test.pl
 Tk/UnderlineAll.pm
+kde/Timex.kdelnk
+Win32Util.pm
+plain.up.gif
+plain.down.gif
