@@ -28,13 +28,16 @@ sub new {
     $self->{'archived'} = 0;
     $self->{'times'} = [];
     $self->{'parent'} = undef;
+    $self->{'modified'} = 1;
     bless $self, $pkg;
+    $self;
 }
 
 sub label {
     my($self, $label) = @_;
     if (defined $label) {
 	$self->{'label'} = $label;
+	$self->modified(1);
     } else {
 	$self->{'label'};
     }
@@ -44,6 +47,7 @@ sub parent {
     my($self, $parent) = @_;
     if (defined $parent) {
 	$self->{'parent'} = $parent;
+	$self->modified(1);
     } else {
 	$self->{'parent'};
     }
@@ -60,6 +64,7 @@ sub subproject {
 	}
 	$sub->parent($self);
 	push(@{$self->{'subprojects'}}, $sub);
+	$self->modified(1);
 	$sub;
     } else {
 	$self->{'subprojects'};
@@ -79,6 +84,7 @@ sub start_time {
     my($self, $time) = @_;
     $time = time unless $time;
     push(@{$self->{'times'}}, [$time]);
+    $self->modified(1);
 }
 
 sub end_time {
@@ -86,13 +92,24 @@ sub end_time {
     $time = time unless $time;
     my @times = @{$self->{'times'}};
     $times[$#times]->[1] = $time;
+    $self->modified(1);
 }
 
 sub unend_time {
     my $self = shift;
     my @times = @{$self->{'times'}};
     pop(@{$times[$#times]});
+    $self->modified(1);
 }
+
+=head2 sum_time
+
+    $time = $project->sum_time($since, $recursive)
+
+Returns the time the given project accumulated since $since. If $recursive
+is true, recurse into subprojects of $project.
+
+=cut
 
 sub sum_time {
     my($self, $since, $recursive) = @_;
@@ -130,15 +147,51 @@ sub sum_time {
     $sum;
 }
 
+=head2 archived
+
+    $archived = $project->archived
+
+Returns true if the project or one of the parent projects are archived. 
+Use $project->{'archived'} for the value of *this* project.
+
+    $project->archived($archived)
+
+Set the archived attribute (0 or 1) for this project.
+
+=cut
+
 sub archived {
     my($self, $flag) = @_;
     if (!defined $flag) {
-	$self->{'archived'};
+	($self->{'archived'} || 
+	 ($self->parent && $self->parent->archived)) ? 1 : 0;
     } else {
-	if ($flag) {
-	    $self->{'archived'} = 1;
+	$self->{'archived'} = ($flag ? 1 : 0);
+    }
+}
+
+=head2 modified
+
+    $modfied = $project->modified
+
+Returns true if the root project is modified, that is, one of root's #'
+subprojects are modified.
+
+    $project->archived($modified)
+
+Set the modified attribute (0 or 1) for the root project.
+
+=cut
+
+sub modified {
+    my($self, $flag) = @_;
+    if ($self->parent) {
+	$self->parent->modified($flag);
+    } else {
+	if (defined $flag) {
+	    $self->{'modified'} = ($flag ? 1 : 0);
 	} else {
-	    $self->{'archived'} = 0;
+	    $self->{'modified'};
 	}
     }
 }
