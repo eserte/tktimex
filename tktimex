@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.49 2000/01/08 22:51:57 eserte Exp $
+# $Id: tktimex,v 4.50 2000/04/11 00:06:14 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -97,7 +97,7 @@ BEGIN { status_change("nach use locale"); }
 use Tk::DropSite;
 BEGIN { status_change("nach tk::dropsite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.49 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.50 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -304,6 +304,11 @@ $mb_export->command(-label => 'Save subproject',
 		    -command => \&save_subproject);
 $mb_export->command(-label => 'Save XML',
 		    -command => \&save_xml);
+$mb_export->command(-label => 'Save Excel',
+		    -command => sub {
+			require Timex::ExcelExport;
+		        Timex::ExcelExport::save_dialog($top, $root);
+		    });
 $mb_export->command(-label => 'Dump',
 		    -command => \&dump_data);
 $mb_file->command(-label => 'Merge',
@@ -433,16 +438,17 @@ eval {
     $mod_sub->();
 };
 if (!$mod_watch || $@) {
-    $save_check = $menu_frame->Checkbutton(-variable => \$root->{'modified'},
-					   -selectcolor => "red",
-					   -highlightthickness => 0,
-					   -padx => 0, -pady => 0,
-					   #-font => "times 5",
-					  );
+    $save_check = $menu_frame->Checkbutton
+    (-variable => \$root->{'modified'},
+     ($os ne 'win' ? (-selectcolor => "red") : ()),
+     -highlightthickness => 0,
+     -padx => 0, -pady => 0,
+     #-font => "times 5",
+    );
     $save_check->bindtags([]);
 }
 $save_check->pack(-side => 'right');
-$balloon->attach($save_check, -msg => 'File saved indicator') if $balloon;
+$balloon->attach($save_check, -msg => 'File modified indicator') if $balloon;
 
 my $pause_cont_button = $menu_frame->Button
   (-text => 'Pause',
@@ -1168,6 +1174,8 @@ sub show_one_day {
 			  -width => 40,
 			  -header => 1,
 			  -scrollbars => 'osoe',
+			  -selectmode => 'extended',
+			  -exportselection => 1,
 			  -command => sub {
 			      show_intervals($f, $p[$_[0]])
 			  },
