@@ -254,6 +254,30 @@ sub unend_time {
     $self->modified(1);
 }
 
+sub set_times {
+    my($self, $i, $start, $end) = @_;
+    if (defined $start) {
+	$self->{'times'}[$i][0] = $start;
+    }
+    if (defined $end) {
+	$self->{'times'}[$i][1] = $end;
+    }
+    $self->modified(1);
+}
+
+sub delete_times {
+    my($self, $i) = @_;
+    splice @{$self->{'times'}}, $i, 1;
+    $self->modified(1);
+}
+
+# XXX nicht ausgetestet
+sub insert_times_after {
+    my($self, $i, $start, $end) = @_;
+    splice @{$self->{'times'}}, $i+1, 0, [$start, $end];
+    $self->modified(1);
+}
+
 sub _min {
     my $min = shift;
     foreach (@_) {
