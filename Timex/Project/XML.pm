@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: XML.pm,v 1.5 2000/09/20 19:47:42 eserte Exp $
+# $Id: XML.pm,v 1.6 2000/11/28 01:50:27 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -87,9 +87,9 @@ sub dump_data_subproject { # XXX note is missing...
     my $res = "";
     my $is = " " x ($args{Indent} || 0);
     $res .= $is."<project name='" . convert1($p->label) . "'";
-    $res .=     " archived='" . $p->archived . "'";
-    $res .=     " rcsfile='" . convert1($p->rcsfile) . "'" 
-      if defined $p->rcsfile;
+    foreach my $attr (@Timex::Project::attributes) {
+	$res .= " $attr='" . convert1($p->{$attr}) . "'"
+	    if defined $p->{$attr} and $p->{$attr} ne "";
     $res .=     ">\n";
     $res .= $is." <times>\n";
     foreach my $ts (@{ $p->{'times'} }) {
@@ -121,7 +121,7 @@ sub interpret_tree {
 	if ($tree->[$i] eq 'project') {
 	    my $new_sub = new Timex::Project::XML;
 	    $new_sub->interpret_tree($tree->[$i+1]);
-	    $self->subproject($new_sub);
+	    $self->subproject($new_sub, -useid => 1);
 	} elsif ($tree->[$i] eq 'times') {
 	    my $slices = $tree->[$i+1];
 	    my @times;
