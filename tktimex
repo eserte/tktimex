@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 3.11 1997/11/28 00:10:10 eserte Exp $
+# $Id: tktimex,v 3.12 1997/11/29 13:17:03 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about
@@ -334,6 +334,7 @@ sub stop_project {
     }
     if (defined $current_project) {
 	$current_project->end_time;
+	&save_file if $options->{'autosave'};
 	&act_time;
 	undef $current_project;
 	$project_frame->configure(-selectbackground => $orig_selectbg);
