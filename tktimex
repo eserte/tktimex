@@ -1,8 +1,8 @@
-#!/usr/local/bin/perl 
+#!/usr/local/bin/perl -w
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 2.7 1997/11/15 22:11:01 eserte Exp $
+# $Id: tktimex,v 3.1 1997/11/16 02:21:28 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -12,21 +12,21 @@
 package main;
 
 use Tk;
-use Tk::ROText;
-use Tk::BrowseEntry;
+use Tk::HList;
+#use Tk::Balloon;
 use FindBin;
 use lib "$FindBin::Bin";
 use Project;
-use strict;
+#use strict;
 
 my $root = new Project;
 
 my $quit_dialog;
-my $copyright = 'tktimex © 1996 Slaven Rezic';
+my $copyright = 'tktimex © 1996, 1997 Slaven Rezic';
 my $datafile = '/home/e/eserte/private/log/mytimex.pj1';
 my $title = 'tktimex';
 #my $datafile = "/tmp/mytimex.pj1"; # XXX
-my $current_project_index = undef;
+my $current_project = undef;
 my $start_session_time = time;
 my $time_after;
 my $dateformat = 'h'; # XXX erst wenn ich sicher bin: 'd';
@@ -37,14 +37,13 @@ my $autosave_update = 60*20;
 my $autosave = 1;
 my @nowtime = localtime;
 my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
-my @projects_in_text;
-my %projects_in_text;
 my $project_status = "Left: Start/Stop | Middle: Attributes | Right: Create Subproject";
 my $show_archived = 0;
 my $show_only_top = 0;
 my $time_arbeitstag = 0;
+my $separator = '¦';
 
-my $xgeometry;
+my $xgeometry = "500x230"; # XXX
 
 my $i;
 for ($i = 0; $i <= $#ARGV; ++$i) {
@@ -54,9 +53,8 @@ for ($i = 0; $i <= $#ARGV; ++$i) {
 				= &get_arg(\$i, \@ARGV, "-geometry", "$_");
 			      last ARGL; };
 	/^-file$/ && do { $datafile 
-			    = &get_arg(*i, *ARGV, "-file", "$_");
+			    = &get_arg(\$i, \@ARGV, "-file", "$_");
 			  last ARGL; };
-#	/^-switch$/ && do { $switch = 0; last ARGL; };
 	/^-/ && do { &usage("bad argument: $_"); last ARGL; };
     }
 }
@@ -65,6 +63,8 @@ my $top = new MainWindow;
 $top->protocol('WM_DELETE_WINDOW', \&quit_program);
 $top->title($title);
 $top->geometry($xgeometry) if $xgeometry;
+
+#my $b = $top->Balloon; # XXX
 
 my $menu_frame = $top->Frame(-relief => 'raised',
 			     -borderwidth => 2);
@@ -84,7 +84,10 @@ my $mb_project = $menu_frame->Menubutton(-text => 'Project'
 $mb_project->command(-label => 'New',
 		     -command => \&new_project);
 $mb_project->command(-label => 'Pause',
-		     -command => \&pause);
+		     -command => \&pause_or_cont);
+$mb_project->separator;
+$mb_project->command(-label => 'Today\'s time',
+		     -command => \&today_time);
 
 my $mb_options = $menu_frame->Menubutton(-text => 'Options'
 					)->pack(-side => 'left');
@@ -106,73 +109,68 @@ $mb_options->checkbutton(-label => 'Show only top',
 			 -command => \&toggle_show_only_top,
 			 -variable => \$show_only_top);
 
-# XXX RO machen!
-$menu_frame->Checkbutton(-text => '*',
-			 -variable => \$root->{'modified'},
-			 -state => 'disabled',
-			)->pack(-side => 'right');
+my $mb_help = $menu_frame->Menubutton(-text => 'Help'
+				     )->pack(-side => 'left');
+$mb_help->command(-label => 'About',
+		  -command => \&show_about);
+$mb_help->command(-label => 'Index',
+		  -command => sub {
+		      use Tk::Pod;
+		      Tk::Pod->Dir($FindBin::Bin);
+		      $top->Pod(-file => "$FindBin::Script");
+		  });
 
-$menu_frame->Button(-text => 'Pause',
-		    -command => \&pause)->pack(-side => 'right');
+my $save_check = $menu_frame->Checkbutton(-text => '*',
+					  -variable => \$root->{'modified'},
+					  -state => 'disabled',
+					 )->pack(-side => 'right');
+#$b->attach($save_check, -msg => 'File saved indicator');
+
+my $pause_cont_button = $menu_frame->Button
+  (-text => 'Pause',
+   -command => \&pause_or_cont)->pack(-side => 'right');
+
 $menu_frame->Button(-text => 'Save',
 		    -command => \&save_file)->pack(-side => 'right');
 
-$menu_frame->pack(-expand => 1, -fill => 'x');
+$menu_frame->pack(-fill => 'x');
 
-my $project_frame = $top->Frame;
-$project_frame->pack(-expand => 1, -fill => 'both');
-my $header_text = $project_frame->Text(-tabs => ['4c', '6.5c', '9c'],
-				       -width => 63,
-				       -height => 2,
-				       -cursor => 'left_ptr',
-				       -relief => 'ridge');
-$header_text->pack(-expand => 1, -fill => 'x');
-$header_text->insert('1.0', "\t\t  Time\nProjects:\t  Session\t  Today\t  All");
-$header_text->bindtags(qw(dummy));
+my $project_frame = $top->Scrolled('HList', -scrollbars => 'e',
+				   -columns => 4,
+				   -drawbranch => 1,
+				   -header => 1,
+				   -selectmode => 'single',
+				   -browsecmd => sub { &start_stop(@_) },
+				   -separator => $separator,
+				  )->pack(-expand => 1, -fill => 'both');
+$project_frame->header('create', 0, -text => 'Projects:');
+$project_frame->header('create', 1, -text => 'Session');
+$project_frame->header('create', 2, -text => 'Today');
+$project_frame->header('create', 3, -text => 'All');
 
-my $projects_scrollbar = $project_frame->Scrollbar(-orient => 'vertical');
-$projects_scrollbar->pack(-side => 'right', -fill => 'y');
-my $projects_text = $project_frame->Text
-  (-yscrollcommand => [$projects_scrollbar => 'set'],
-   -tabs => ['4c', '6.5c', '9c'],
-   -width => 63,
-   -height => 10,
-   -spacing1 => 1,
-   -spacing3 => 1,
-   -cursor => 'left_ptr',
-   -relief => 'ridge');
-$projects_scrollbar->configure(-command => [$projects_text => 'yview']);
-$projects_text->pack(-expand => 1, -fill => 'both');
-$projects_text->bindtags(qw(dummy));
-$projects_text->tagConfigure('running',
-			     -relief => 'raised',
-			     -borderwidth => 1,
-			     -background  => 'SeaGreen3');
-$projects_text->tagConfigure('project',
-			     -underline => 1);
-$projects_text->tagBind('project',
-			"<Button-1>" =>
-			sub { &start_stop($projects_text->index('current')) });
-$projects_text->tagBind('project',
-			"<Button-2>" =>
-			sub { &show_attributes($projects_text->index('current')) });
-$projects_text->tagBind('project',
-			"<Button-3>" =>
-			sub { &new_sub_project($projects_text->index('current')) });
+my $orig_selectbg = $project_frame->cget(-selectbackground);
+
+$project_frame->bind("<Button-2>" =>
+		     sub { &show_attributes(get_entry(@_)) });
+$project_frame->bind("<Button-3>" =>
+		     sub { &new_sub_project(get_entry(@_)) });
 
 my $status_frame = $top->Frame(-relief => 'ridge',
 			       -bd => 1);
-$status_frame->pack(-expand => 1, -fill => 'x');
+$status_frame->pack(-fill => 'x');
+
 my $status_text = $status_frame->Label(-text => $copyright);
 $status_text->pack(-side => 'left');
 
-$projects_text->tagBind('project',
-			"<Enter>" =>
-			sub { $status_text->configure(-text => $project_status); });
-$projects_text->tagBind('project',
-			"<Leave>" =>
-			sub { $status_text->configure(-text => $copyright); });
+#$b->attach($project_frame, -msg => $project_status);
+$project_frame->bind("<Enter>" =>
+		     sub { $status_text->configure(-text => $project_status);
+ });
+$project_frame->bind("<Leave>" =>
+		     sub { $status_text->configure(-text => $copyright); });
 
+
+$root->modified(0);
 &load_file;
 
 MainLoop;
@@ -200,84 +198,90 @@ sub new_project {
     if ($label) {
 	my $p = $root->subproject($label);
 	&insert_project($p);
+	$project_frame->see(make_path($p));
     }
 }
 
 sub new_sub_project {
-    my $index = shift;
+    my $path = shift;
     my $label = &enter_label;
     if ($label) {
-	my $project_index = &get_project_index($index);
-	return if !defined $project_index;
-	my $p = $projects_in_text[$project_index];
+	my $p = $project_frame->info('data', $path);
+	return if !$p;
 	my $sub_p = $p->subproject($label);
-	&insert_project($sub_p,
-			"project-$project_index.last");
+	&insert_project($sub_p);
+	$project_frame->see(make_path($sub_p));
     }
 }
 
 sub insert_project {
-    my($p, $after) = @_;
-    return if $p->archived && !$show_archived;
+    my($p) = @_;
+    return if !$p || ($p->archived && !$show_archived);
     my $label = $p->label;
-    my $indent = $p->level-1;
-    $after = 'end' unless $after;
-    push(@projects_in_text, $p);
-    my $index = $#projects_in_text;
-    $projects_in_text{$p} = $index;
-    $projects_text->insert
-      ($after, 
-       (">" x $indent),
-       ["project-$index"],
-       ($p->archived ? "($label)" : $label),
-       ["label-$index", "project-$index", 'project'],
-       "\t" . &sec2time($p->sum_time($start_session_time, 1)) .
-       "\t" . &sec2time($p->sum_time($today_time, 1)) .
-       "\t" . &sec2time($p->sum_time(0, 1)) . "\n",
-       ["time-$index", "project-$index"]);
+    my $path = make_path($p);
+    return if !$path;
+    $project_frame->add($path,
+			-text => $p->label,
+			-itemtype => 'text',
+			-data => $p);
+    $project_frame->itemCreate
+      ($path, 1, -itemtype => 'text',
+       -text => &sec2time($p->sum_time($start_session_time, 1)));
+    $project_frame->itemCreate
+      ($path, 2, -itemtype => 'text',
+       -text => &sec2time($p->sum_time($today_time, 1)));
+    $project_frame->itemCreate
+      ($path, 3, -itemtype => 'text',
+       -text => &sec2time($p->sum_time(0, 1)));
+
+    $project_frame->columnWidth(0, -char => 31);
+    $project_frame->columnWidth(1, -char => 11);
+    $project_frame->columnWidth(2, -char => 11);
+    $project_frame->columnWidth(3, -char => 11);
 }
 
 sub start_stop {
-    my $index = shift;
-    my $project_index = &get_project_index($index);
-    return if !defined $project_index;
-    if (defined $current_project_index &&
-	$current_project_index == $project_index) {
-	&stop_project;
+    my $path = shift;
+    my $p = $project_frame->info('data', $path);
+    return if !$p;
+    if (defined $current_project && $current_project eq $p) {
+#	&stop_project;
+	&pause_or_cont;
     } else {
-	&start_project($project_index);
+	&start_project($p);
     }
-}
-
-sub get_project_index {
-    my $index = shift;
-    my @tags = $projects_text->tagNames($index);
-    my $project_index;
-    foreach (@tags) {
-	if (/^project-(.*)/) {
-	    $project_index = $1;
-	    last;
-	}
-    }
-    $project_index;
 }
 
 sub start_project {
-    my $project_index = shift;
+    my $p = shift;
     &stop_project;
-    $current_project_index = $project_index;
-    $projects_text->tagAdd('running',
-			   "label-$project_index.first",
-			   "label-$project_index.last");
-    $top->title($title .
-		" (" . $projects_in_text[$current_project_index]->label . ")");
-    $projects_in_text[$current_project_index]->start_time;
+    $current_project = $p;
+    $project_frame->configure(-selectbackground => 'SeaGreen3');
+    $pause_cont_button->configure(-text => 'Pause');
+
+    $top->title($title . " (" . $p->label . ")");
+    $p->start_time;
     &set_timeout();
 }
 
 sub pause {
-    if (defined $current_project_index) {
+    if (defined $current_project) {
 	&stop_project;
+	$pause_cont_button->configure(-text => 'Cont');
+    }
+}
+
+sub pause_or_cont {
+    if (defined $current_project) {
+	&stop_project;
+	$pause_cont_button->configure(-text => 'Cont');
+    } else {
+	my $sel = $project_frame->selectionGet;
+	if ($sel) {
+	    my $p = $project_frame->info('data', $sel);
+	    return if !$p;
+	    start_project($p);
+	}
     }
 }
 
@@ -286,20 +290,22 @@ sub stop_project {
 	$time_after->cancel;
 	undef $time_after;
     }
-    if (defined $current_project_index) {
-	$projects_in_text[$current_project_index]->end_time;
+    if (defined $current_project) {
+	$current_project->end_time;
 	&act_time;
-	undef $current_project_index;
-	$projects_text->tagRemove('running', '1.0', 'end');
+	undef $current_project;
+	$project_frame->configure(-selectbackground => $orig_selectbg);
 	$top->title($title);
     }
 }
 
 sub act_time {
-    my $index = shift;
-    my $project_index = (defined $index ? $index : $current_project_index);
-    return if !defined $project_index;
-    my $project = $projects_in_text[$project_index];
+    my $p = shift;
+    if (!$p) {
+	$p = $current_project;
+	return if !$p;
+    }
+    my $project = $p;
     while ($project) {
 	&act_time_project($project);
 	$project = ($project->level > 1 ? $project->parent : undef);
@@ -308,35 +314,50 @@ sub act_time {
 }
 
 sub act_time_project {
-    my($project_index_or_ref) = @_;
-    my($project, $project_index);
-    if (ref $project_index_or_ref eq 'Project') {
-	$project = $project_index_or_ref;
-	$project_index = $projects_in_text{$project};
-    } else {
-	$project_index = $project_index_or_ref;
-	$project = $projects_in_text[$project_index];
-    }
-    $projects_text->delete("time-$project_index.first",
-			   "time-$project_index.last");
-    $projects_text->insert
-      ("label-$project_index.last",
-       "\t" . &sec2time($project->sum_time($start_session_time, 1)) .
-       "\t" . &sec2time($project->sum_time($today_time, 1)) .
-       "\t" . &sec2time($project->sum_time(0, 1)) . "\n",
-       ["time-$project_index", "project-$project_index"]);
+    my($p) = @_;
+    my $path = make_path($p);
+    return if !$path;
+    $project_frame->itemConfigure
+      ($path, 1, -text => &sec2time($p->sum_time($start_session_time, 1)));
+    $project_frame->itemConfigure
+      ($path, 2, -text => &sec2time($p->sum_time($today_time, 1)));
+    $project_frame->itemConfigure
+      ($path, 3, -text => &sec2time($p->sum_time(0, 1)));
 }
 
 sub set_timeout {
     if (defined $time_after) {
 	$time_after->cancel;
     }
-    $time_after = $projects_text->after
+    $time_after = $project_frame->after
       ($time_update*1000, sub { &act_time(); } );
 }
 
+sub today_time {
+    my $sum = 0;
+    foreach ($root->subproject) {
+	$sum += $_->sum_time($today_time, 1);
+    }
+    require Tk::Dialog;
+    $top->Dialog(-title => 'Today\'s time',
+		 -text  => "Today\'s working time: " . &sec2time($sum),
+		 -popover => 'cursor',
+		)->Show;
+}
+
 sub load_file {
+    if ($root->modified || defined $current_project) {
+	require Tk::Dialog;
+	my $dialog = $top->Dialog(-title => 'Load',
+				  -text  => "Load project data (overwrite current data)?",
+				  -default_button => 'No',
+				  -buttons => ['Yes', 'No'],
+				  -popover => 'cursor',
+				 );
+	return if $dialog->Show eq 'No';
+    }
     &stop_project;
+    $root->delete_all;
     if (!$root->load($datafile)) {
 	$status_text->configure(-text => "Can't load $datafile!");
 	return;
@@ -348,20 +369,18 @@ sub load_file {
 }
 
 sub insert_all {
-    $projects_text->delete('1.0', 'end');
-    @projects_in_text = ();
-    %projects_in_text = ();
+    $project_frame->delete('all');
     foreach (@{$root->subproject}) {
-	&insert_old_project($_, 0);
+	&insert_old_project($_);
     }
 }
 
 sub insert_old_project {
-    my($p, $indent) = @_;
+    my($p) = @_;
     &insert_project($p);
     if (!$show_only_top) {
 	foreach (@{$p->subproject}) {
-	    &insert_old_project($_, $indent+1);
+	    &insert_old_project($_);
 	}
     }
 }
@@ -388,8 +407,8 @@ sub old_save_file {
 sub save_file {
     my $autosave = shift;
 
-    if (defined $current_project_index) {
-	$projects_in_text[$current_project_index]->end_time;
+    if (defined $current_project) {
+	$current_project->end_time;
     }
 
     if (!$autosave) {
@@ -406,8 +425,8 @@ sub save_file {
     }
     &old_save_file;
 
-    if (defined $current_project_index) {
-	$projects_in_text[$current_project_index]->unend_time;
+    if (defined $current_project) {
+	$current_project->unend_time;
     }
 
     if (!$autosave) {
@@ -433,10 +452,7 @@ sub toggle_autosave {
 }
 
 sub toggle_dateformat {
-    my $project_index;
-    foreach $project_index (@projects_in_text) {
-	&act_time_project($project_index);
-    }
+    &insert_all;
     if (&set_time_update) {
 	&set_timeout;
     }
@@ -444,7 +460,7 @@ sub toggle_dateformat {
 
 sub not_running {
     my($var) = @_;
-    if (defined $current_project_index) {
+    if (defined $current_project) {
 	require Tk::Dialog;
 	$top->Dialog(-title => 'Warning',
 		     -text  => 
@@ -474,13 +490,12 @@ sub toggle_time_arbeitstag {
 }
 
 sub show_attributes {
-    my $index = shift;
+    my $path = shift;
 
     return if !&not_running;
 
-    my $project_index = &get_project_index($index);
-    return if !defined $project_index;
-    my $project = $projects_in_text[$project_index];
+    my $project = $project_frame->info('data', $path);
+    return if !defined $project;
 
     my $attribute_top = $top->Toplevel(-title => "Attributes");
     my $f = $attribute_top->Frame->pack;
@@ -496,11 +511,12 @@ sub show_attributes {
     }
 
     my $new_parent;
+    require Tk::BrowseEntry;
     my $browse = $attribute_top->BrowseEntry(-label => "New Parent",
 					     -variable => \$new_parent);
-    my @all_labels = @{$root->all_labels};
+    my @all_labels = sort { lc($a) cmp lc($b) } @{$root->all_labels};
     foreach (@all_labels) {
-	$_ = '(Root)' if $_ eq '';
+	$_ = '(Root)' if !defined $_ || $_ eq '';
 	$browse->insert("end", $_);
     }
     $browse->pack;
@@ -555,8 +571,7 @@ sub show_attributes {
     &set_text_or_image($cancel,
 		       "/usr/www/bilder/icons/Misc2/answer_bad.gif", "Cancel");
     $cancel->pack(-side => 'left');
-
-    &under_mouse($attribute_top);
+    $attribute_top->Popup(-popover => 'cursor');
 }
 
 sub set_time_update {
@@ -567,50 +582,30 @@ sub set_time_update {
 
 sub set_text_or_image {
     my($widget, $image, $text) = @_;
-    # use image if available, else text
+    # use image if available, otherwise text
     if (-r $image) {
-	$widget->configure(-image => $widget->Photo(-file => $image));
-    } else {
-	$widget->configure(-text => $text);
-    }
+	eval { $widget->configure(-image => $widget->Photo(-file => $image)) };
+	if (!$@) { return }
+    } 
+    $widget->configure(-text => $text);
 }
 
-sub rdonly_checkbutton {
-    my $checkbutton = shift;
-    $checkbutton->bind("<1>");
-    $checkbutton->bind("<space>");
+sub make_path {
+    my($p) = @_;
+    return if !$p;
+    my @path = $p->path;
+    join($separator, @path[1 .. $#path]);
 }
 
-# aus ~/devel/adb/adb 
-sub under_mouse {
-    my($toplevel) = @_;
-    $toplevel->withdraw;	# unsichtbares Update erzwingen
-    $toplevel->update;
-    my($scrheight, $scrwidth) 
-	= ($toplevel->screenheight, $toplevel->screenwidth);
-    my($x, $y) = $toplevel->pointerxy;
-    # XXX leider ist req(width|height) ohne Rahmen. Deshalb addiere ich
-    # etwas hinzu ...
-    my($topheight, $topwidth)
-	= ($toplevel->reqheight+28, $toplevel->reqwidth+6);
-    my($geomheight, $geomwidth);
-    $geomheight = int($y - $topheight/2);
-    if ($geomheight + $topheight > $scrheight) {
-	$geomheight = $scrheight - $topheight;
-    }
-    $geomheight = 0 if ($geomheight < 0);
-    $geomwidth = int($x - $topwidth/2);
-    if ($geomwidth + $topwidth > $scrwidth) {
-	$geomwidth = $scrwidth - $topwidth;
-    }
-    $geomwidth = 0 if ($geomwidth < 0);
-    $toplevel->geometry("+$geomwidth+$geomheight");
-    $toplevel->deiconify;	# wieder sichtbar machen
+sub get_entry {
+    my($w) = @_;
+    my $Ev = $w->XEvent;
+    $w->GetNearest($Ev->y);
 }
 
 sub quit_program {
     require Tk::Dialog;
-    if ($root->modified || defined $current_project_index) {
+    if ($root->modified || defined $current_project) {
 	if (!defined $quit_dialog) {
 	    $quit_dialog = $top->Dialog(-title => 'Quit Program',
 					-text  => "Really quit?",
@@ -641,6 +636,47 @@ sub sec2time {
     }
 }
 
+sub show_about {
+    my $dia = $top->Toplevel(-title => 'Copyright');
+    $dia->Label(-text  => <<'EOF',
+
+tktimex by Slaven Rezic (eserte@cs.tu-berlin.de)
+
+Copyright (c) 1996, 1997 Slaven Rezic. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. All advertising materials mentioning features or use of this software
+   must display the following acknowledgement:
+   This product includes software developed by Slaven Rezic.
+4. The name of the author may not be used to endorse or promote products
+   derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+
+EOF
+		-justify => 'left')->pack;
+    $dia->Button(-text => 'OK',
+		 -command => sub { $dia->destroy })->pack;
+    $dia->Popup(-popover => 'cursor');
+}
+
 # print out how to use this program.
 # the string argument passed to it is printed at the end, with a nl.
 sub usage {
@@ -669,6 +705,6 @@ sub get_arg {
 
 =head1 TODO
 
- - reparent objects
+ - write POD
 
 =cut
