@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.30 2000/08/23 23:29:46 eserte Exp $
+# $Id: Project.pm,v 3.31 2000/08/25 02:21:52 eserte Exp $
 #
 
 =head1 NAME
@@ -215,13 +215,32 @@ sub last_time_subprojects {
     @times = $project->interval_times("daily")
 
 Return the @times array (like $project->{'times'}) aggregated to an
-interval. Valid argument values are: daily, weekly, monthly and yearly.
+interval. Valid argument values are: "" (no aggregation), daily,
+weekly, monthly and yearly.
 
 =cut
 
 sub interval_times {
     my $self = shift;
     my $interval_type = shift;
+    my %args = @_;
+
+    my @times;
+
+    if ($args{'-recursive'}) {
+
+	my @all_subs  = $self->all_subprojects;
+	my @all_times = map { @{ $_->{'times'} } } @all_subs;
+	my $combined = new Timex::Project;
+	@{ $combined->{'times'} } = @all_times;
+	$combined->sort_times;
+	@times = @{ $combined->{'times'} }
+
+    } else {
+
+	@times = @{ $self->{'times'} };
+
+    }
 
     if ($interval_type eq 'weekly') {
 	eval {
@@ -233,20 +252,25 @@ sub interval_times {
 	}
     }
 
-    use constant INTERVAL_TYPE_DAILY   => 0;
-    use constant INTERVAL_TYPE_WEEKLY  => 1;
-    use constant INTERVAL_TYPE_MONTHLY => 2;
-    use constant INTERVAL_TYPE_YEARLY  => 3;
+    use constant INTERVAL_TYPE_NONE    => 0;
+    use constant INTERVAL_TYPE_DAILY   => 1;
+    use constant INTERVAL_TYPE_WEEKLY  => 2;
+    use constant INTERVAL_TYPE_MONTHLY => 3;
+    use constant INTERVAL_TYPE_YEARLY  => 4;
 
-    my $it = {'daily'   => INTERVAL_TYPE_DAILY,
+    my $it = {''        => INTERVAL_TYPE_NONE,
+	      'daily'   => INTERVAL_TYPE_DAILY,
 	      'weekly'  => INTERVAL_TYPE_WEEKLY,
 	      'monthly' => INTERVAL_TYPE_MONTHLY,
 	      'yearly'  => INTERVAL_TYPE_YEARLY,
 	     }->{$interval_type};
 
+    if ($it == INTERVAL_TYPE_NONE) {
+	return @times;
+    }
+
     require Time::Local;
 
-    my @times = @{$self->{'times'}};
     my @res;
     my($last_wday); # not really wday... for weeks this is the week number etc.
 
@@ -439,7 +463,8 @@ sub sorted_subprojects {
 
     @sub = $root->all_subprojects()
 
-Return all projects below $root (recurse into tree) as an array of Projects.
+Return all projects below $root (recurse into tree) as an flat array
+of Projects.
 
 =cut
 
