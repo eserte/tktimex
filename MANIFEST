@@ -15,8 +15,6 @@ Tk/Autoscroll.pm	from Tk-SREZIC
 Tk/UnderlineAll.pm	from Tk-SREZIC
 Win32Util.pm		from Win32Util
 clear_times.pl
-convert2xls.pl
-convert2xml.pl
 ctimex
 emacs/project.el
 get_skeleton.pl
@@ -27,8 +25,11 @@ mini-clock.xpm
 mini-clock.ico
 plain.down.gif
 plain.up.gif
+project2xls.pl
+project2xml.pl
 restrict_domain.pl
 templates/oo.pjt
 timexserver
 timexserver.cgi
 tktimex
+msg/tktimex/de
