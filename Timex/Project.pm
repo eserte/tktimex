@@ -58,30 +58,19 @@ Clone a new Timex::Project object from an old one.
 
 sub clone {
     my($pkg, $orig_project) = @_;
-    my $self = _deep_copy($orig_project);
+    require Data::Dumper;
+    my $self;
+    eval {
+	my $dd = new Data::Dumper([$orig_project], ['self']);
+	$dd->Indent(0);
+	$dd->Purity(1);
+	my $evals = $dd->Dumpxs;
+	eval $evals;
+    };
+    warn $@ if $@;
     bless $self, $pkg;
-}
-
-# private sub: does a deep recursive copy of the given reference
-sub _deep_copy {
-    my($ref) = @_;
-    my $new_ref;
-    if (!ref $ref) {
-	$new_ref = $ref;
-    } elsif (UNIVERSAL::isa($ref, 'ARRAY')) {
-	$new_ref = [];
-	foreach (@$ref) {
-	    push @$new_ref, _deep_copy($_);
-	}
-    } elsif (UNIVERSAL::isa($ref, 'HASH')) {
-	$new_ref = {};
-	while(my($k,$v) = each %$ref) {
-	    $new_ref->{$k} = _deep_copy($v);
-	}
-    } else {
-	die "Unknown ref type for $ref";
-    }
-    $new_ref;
+    $self->rebless_subprojects("Timex::Project::XML");
+    $self;
 }
 
 sub label {
