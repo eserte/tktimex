@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.67 2000/09/02 22:51:10 eserte Exp $
+# $Id: tktimex,v 4.68 2000/09/05 00:35:32 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -101,7 +101,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.67 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.68 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -145,6 +145,7 @@ my $sbside = ($os eq 'win' ? 'e' : 'w');
 
 state_change("before Getopt definition");
 
+my @all_domains;
 my $options = {};
 my @opttable =
   ('General',
@@ -181,6 +182,11 @@ my @opttable =
     ],
    ['onlytop',            '!',  0, 'callback' => \&toggle_show_archived,
     "longhelp" => "Do not show subprojects.",
+    ],
+   ['domain',             '=s', undef, 'callback' => \&toggle_show_archived,
+    "longhelp" => "Restrict projects to a single domain only.",
+    'choices' => \@all_domains,
+    #'strict' => 1, # geht leider nicht...
     ],
    ['sort',               '=s', 'name',
     'choices' => ['nothing', 'name', 'time'],
@@ -767,9 +773,17 @@ sub new_project {
 sub get_templates {
     return $templates_root if $templates_root;
 
-    my @templ_files = glob("$FindBin::RealBin/templates/*.pjt");
+    my @templ_files;
+    foreach my $dir (@INC) {
+	push @templ_files, glob("$dir/templates/*.pjt");
+	push @templ_files, glob("$dir/Timex/templates/*.pjt");
+    }
+    push @templ_files, glob("$FindBin::RealBin/templates/*.pjt");
+
+    my %templ_files = map { ($_ => 1) } @templ_files;
+
     my @templ_projects;
-    foreach my $f (@templ_files) {
+    foreach my $f (sort keys %templ_files) {
 	my $tp = new Timex::Project;
 	$tp->load($f);
 	push @templ_projects, $tp;
@@ -840,7 +854,10 @@ sub delete_project {
 
 sub insert_project {
     my($p, %args) = @_;
-    return if !$p || ($p->archived && !$options->{'archived'});
+    return if !$p;
+    return if $p->archived && !$options->{'archived'};
+    return if (defined $options->{'domain'} && $options->{'domain'} !~ /^\s*$/)
+	      && (!defined $p->domain || $p->domain ne $options->{'domain'});
     my $label = $p->label;
     my $path = make_path($p);
     return if !$path;
@@ -848,6 +865,27 @@ sub insert_project {
 	warn "Duplicate entry path $path - please check .pj1 file!";
 	return;
     }
+
+    # check existence of parent and create dummy entry, if appropriate
+    my $check_parent;
+    $check_parent = sub {
+	my($p, $path) = @_;;
+
+	my $parent_path = get_parent_path($path);
+	return if $parent_path eq "";
+
+	my $parent_p = $p->parent;
+	return if !defined $parent_p;
+
+	if (!$project_frame->info('exists', $parent_path)) {
+	    $check_parent->($parent_p, $parent_path);
+	    $project_frame->add($parent_path,
+				-text => "(" . $parent_p->label . ")");
+	}
+    };
+
+    $check_parent->($p, $path);
+
     $project_frame->add
 	($path,
 	 (defined $args{-after} ? (-after => $args{-after}) : ()),
@@ -1716,6 +1754,7 @@ sub insert_all {
     if (defined $current_project) {
 	$project_frame->selectionSet(make_path($current_project));
     }
+    @all_domains = $root->get_all_domains;
     $top->Unbusy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
 }
 
@@ -2224,6 +2263,19 @@ sub show_attributes {
 	)->grid(-row => $row, -column => 1, -sticky => 'w');
     if ($readonly) { $rate_entry->configure(-state => 'disabled') }
 
+    # Domain
+    my $domain = my $old_domain = $project->{'domain'};
+    $row++;
+    $f->Label(-text => 'Domain'
+	     )->grid(-row => $row, -column => 0, -sticky => 'w');
+    my $domain_entry = $f->BrowseEntry
+	(-textvariable => \$domain,
+	 -bg => $inner_bg,
+	 -fg => $inner_fg,
+	 -choices => ["", @all_domains],
+	)->grid(-row => $row, -column => 1, -sticky => 'w');
+    if ($readonly) { $domain_entry->configure(-state => 'disabled') }
+
     # Archived
     my $archived = $project->{'archived'};
     $row++;
@@ -2320,6 +2372,9 @@ sub show_attributes {
 
 	   $insert_all++ if defined $old_rate && $rate ne $old_rate;
 	   $project->rate($rate);
+
+	   $insert_all++ if defined $old_domain && $domain ne $old_domain;
+	   $project->domain($domain);
 
 	   $attribute_top->destroy();
 	   insert_all() if $insert_all;
@@ -2791,7 +2846,13 @@ sub make_path {
     return if !$p;
     die "wrong arg for make_path: <$p>" if !$p->isa('Timex::Project');
     my @path = $p->path;
-    join($separator, @path[1 .. $#path]);
+    join $separator, @path[1 .. $#path];
+}
+
+sub get_parent_path {
+    my $path = shift;
+    my @path = split $separator, $path;
+    join $separator, @path[0 .. $#path-1];
 }
 
 sub get_entry {
