@@ -4,6 +4,7 @@ Makefile.PL
 tktimex
 ctimex
 clear_times.pl
+get_skeleton.pl
 Timex/Project.pm
 Timex/Rcs.pm
 Timex/test.pl
