@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.29 1999/11/02 23:55:49 eserte Exp $
+# $Id: Project.pm,v 3.30 2000/08/23 23:29:46 eserte Exp $
 #
 
 =head1 NAME
@@ -120,20 +120,32 @@ sub rcsfile {
 
 =head2 note
 
-    $project->note("First note", "Second note");
-    $project->note(["First note", "Second note"]);
     @notes = $project->note;
+
+Get notes for project.
 
 =cut
 
 sub note {
     my($self, @note_lines) = @_;
+    if ($self->{'note'}) {
+	@{$self->{'note'}};
+    } else {
+	();
+    }
+}
+
+=head2 set_note
+
+    $project->note("First note", "Second note");
+    $project->note(["First note", "Second note"]);
+
+=cut
+
+sub set_note {
+    my($self, @note_lines) = @_;
     if (@note_lines == 0) {
-	if ($self->{'note'}) {
-	    @{$self->{'note'}};
-	} else {
-	    ();
-	}
+	undef $self->{'note'};
     } else {
 	if (ref $note_lines[0] eq 'ARRAY') {
 	    @note_lines = @{$note_lines[0]};
@@ -144,6 +156,21 @@ sub note {
 	$self->{'note'} = [@note_lines];
 	$self->modified(1);
     }
+}
+
+=head2 has_note
+
+    $project->has_note
+
+Return, if $project has a note attached.
+
+=cut
+
+sub has_note {
+    my $self = shift;
+    $self->{'note'} and
+    ref $self->{'note'} eq 'ARRAY' and
+    scalar @{ $self->{'note'} };
 }
 
 =head2 last_times
@@ -183,20 +210,46 @@ sub last_time_subprojects {
     return $last;
 }
 
-=head2 daily_times
+=head2 interval_times
 
-    @times = $project->daily_times;
+    @times = $project->interval_times("daily")
 
-Return the @times array (like $project->{'times'}) aggregated to days.
+Return the @times array (like $project->{'times'}) aggregated to an
+interval. Valid argument values are: daily, weekly, monthly and yearly.
 
 =cut
 
-sub daily_times {
+sub interval_times {
     my $self = shift;
+    my $interval_type = shift;
+
+    if ($interval_type eq 'weekly') {
+	eval {
+	    require Date::Calc;
+	};
+	if ($@) {
+	    warn "$@. Reverting to daily";
+	    $interval_type = "daily";
+	}
+    }
+
+    use constant INTERVAL_TYPE_DAILY   => 0;
+    use constant INTERVAL_TYPE_WEEKLY  => 1;
+    use constant INTERVAL_TYPE_MONTHLY => 2;
+    use constant INTERVAL_TYPE_YEARLY  => 3;
+
+    my $it = {'daily'   => INTERVAL_TYPE_DAILY,
+	      'weekly'  => INTERVAL_TYPE_WEEKLY,
+	      'monthly' => INTERVAL_TYPE_MONTHLY,
+	      'yearly'  => INTERVAL_TYPE_YEARLY,
+	     }->{$interval_type};
+
     require Time::Local;
+
     my @times = @{$self->{'times'}};
     my @res;
-    my($last_wday, $last_year);
+    my($last_wday); # not really wday... for weeks this is the week number etc.
+
     for(my $i = 0; $i<=$#times; $i++) {
 	my @d = @{ $times[$i] }; # important: don't operate on ref!
 	next if !defined $d[1]; # ignore running project
@@ -209,17 +262,45 @@ sub daily_times {
 	    splice @times, $i+1, 0, [$d[1]+1, $old_end];
 	}
 	my $interval = $d[1] - $d[0];
-	if (defined $last_wday &&
-	    $last_wday == $a1[7] && $last_year == $a1[7]) {
-	    $res[$#res]->[1] = $d[1]; # correct end time
-	    $res[$#res]->[2] += $interval; # update daily interval
-	} else {
-	    push @res, [$d[0], $d[1], $interval];
+
+	my $this_wday;
+	if      ($it == INTERVAL_TYPE_DAILY) {
+	    $this_wday = $a1[7];
+
+	} elsif ($it == INTERVAL_TYPE_WEEKLY) {
+	    $this_wday = Date::Calc::Week_Number
+		(1900+$a1[5], 1+$a1[4], $a1[3]);
+
+	} elsif ($it == INTERVAL_TYPE_MONTHLY) {
+	    $this_wday = $a1[4]; # verzichte auf +1 ...
+
+	} elsif ($it == INTERVAL_TYPE_YEARLY) {
+	    $this_wday = $a1[5]; # verzichte auf +1900 ...
 	}
-	$last_wday = $a1[7];
-	$last_year = $a1[7];
+
+	if (defined $last_wday && $last_wday == $this_wday) {
+	    $res[$#res]->[1] = $d[1]; # correct end time
+	    $res[$#res]->[2] += $interval; # update daily/weekly... interval
+	} else {
+	    push @res, [$d[0], $d[1], $interval]; # new interval
+	}
+	$last_wday = $this_wday;
     }
     @res;
+
+}
+
+=head2 daily_times
+
+    @times = $project->daily_times;
+
+Same as interval_times('daily').
+
+=cut
+
+sub daily_times {
+    my $self = shift;
+    $self->interval_times("daily");
 }
 
 sub parent {
@@ -451,6 +532,26 @@ sub find_by_regex {
     my @res;
     foreach my $p ($self->all_subprojects) {
 	if (defined $p->label and $p->label =~ /$regex/) {
+	    push @res, $p;
+	}
+    }
+    @res;
+}
+
+=head2 find_by_regex_pathname
+
+    @projects = $root->find_by_regex_pathname($regex);
+
+Search and return the projects, which pathnames match with $regex. The
+returndes project objects are accumulated in an array.
+
+=cut
+
+sub find_by_regex_pathname {
+    my($self, $regex) = @_;
+    my @res;
+    foreach my $p ($self->all_subprojects) {
+	if (defined $p->pathname and $p->pathname =~ /$regex/) {
 	    push @res, $p;
 	}
     }
@@ -989,7 +1090,7 @@ sub interpret_data_project {
 		$self->{'archived'} = delete $attributes{'archived'};
 		$self->{'rcsfile'}  = delete $attributes{'rcsfile'};
 		if (defined $attributes{'note'}) {
-		    $self->note($attributes{'note'});
+		    $self->set_note($attributes{'note'});
 		    delete $attributes{'note'};
 		}
 		warn "Unknown attributes: " . join(" ", %attributes)
@@ -1272,4 +1373,3 @@ sub merge {
 ######################################################################
 
 1;
-
