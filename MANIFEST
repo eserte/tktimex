@@ -8,6 +8,7 @@ get_skeleton.pl
 Timex/Project.pm
 Timex/Rcs.pm
 Timex/test.pl
+Tk/Autoscroll.pm
 Tk/UnderlineAll.pm
 kde/Timex.kdelnk
 Win32Util.pm
