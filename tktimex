@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 5.7 2000/12/31 03:23:07 eserte Exp $
+# $Id: tktimex,v 5.8 2001/02/02 01:27:10 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -104,7 +104,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 5.7 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 5.8 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -345,8 +345,11 @@ $top->title($title);
 $top->geometry($options->{'geometry'}) if $options->{'geometry'};
 eval {
     my $icon = $top->Pixmap(-file => Tk::findINC("mini-clock.xpm"));
+    if (!$icon) {
+	$top->Pixmap(-file => "$FindBin::RealBin/mini-clock.xpm");
+    }
     $top->Icon(-image => $icon);
-};
+}; warn $@ if $@;
 
 $top->bind("<Pause>" => sub {
 	       eval {
