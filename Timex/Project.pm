@@ -296,8 +296,8 @@ sub subproject {
     my($self, $label) = @_;
     if (defined $label) {
 	my $sub;
-	if (ref $label ne 'Timex::Project') {
-	    $sub = Timex::Project->new($label);
+	if (ref $label !~ /^Timex::Project/) {
+	    $sub = $self->new($label);
 	} else {
 	    $sub = $label;
 	}
@@ -978,10 +978,12 @@ sub load_old {
 }
 
 sub rebless_subprojects {
-    my $self = shift;
+    my($self, $class) = @_;
+    $class = 'Timex::Project' unless $class;
+    bless $self, $class;
     foreach (@{$self->subproject}) {
-	bless $_, 'Timex::Project';
-	$_->rebless_subprojects;
+	bless $_, $class;
+	$_->rebless_subprojects($class);
     }
 }
 
