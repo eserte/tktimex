@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 5.6 2000/12/12 23:35:15 eserte Exp $
+# $Id: tktimex,v 5.7 2000/12/31 03:23:07 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -104,7 +104,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 5.6 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 5.7 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -3068,6 +3068,21 @@ sub show_intervals {
 	}
     };
 
+    my $epoch2readable_date = sub {
+	my @l = localtime $_[0];
+	sprintf "%04d-%02d-%02d-%02d:%02d:%02d",
+	    $l[5]+1900, $l[4]+1, $l[3], $l[2], $l[1], $l[0];
+    };
+
+    my $readable_date2epoch = sub {
+	if ($_[0] =~ /^\s*(\d{4})-(\d{1,2})-(\d{1,2})-(\d{1,2}):(\d{2}):(\d{2})\s*$/) {
+	    require Time::Local;
+	    Time::Local::timelocal($6, $5, $4, $3, $2-1, $1-1900);
+	} else {
+	    undef;
+	}
+    };
+
     my $interval_editor = sub {
 	my $i = shift;
 	my %args = @_;
@@ -3104,6 +3119,12 @@ sub show_intervals {
 	    }
 	};
 	$t->Label(-text => 'From:')->grid(-row => 0, -column => 0);
+
+	if (!$has_date) {
+	    $from = $epoch2readable_date->($from);
+	    $to   = $epoch2readable_date->($to);
+	}
+
 	my $from_date = ($has_date
 			 ? $t->Date($inner_bg_opt => $inner_bg,
 				    $inner_fg_opt => $inner_fg,
@@ -3134,7 +3155,17 @@ sub show_intervals {
 	my $okb = $f->Button
 	  (-text => 'OK',
 	   -command => sub {
-	       $project->set_times($i, $from, $to);
+	       my($from_e, $to_e);
+	       if (!$has_date) {
+		   $from_e = $readable_date2epoch->($from);
+		   $to_e   = $readable_date2epoch->($to);
+		   if (!defined $from_e || !defined $to_e) {
+		       die "Can't recognize $from/$to";
+		   }
+	       } else {
+		   ($from_e, $to_e) = ($from, $to);
+	       }
+	       $project->set_times($i, $from_e, $to_e);
 	       $update->($t);
 	   },
 	  )->pack(-side => 'left');
