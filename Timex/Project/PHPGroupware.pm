@@ -1,14 +1,14 @@
 # -*- perl -*-
 
 #
-# $Id: PHPGroupware.pm,v 1.1 2001/07/02 20:59:47 eserte Exp $
+# $Id: PHPGroupware.pm,v 1.2 2003/03/28 16:52:40 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Slaven Rezic. All rights reserved.
 # This package is free software; you can redistribute it and/or
 # modify it under the same terms as Perl itself.
 #
-# Mail: slaven.rezic@berlin.de
+# Mail: slaven@rezic.de
 # WWW:  http://user.cs.tu-berlin.de/~eserte/
 #
 
@@ -16,7 +16,7 @@ package Timex::Project::PHPGroupware;
 
 use strict;
 use vars qw($VERSION $tablename);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 use DBI;
 
@@ -139,7 +139,7 @@ Timex::Project::PHPGroupware - interface to phpgroupware
 
 =head1 AUTHOR
 
-Onlineoffice - info@onlineoffice.de
+Onlineoffice - slaven@rezic.de
 
 =head1 SEE ALSO
 

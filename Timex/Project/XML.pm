@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: XML.pm,v 1.7 2000/12/07 23:04:36 eserte Exp $
+# $Id: XML.pm,v 1.8 2003/03/28 16:52:51 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -19,6 +19,7 @@ use XML::Parser;
 *convert1 = \&escape_special;
 
 # XXX noch nicht getestet
+# XXX code aus Tk::XMLViewer verwenden (repository?)
 eval q{
     use utf8;
     sub convert2 {
