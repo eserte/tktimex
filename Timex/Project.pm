@@ -448,6 +448,31 @@ sub load {
     }
 }
 
+=head2 is_project_file
+
+    $r = Project->is_project_file($filename);
+
+Returns TRUE if $filename is a project file.
+
+=cut
+
+sub is_project_file {
+    shift;
+    my $filename = shift;
+    if (!open(F, $filename)) {
+	return undef;
+    } else {
+	my $res = 1;
+	chomp(my $magicline = <F>);
+	if ($magicline !~ /^$magic/) {
+	    $@ = "Wrong magic <$magicline>.";
+	    $res = undef;
+	}
+	close F;
+	return $res;
+    }
+}
+
 sub load_old {
     my($self, $file) = @_;
     do $file;
