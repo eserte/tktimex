@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.62 2000/09/01 23:35:01 eserte Exp $
+# $Id: tktimex,v 4.63 2000/09/02 02:16:49 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -24,6 +24,8 @@ BEGIN {
     state_change("after Tk");
 }
 use Tk::ErrorDialog;
+
+#eval 'use blib qw(/home/e/eserte/src/CPAN/Tk-HistEntry)';warn $@ if $@;#XXXXXXX
 
 state_change("all use's processed...");
 
@@ -99,7 +101,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.62 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.63 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -180,7 +182,7 @@ my @opttable =
    ['onlytop',            '!',  0, 'callback' => \&toggle_show_archived,
     "longhelp" => "Do not show subprojects.",
     ],
-   ['sort',               '=s', '',
+   ['sort',               '=s', 'name',
     'choices' => ['nothing', 'name', 'time'],
     'strict' => 1,
     'callback' => \&insert_all,
@@ -684,6 +686,11 @@ sub enter_label {
 	} elsif ($entry->can('history') and ref $history{$caller} eq 'ARRAY') {
 	    $entry->history($history{$caller});
 	}
+
+	if ($entry->can('history')) {
+	    $res = ($entry->history)[-1];
+	    $entry->selectionRange(0,"end");
+	}
     }
 
     $entry->pack(-side => 'left');
@@ -981,6 +988,15 @@ sub get_project_from_selection {
     undef;
 }
 
+sub get_project_from_anchor_or_selection {
+    my $sel = $project_frame->info("anchor");
+    if ($sel) {
+	$project_frame->info('data', $sel);
+    } else {
+	get_project_from_selection();
+    }
+}
+
 sub update_pause_cont_balloon {
     my $txt = $pause_cont_button->cget(-text);
     if ($txt eq 'Cont') { $txt = 'Continue' }
@@ -1057,18 +1073,41 @@ sub undo {
 sub search_project {
     my $regex = enter_label("Search:", 'search');
     if ($regex && $root) {
-	# XXX vielleicht ein eval, um regex-Fehler abzufangen; \Q/\E geht nicht
-	my @res = $root->find_by_regex_pathname("(?i)$regex");
-	foreach my $r (@res) {
-	    my $path = make_path($r);
-	    # überprüfen, ob das Projekt überhaupt sichtbar ist:
-	    if ($project_frame->info('exists', $path)) {
-		$project_frame->see($path);
-		$project_frame->anchorSet($path);
-		last;
+
+	my $active;
+
+	my $checkit = sub {
+	    my $p = $project_frame->info('data', $active);
+	    return 0 unless $p;
+	    if ($p->pathname =~ /(?i)$regex/) {
+		$project_frame->see($active);
+		$project_frame->anchorSet($active);
+		return 1;
 	    }
+	};
+
+	# first pass
+	$active = $project_frame->info("anchor");
+	if ($active ne "") {
+	    $active = $project_frame->info("next", $active);
 	}
+	while ($active ne "") {
+	    return if $checkit->();
+	    $active = $project_frame->info("next", $active);
+	}
+
+	$status_text->configure(-text => "Wrapped search");
+
+	# second pass from beginning
+	($active) = $project_frame->info("children");
+	while ($active ne "") {
+	    return if $checkit->();
+	    $active = $project_frame->info("next", $active);
+	}
+
+	$status_text->configure(-text => "Nothing found");
     }
+
 }
 
 sub act_time {
