@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: base.t,v 1.4 1999/04/01 15:43:15 eserte Exp $
+# $Id: base.t,v 1.5 1999/05/26 17:10:11 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -192,3 +192,11 @@ print "After delete:\n" . $p2->dump_data;
 print
     "All subprojects of " . $p2->label . ":\n",
     join("\n", map { $_->label } $p2->all_subprojects), "\n";
+
+print
+    "Last four projects: ";
+@last = $p2->last_projects(4);
+foreach (@last) {
+    print $_->label, " ";
+}
+print "\n";
