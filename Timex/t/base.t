@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: base.t,v 1.2 1999/02/05 21:21:57 eserte Exp $
+# $Id: base.t,v 1.3 1999/04/01 08:08:27 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -184,3 +184,7 @@ $sp->move_times_after(1, -1);
 print $sp->parent->dump_data;
 $sp->sort_times;
 print $sp->parent->dump_data;
+
+print
+    "All subprojects of " . $p2->label . ":\n",
+    join("\n", map { $_->label } $p2->all_subprojects), "\n";
