@@ -30,7 +30,7 @@ $emacsmode = '-*- project -*-';
 
     $project = new Timex::Project $label
 
-Constructs a new Timex::Project object with label $label.
+Construct a new Timex::Project object with label $label.
 
 =cut
 
@@ -127,6 +127,16 @@ sub delete_all {
     }
 }
 
+=head2 subproject
+
+    $root->subproject([$label]);
+
+With label defined, create a new subproject labeled $label. Without
+label, return either an array of subprojects (in array context) or a
+reference to the array of subprojects (in scalar context).
+
+=cut 
+
 sub subproject {
     my($self, $label) = @_;
     if (defined $label) {
@@ -144,6 +154,17 @@ sub subproject {
 	wantarray ? @{$self->{'subprojects'}} : $self->{'subprojects'};
     }
 }
+
+=head2 sorted_subprojects
+
+    $root->sorted_subprojects($sorted_by)
+
+Return subprojects according to $sorted_by. If $sorted_by is 'name',
+sorting is done lexically by name. If $sorted_by is 'time', sorting is
+done by time (more time consuming subprojects come first). If
+$sorted_by is not given or is 'nothing', no sorting is done.
+
+=cut
 
 sub sorted_subprojects {
     my($self, $sorted_by) = @_;
@@ -292,19 +313,65 @@ sub set_times {
     $self->modified(1);
 }
 
+=head2 delete_times
+
+    $root->delete_times($index1, $index2 ...)
+
+Delete the times definitions by the given indexes.
+
+=cut
+
 sub delete_times {
-    my($self, $i) = @_;
-    splice @{ $self->{'times'} }, $i, 1;
+    my($self, @i) = @_;
+    return if !@i;
+    @i = sort { $a <=> $b } @i;
+    my @res;
+    for(my $i = 0; $i<=$#{ $self->{'times'} }; $i++) {
+	if (!@i) {
+	    push @res, @{$self->{'times'}}[$i .. $#{ $self->{'times'} }];
+	    last;
+	} elsif ($i == $i[0]) {
+	    shift @i;
+	} else {
+	    push @res, $self->{'times'}[$i];
+	}
+    }
+    @{ $self->{'times'} } = @res;
     $self->update_cached_time;
     $self->modified(1);
 }
 
-# XXX nicht ausgetestet
 sub insert_times_after {
     my($self, $i, $start, $end) = @_;
     splice @{ $self->{'times'} }, $i+1, 0, [$start, $end];
     $self->update_cached_time;
     $self->modified(1);
+}
+
+=head2 move_times_after
+
+    $root->move_times_after($index_from, $index_before);
+
+Move the times definition at $index_from after $index_before.
+
+=cut
+
+sub move_times_after {
+    my($self, $i, $after) = @_;
+    my $save = $self->{'times'}[$i];
+    if ($i > $after) { # Reihenfolge beachten!
+	$self->delete_times($i);
+	$self->insert_times_after($after, $save->[0], $save->[1]);
+    } else {
+	$self->insert_times_after($after, $save->[0], $save->[1]);
+	$self->delete_times($i);
+    }
+    # modified ist bereits gesetzt
+}
+
+sub sort_times {
+    my($self) = @_;
+    @{ $self->{'times'} } = sort { $a->[0] <=> $b->[0] } @{ $self->{'times'} };
 }
 
 sub _min {
@@ -320,8 +387,8 @@ sub _min {
 
     $time = $project->sum_time($since, $until, %args)
 
-Returns the time the given project accumulated since $since until $until.
-If $until is undefined, returns the time until now. If -recursive is set in
+Return the time the given project accumulated since $since until $until.
+If $until is undefined, return the time until now. If -recursive is set in
 the %args hash to a true value, recurse into subprojects of $project.
 
 =cut
@@ -405,7 +472,7 @@ sub update_cached_time {
 
     $archived = $project->archived
 
-Returns true if the project or one of the parent projects are archived. 
+Return true if the project or one of the parent projects are archived. 
 Use $project->{'archived'} for the value of *this* project.
 
     $project->archived($archived)
@@ -592,7 +659,7 @@ sub interpret_data_project {
 
     $r = $project->load($filename)
 
-Loads the project file $filename and returns true if the loading was
+Load the project file $filename and returns true if the loading was
 successfull. New data is merged to the existing project.
 
 =cut
@@ -619,7 +686,7 @@ sub load {
 
     $r = Timex::Project->is_project_file($filename);
 
-Returns TRUE if $filename is a project file.
+Return TRUE if $filename is a project file.
 
 =cut
 
