@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.15 2002/08/13 20:08:33 eserte Exp $
+# $Id: tktimex,v 6.16 2003/03/28 16:49:32 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -168,7 +168,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.15 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.16 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -2507,11 +2507,11 @@ sub update_project {
     {
 	for my $i (0 .. $#root_children) {
 	    if ($top_parent_entry eq $root_children[$i]) {
-		$prev_entry = $root_children[$i-1];
+		$prev_entry = $root_children[$i-1] if $i > 0;
 		last SEARCH;
 	    }
 	}
-	warn Mfmt("Can't find %s in children list of HList",$top_parent_entry);
+	warn Mfmt("Can't find %s in children list (@root_children) of HList",$top_parent_entry);
 	return;
     }
 
