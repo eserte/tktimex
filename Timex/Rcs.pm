@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.5 2001/02/07 23:45:24 eserte Exp $
+# $Id: Rcs.pm,v 1.6 2001/04/20 21:53:41 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -27,6 +27,7 @@ sub new {
 }
 
 sub revision { $_[0]->{Revision} }
+sub version  { $_[0]->revision } # VCS.pm compatibility
 sub date     { $_[0]->{Date} }
 sub unixtime {
     my $date = $_[0]->date;
@@ -174,6 +175,7 @@ sub symbolic_name  {
     }
 }
 sub revisions      { @{$_[0]->{Revisions}} }
+sub versions       { $_[0]->revisions } # VCS.pm compatibility
 
 sub get_log_entries {
     my($self, $from_date, $to_date) = @_;
