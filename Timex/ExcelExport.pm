@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: ExcelExport.pm,v 1.4 2000/09/01 23:35:16 eserte Exp $
+# $Id: ExcelExport.pm,v 1.5 2000/11/24 21:21:37 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2000 Slaven Rezic. All rights reserved.
@@ -13,8 +13,6 @@
 #
 
 package Timex::ExcelExport;
-use Tk 800.012;
-use Tk::Date;
 use Time::Local;
 use FindBin;
 use Date::Calc qw(Week_Number);
@@ -22,8 +20,17 @@ use strict;
 
 my $excel;
 
+use vars qw($excel_separator $is_german_excel $decimalsep);
+$excel_separator = ";" unless defined $excel_separator;
+$is_german_excel = 1   unless defined $is_german_excel;
+$decimalsep      = "," unless defined $decimalsep;
+
 sub save_dialog {
     my($top, $root_project, %args) = @_;
+
+    Tk->VERSION(800.012);
+    require Tk::Date;
+
     my $t = $top->Toplevel;
     my $file;
     $t->title("Excel export");
@@ -97,7 +104,9 @@ sub save_dialog {
 
 sub can_xls {
     eval {
-	require Win32::OLE;
+	use Win32::OLE;
+	use Win32::OLE::NLS qw(:LOCALE GetUserDefaultLCID GetLocaleInfo);
+	$decimalsep = GetLocaleInfo(GetUserDefaultLCID(), LOCALE_SDECIMAL);
 	$excel = Win32::OLE->GetActiveObject('Excel.Application');
 	unless (defined $excel) {
 	    $excel = Win32::OLE->new('Excel.Application', sub { $_[0]->Quit });
@@ -106,26 +115,47 @@ sub can_xls {
     defined $excel;
 }
 
+# coords 1..n
+sub _excel_coord {
+    my($col, $row) = @_;
+    chr(ord("A")-1+$col) . $row;
+}
+
 sub _excel_print_row {
     my $sheet = shift;
     my $row = shift;
     my $s = shift;
-    my @s = split(/;/, $s);
+    my @s;
+    if (ref $s eq 'ARRAY') {
+	@s = @$s;
+    } else {
+	@s = split($excel_separator, $s);
+    }
     return if !@s;
-    my $range = "A$row:" . chr(ord("A")-1+scalar @s).$row;
+#    my $range = "A$row:" . chr(ord("A")-1+scalar @s).$row;
+    my $range = _excel_coord(1,$row) . ":" . _excel_coord(scalar @s, $row);
     $sheet->Range($range)->{Value} = [\@s];
 }
 
 sub save {
     my($root_project, $file, $from, $to, %args) = @_;
     my(@sub_projects) = $root_project->projects_by_interval($from, $to);
-    my $name;
-    eval {
-	$name = ((getpwuid($<))[6]);
-    };
-    if (!defined $name) {
-	$name = $ENV{USERNAME} || $ENV{USER} || "";
+
+    my $username = $args{-username};
+    if ($^O eq 'MSWin32') {
+	eval q{
+	   use Win32Util;
+	   $username = Win32Util::get_user_name();
+	};
+    } else {
+	$username = eval { local $SIG{__DIE__};
+			   (getpwuid($<))[0];
+		       };
     }
+    if (!defined $username) {
+	$username = $ENV{USERNAME} || $ENV{USER} || "";
+    }
+
     my $rate = $args{-hourlyrate};
     my $template_file = $args{-templatefile} || "Timex/de_template.csv";
     my(@l) = localtime $from;
@@ -143,7 +173,7 @@ sub save {
     if ($do_excel) {
 
 	# write .xls file
-	if (-f $file) {
+	if (0 && -f $file) { # XXX
 	    $book = $excel->Workbooks->Open($file);
 	    if (!$book) {
 		die "Can't open Workbook $file: " . Win32::OLE::LastError();
@@ -153,10 +183,9 @@ sub save {
 	    if (!$book) {
 		die "Can't create Workbook: " . Win32::OLE::LastError();
 	    }
-	    $book->SaveAs($file);
 	}
 	$sheet = $book->Worksheets(1);
-	
+
     } else {
 
 	# write .csv file
@@ -169,12 +198,15 @@ sub save {
     }
 
     my $row = 0;
+    my($first_project_row, $last_project_row);
+    my($hours_col, $rate_col, $projectsum_col);
     open(T, $template_file) or die "Can't open $template_file: $!";
     while(<T>) {
 	$row++;
 	if (/%%PROJECTNAME%%/) {
 	    my $template_line = $_;
 	    foreach my $p (@sub_projects) {
+		$first_project_row = $row if !defined $first_project_row;
 		my $this_line = $template_line;
 		my $label = $p->pathname("/"); #join("/", $p->path);
 		$label =~ s|^/||; # strip root part
@@ -188,33 +220,80 @@ sub save {
 
 		$sum += $projectsum;
 
-		# fix for german excel XXX
-		if (1||!$do_excel) {
-		    $hours       =~ s/\./,/;
-		    $rate        =~ s/\./,/;
-		    $projectsum  =~ s/\./,/;
+		if ($is_german_excel || !$do_excel) {
+		    $hours       =~ s/\./$decimalsep/;
+		    $rate        =~ s/\./$decimalsep/;
+		    $projectsum  =~ s/\./$decimalsep/;
 		}
 
 		$this_line =~ s/%%PROJECTNAME%%/$label/g;
-		$this_line =~ s/%%HOURS%%/$hours/g;
-		$this_line =~ s/%%RATE%%/$rate/g;
-		$this_line =~ s/%%PROJECTSUM%%/$projectsum/g;
 		if ($do_excel) {
 		    chomp $this_line;
-		    _excel_print_row($sheet, $row, $this_line);
+		    my @cols = split $excel_separator, $this_line;
+		    my $col = 1;
+		    foreach (@cols) {
+			if (/%%HOURS%%/) {
+			    $_ = $hours;
+			    $hours_col = $col;
+			} elsif (/%%RATE%%/) {
+			    $_ = $rate;
+			    $rate_col = $col;
+			}
+			$col++;
+		    }
+		    $col = 1;
+		    foreach (@cols) {
+			if (/%%PROJECTSUM%%/) {
+			    $projectsum_col = $col;
+			    if (defined $hours_col && defined $rate_col) {
+				$_ = "=" . _excel_coord($hours_col, $row) .
+				     "*" . _excel_coord($rate_col, $row);
+			    } else {
+				$_ = "";
+			    }
+			}
+			$col++;
+		    }
+		    _excel_print_row($sheet, $row, \@cols);
 		} else {
+		    $this_line =~ s/%%HOURS%%/$hours/g;
+		    $this_line =~ s/%%RATE%%/$rate/g;
+		    $this_line =~ s/%%PROJECTSUM%%/$projectsum/g;
 		    print S $this_line;
 		}
+		$row++;
 	    }
+	    $last_project_row = $row-1;
 	} else {
-	    s/%%NAME%%/$name/g;
+	    s/%%NAME%%/$username/g;
 	    s/%%WEEK%%/$weeknumber/g;
-	    s/%%SUM%%/$sum/g;
 
 	    if ($do_excel) {
 		chomp;
-		_excel_print_row($sheet, $row, $_);
+		my @cols = split $excel_separator, $_;
+		foreach my $c (@cols) {
+		    my $this_col;
+		    my $or_empty;
+		    if      ($c =~ /%%SUM%%/) {
+			$this_col = $projectsum_col;
+			$or_empty++;
+		    } elsif ($c =~ /%%SUMHOURS%%/) {
+			$this_col = $hours_col;
+			$or_empty++;
+		    }
+		    if (defined $this_col) {
+			$c = "=SUMME(" .
+			    _excel_coord($this_col, $first_project_row).
+			    ":".
+			    _excel_coord($this_col, $last_project_row).
+			    ")";
+		    } elsif ($or_empty) {
+			$c = "";
+		    }
+		}
+		_excel_print_row($sheet, $row, \@cols);
 	    } else {
+		s/%%SUM%%/$sum/g;
 		print S $_;
 	    }
 	}
@@ -222,7 +301,7 @@ sub save {
     close T;
 
     if ($do_excel) {
-	$book->Save;
+	$book->SaveAs($file);
 	$book->Close;
 	undef $sheet;
 	undef $book;
