@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.14 1998/07/05 17:59:32 eserte Exp $
+# $Id: tktimex,v 4.15 1998/08/17 10:22:56 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -67,14 +67,14 @@ use Tk::HList;
 use File::Basename;
 use FindBin;
 use lib ("$FindBin::RealBin");
-#use lib ("/home/e/eserte/lib/perl");
+use lib ("/home/e/eserte/lib/perl");
 eval { require Tk::UnderlineAll };
 use Timex::Project;
 use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.14 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.15 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -94,9 +94,13 @@ my $autosave_after;
 my @nowtime = localtime;
 my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
 my $project_status = "Left: Start/Stop | Middle: Attributes | Right: Create Subproject";
+# there are two forms of separators: for intern store in HList and in
+# .tktimex.last ust $separator, for human-readable output use "/"
 my $separator = '¦';
 my $undo_register;
 my $status_edit = 0;
+my $last_projects;
+my $max_last_projects = 4;
 
 my $options = {};
 my @opttable =
@@ -176,6 +180,7 @@ $mb_file->command(-label => 'Dump',
 		  -command => \&dump_data);
 $mb_file->command(-label => 'Quit',
 		  -command => \&quit_program);
+$mb_file->separator;
 
 my $mb_project = $menu_frame->Menubutton(-text => 'Project'
 					)->pack(-side => 'left');
@@ -347,6 +352,8 @@ if (!$options->{'file'}) {
     }
 }
 load_file(0);
+load_last_projects();
+create_menu_last_projects($mb_file->cget(-menu));
 
 $project_frame->focus;
 
@@ -431,6 +438,7 @@ sub insert_project {
 
 sub start_stop {
     my $path = shift;
+    return if !$project_frame->info('exists', $path);
     my $p = $project_frame->info('data', $path);
     return if !$p;
     if (defined $current_project && $current_project eq $p) {
@@ -444,11 +452,16 @@ sub start_project {
     my $p = shift;
     &stop_project;
     $current_project = $p;
+    my $current_pathname = $p->pathname($separator);
+    $project_frame->selectionClear;
+    $project_frame->selectionSet($current_pathname);
     $project_frame->configure(-selectbackground => 'SeaGreen3');
+    $project_frame->see($current_pathname);
     gui_set_pause_or_cont('Pause');
 
     $top->title($title . " (" . $p->pathname . ")");
     $p->start_time;
+    add_last_projects($current_pathname);
     &set_timeout();
 }
 
@@ -1152,10 +1165,12 @@ sub show_intervals {
 	my $t = $w->Toplevel(-title => "Edit line $i");
 	my($from, $to) = @{$project->{'times'}[$i]};
 	$t->Label(-text => 'From:')->grid(-row => 0, -column => 0);
-	my $from_date = $t->Date(-variable => \$from
+	my $from_date = $t->Date(-variable => \$from,
+				 -choices => 'now',
 				)->grid(-row => 0, -column => 1);
 	$t->Label(-text => 'To:')->grid(-row => 1, -column => 0);
-	my $to_date = $t->Date(-variable => \$to
+	my $to_date = $t->Date(-variable => \$to,
+			       -choices => 'now',
 			      )->grid(-row => 1, -column => 1);
 	my $f = $t->Frame->grid(-row => 2, -column => 0, -columnspan => 2);
 
@@ -1312,6 +1327,7 @@ sub quit_program {
 	}
 	return 0 if $quit_dialog->Show ne 'Yes';
     }
+    save_last_projects();
     $top->destroy;
 }
 
@@ -1336,7 +1352,6 @@ sub sec2time {
     }
 }
 
-# XXX testen!
 sub check_still_today {
     my @new_nowtime = localtime;
     my $new_today_time = 
@@ -1354,6 +1369,75 @@ sub adjust_filename {
 	$file = "$file.pj1";
     }
     $file;
+}
+
+
+sub create_menu_last_projects {
+    my $mb_file_menu = shift;
+    # find last separator
+    my $end = $mb_file_menu->index('end');
+    my $i = $end;
+  LOOP: {
+	while ($i >= 0) {
+	    last LOOP if ($mb_file_menu->type($i) eq 'separator');
+	    $i--;
+	}
+	$status_text->configure("Separator in Menu File not found");
+	return;
+    }
+    # delete anything from the item after the separator to the end
+    if ($i < $end) {
+	$mb_file_menu->delete($i+1, 'end');
+    }
+    # insert last_projects
+    $i = 0;
+    foreach (@$last_projects) {
+	my $pathname = $_;
+	(my $out_pathname = $pathname) =~ s|$separator|/|g;
+	$i++;
+	$mb_file_menu->command(-label => "$i: " . $out_pathname,
+			       -underline => 0,
+			       -command => sub {
+				   start_stop($pathname);
+			       });
+    }
+}
+
+sub add_last_projects {
+    my($project) = @_;
+    my $i;
+    for($i = 0; $i <= $#$last_projects; $i++) {
+	if ($last_projects->[$i] eq $project) {
+	    splice @$last_projects, $i, 1;
+	    last;
+	}
+    }
+    unshift(@$last_projects, $project);
+    if (@$last_projects > $max_last_projects) {
+	$#$last_projects = $max_last_projects-1; # $max_last_projects Dateien merken
+    }
+}
+
+sub load_last_projects {
+    if (open(LAST, "$ENV{HOME}/.tktimex.last")) {
+	$last_projects = [];
+	while(<LAST>) {
+	    chomp;
+	    push @$last_projects, $_;
+	}
+	close LAST;
+    }
+}
+
+sub save_last_projects {
+    if (!open(LAST, ">$ENV{HOME}/.tktimex.last")) {
+	$status_text->configure(-text => "Can't write to .tktimex.last");
+	return;
+    }
+    foreach (@$last_projects) {
+	print LAST "$_\n";
+    }
+    close LAST;
 }
 
 sub show_about {
