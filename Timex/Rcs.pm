@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.12 2003/01/10 20:21:04 eserte Exp $
+# $Id: Rcs.pm,v 1.13 2003/01/10 20:34:57 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -369,8 +369,12 @@ push @INC, "$FindBin::RealBin/..";
 
 my $f = shift or die "Please supply RCS or CVS file";
 my $o = new Timex::Rcs $f;
-foreach my $rev ($o->revisions) {
-    print $rev->revision.": ".localtime($rev->unixtime)."\n";
+if (1) {
+    foreach my $rev ($o->revisions) {
+	print $rev->revision.": ".localtime($rev->unixtime)."\n";
+    }
+    require Data::Dumper;
+    print Data::Dumper->Dumpxs([$o], ['o']),"\n";
+} else {
+    warn $o->co_revision(($o->revisions)[0]->revision);
 }
-require Data::Dumper;
-print Data::Dumper->Dumpxs([$o], ['o']),"\n";
