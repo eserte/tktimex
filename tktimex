@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 3.14 1997/12/04 10:09:44 eserte Exp $
+# $Id: tktimex,v 3.15 1997/12/10 22:34:39 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about
@@ -19,7 +19,7 @@ use Tk::HList;
 #use Tk::Balloon;
 use FindBin;
 use lib ("$FindBin::RealBin", "/home/e/eserte/lib/perl");
-use Tk::UnderlineAll;
+eval { require Tk::UnderlineAll };
 use Tk::Getopt 0.34;
 use Project;
 use strict;
@@ -194,7 +194,7 @@ $project_frame->bind("<Leave>" =>
  		     sub { $status_text->configure(-text => $copyright); });
 
 
-$menu_frame->UnderlineAll;
+$menu_frame->UnderlineAll if $menu_frame->can('UnderlineAll');
 
 $opt->process_options;
 
@@ -301,7 +301,7 @@ sub start_project {
     $project_frame->configure(-selectbackground => 'SeaGreen3');
     $pause_cont_button->configure(-text => 'Pause');
 
-    $top->title($title . " (" . $p->label . ")");
+    $top->title($title . " (" . $p->pathname . ")");
     $p->start_time;
     &set_timeout();
 }
@@ -437,7 +437,7 @@ sub show_one_day {
     my $dw = $f->Date(-date_only => 1,
 		      -datefmt => [qw(%12A , %2d . %2m . %4y)],
 		      -today_button => 1,
-		      -callback => sub {
+		      -command => sub {
 			  if ($options->{'oneday-immediately'}) {
 			      $b->invoke;
 			  }
@@ -468,7 +468,7 @@ sub show_one_day {
 		      my $i = 0;
 		      my $sum = 0;
 		      foreach (@p) {
-			  $lb->add($i, -text => $_->label);
+			  $lb->add($i, -text => $_->pathname);
 			  my $diff = $_->sum_time($s_from, $s_to, 0);
 			  $sum += $diff;
 			  $lb->itemCreate($i, 1, -text =>
@@ -682,7 +682,7 @@ sub show_attributes {
     require Tk::BrowseEntry;
     my $browse = $attribute_top->BrowseEntry(-label => "New Parent",
 					     -variable => \$new_parent);
-    my @all_labels = sort { lc($a) cmp lc($b) } @{$root->all_labels};
+    my @all_labels = sort { lc($a) cmp lc($b) } $root->all_pathnames;
     foreach (@all_labels) {
 	$_ = '(Root)' if !defined $_ || $_ eq '';
 	$browse->insert("end", $_);
@@ -747,7 +747,7 @@ sub show_attributes {
 
 sub show_intervals {
     my($top, $project) = @_;
-    my $w = $top->Toplevel(-title => "Intervals for " . $project->label);
+    my $w = $top->Toplevel(-title => "Intervals for " . $project->pathname);
     my $lb = $w->Scrolled('HList', -scrollbars => 'oe',
 			  -columns => 5,
 			  -width => 70,
@@ -764,18 +764,24 @@ sub show_intervals {
 	my(@fromdate) = localtime($from);
 	$fromdate[4]++;
 	$fromdate[5]+=1900;
-	my(@todate) = localtime($to);
-	$todate[4]++;
-	$todate[5]+=1900;
 	my $fromdate = sprintf
 	  "%02d.%02d.%04d %02d:%02d:%02d", @fromdate[3,4,5,2,1,0];
-	my $todate = sprintf
-	  "%02d.%02d.%04d %02d:%02d:%02d", @todate[3,4,5,2,1,0];
 	$lb->add($i, -text => $fromdate);
 	$lb->itemCreate($i, 1, -text => $from);
-	$lb->itemCreate($i, 2, -text => $todate);
-	$lb->itemCreate($i, 3, -text => $to);
-	$lb->itemCreate($i, 4, -text => sec2time($to-$from, 'h', 0));
+
+	my(@todate, $todate);
+	if (defined $to) {
+	    @todate = localtime($to);
+	    $todate[4]++;
+	    $todate[5]+=1900;
+	    $todate = sprintf
+	      "%02d.%02d.%04d %02d:%02d:%02d", @todate[3,4,5,2,1,0];
+	    $lb->itemCreate($i, 2, -text => $todate);
+	    $lb->itemCreate($i, 3, -text => $to);
+	    $lb->itemCreate($i, 4, -text => sec2time($to-$from, 'h', 0));
+	} else {
+	    $lb->itemCreate($i, 2, -text => 'Running (?)');
+	}
 	$i++;
     }
     $w->Button(-text => 'Close',
