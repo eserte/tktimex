@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.72 2000/09/20 02:02:44 eserte Exp $
+# $Id: tktimex,v 4.73 2000/09/20 19:46:59 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -101,7 +101,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.72 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.73 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -168,6 +168,12 @@ my @opttable =
    ['securesave',         '!', 0,
     'longhelp' => "Saving data also in a Data::Dumper format. Not really necessary anymore."],
 
+   'Enterprise', # oder company? XXX
+   ['enterpriseprojects', "=s", undef, 'subtype' => 'file',
+    'longhelp' => "File with enterprise-wide list of projects"],
+   ['enterprisedefaults', "=s", undef, 'subtype' => 'file',
+    'longhelp' => "File with enterprise-wide configuration settings"],
+
    'Projects',
    ['dateformat',         '=s', 'h',
     'choices' => ['d', 'h', 'hs', 'frac d', 'frac h'],
@@ -192,7 +198,7 @@ my @opttable =
    ['sort',               '=s', 'name',
     'choices' => ['nothing', 'name', 'time'],
     'strict' => 1,
-    'callback' => \&insert_all,
+    'callback' => sub { insert_all() },
    ],
 
    'Appearance',
@@ -242,6 +248,12 @@ if ($@) {
     $opt->set_defaults;
     state_change("Tk::Getopt checkpoint 3");
     $opt->load_options;
+
+    if ($options->{'enterprisedefaults'} and
+	-r $options->{'enterprisedefaults'}) {
+	$opt->load_options($options->{'enterprisedefaults'});
+    }
+
     require Getopt::Long; state_change("Tk::Getopt checkpoint 4");
     die $opt->usage if !$opt->get_options;
     state_change("Tk::Getopt checkpoint 5");
@@ -287,7 +299,7 @@ eval {
 
 state_change("checkpoint 2");
 
-my($is_archiv, $east, %hl_entry);
+my($is_archiv, $east, %hl_entry, $new_in_merge, $changed_in_merge);
 my $balloon;
 if ($Tk::VERSION >= 800.005) {
     require Tk::ItemStyle; # erst ab 800.005
@@ -299,6 +311,11 @@ if ($Tk::VERSION >= 800.005) {
 
     $hl_entry{"red"}  = $top->ItemStyle('text', -foreground => 'red');
     $hl_entry{"blue"} = $top->ItemStyle('text', -foreground => 'blue');
+
+    $new_in_merge     = $top->ItemStyle('text', -foreground => 'green3',
+					-background => $inner_bg);
+    $changed_in_merge = $top->ItemStyle('text', -foreground => 'blue',
+					-background => $inner_bg);
 
     # altes Balloon und HList vertragen sich nicht miteinander
     require Tk::Balloon;
@@ -340,6 +357,8 @@ $mb_export->command(-label => 'Dump',
 		    -command => \&dump_data);
 $mb_file->command(-label => 'Merge',
 		  -command => \&merge_file);
+$mb_file->command(-label => 'Update enterprise projects',
+		  -command => \&update_enterprise_projects);
 $mb_file->command(-label => 'Quit',
 		  -command => \&quit_program);
 $mb_file->separator;
@@ -635,10 +654,15 @@ $root->modified(0);
 
 state_change("checkpoint 9");
 
+# preload file
 if ($options->{'file'}) {
     load_file(0);
     $last_projects = [ $root->last_projects($max_last_projects) ];
     create_menu_last_projects();
+}
+# merge enterprise-wide data
+if ($options->{'enterpriseprojects'}) {
+    update_enterprise_projects();
 }
 
 $project_frame->focus;
@@ -858,6 +882,7 @@ sub delete_project {
 
 sub insert_project {
     my($p, %args) = @_;
+
     return if !$p;
     return if $p->archived && !$options->{'archived'};
     return if (defined $options->{'domain'} && $options->{'domain'} !~ /^\s*$/)
@@ -898,6 +923,9 @@ sub insert_project {
 	 -data => $p);
     if ($p->archived && $is_archiv) {
 	$project_frame->itemConfigure($path, 0, -style => $is_archiv);
+    }
+    if ($args{-style}) {
+	$project_frame->itemConfigure($path, 0, -style => $args{-style});
     }
     my $all_time_sec = $p->sum_time(0, undef, -recursive => 1);
     $project_frame->itemCreate
@@ -1971,10 +1999,24 @@ sub update_project {
 }
 
 sub insert_all {
+    my(%args) = @_;
+
+    my %new_p;
+    if ($args{-newprojects}) {
+	%new_p = map { ($_->pathname, 1) } @{ $args{-newprojects} };
+    }
+    my %changed_p;
+    if ($args{-changedprojects}) {
+	%changed_p = map { ($_->pathname, 1) } @{ $args{-changedprojects} };
+    }
+
     $top->Busy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
     $project_frame->delete('all');
-    foreach ($root->sorted_subprojects($options->{'sort'})) {
-	insert_old_project($_);
+    my $p;
+    foreach $p ($root->sorted_subprojects($options->{'sort'})) {
+	insert_old_project($p,
+			   -newprojects => \%new_p,
+			   -changedprojects => \%changed_p);
     }
     if (defined $current_project) {
 	$project_frame->selectionSet(make_path($current_project));
@@ -1986,10 +2028,24 @@ sub insert_all {
 sub insert_old_project {
     my($p, %args) = @_;
     my $prev_entry = delete $args{-after};
-    insert_project($p, -after => $prev_entry);
+
+    my $style;
+    my $set_style = sub {
+	my $p = shift;
+	my $style;
+	if ($args{-newprojects} && $args{-newprojects}->{$p->pathname}) {
+	    $style = $new_in_merge;
+	}
+	if ($args{-changedprojects} && $args{-changedprojects}->{$p->pathname}) {
+	    $style = $changed_in_merge;
+	}
+	$style;
+    };
+
+    insert_project($p, -after => $prev_entry, -style => $set_style->($p));
     if (!$options->{'onlytop'}) {
 	foreach ($p->sorted_subprojects($options->{'sort'})) {
-	    insert_old_project($_);
+	    insert_old_project($_, %args);
 	}
     }
 }
@@ -2244,16 +2300,46 @@ sub merge_file {
 
 sub merge_file_noninteractive {
     my $file = shift;
+    my %args = @_;
+    my %load_args;
+
+    $load_args{-skeleton} = delete $load_args{-skeleton};
+
     my $new_project = new Timex::Project;
-    if (!$new_project->load($file)) {
+    if (!$new_project->load($file, %args)) {
 	$status_text->configure(-text => $@);
 	return;
     }
-    my $diff = $root->merge($new_project);
-    insert_all() if $diff;
+    my($diff, $new_p_ref, $changed_p_ref) = $root->merge($new_project);
+    insert_all(-newprojects     => $new_p_ref,
+	       -changedprojects => $changed_p_ref) if $diff;
     $status_text->configure
       (-text => "Merge completed with $diff difference" .
        ($diff == 1 ? "" : "s"));
+}
+
+sub update_enterprise_projects {
+    if (!$options->{'enterpriseprojects'}) {
+	require Tk::Dialog;
+	$top->Dialog
+	    (-title => 'Error',
+	     -text => "There is no enterprise projects file defined.\n" .
+	     "Please go to the enterprise tab in the option editor.\n",
+	     -popover => 'cursor')->Show;
+	return;
+    }
+
+    if (!-r $options->{'enterpriseprojects'}) {
+	require Tk::Dialog;
+	$top->Dialog
+	    (-title => 'Error',
+	     -text => "File $options->{'enterpriseprojects'} is not readable or does not exist.\n",
+	     -popover => 'cursor')->Show;
+	return;
+    }
+
+    merge_file_noninteractive($options->{'enterpriseprojects'},
+			      -skeleton => 1);
 }
 
 sub get_filename {
