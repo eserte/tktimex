@@ -819,7 +819,7 @@ sub interpret_data {
     $i++;
     if (!$found_magic) {
 	if ($data->[0] =~ /<\?xml.*\?>/) {
-	    eval {
+	    eval q{
 		use Timex::Project::XML;
 		$self->rebless_subprojects("Timex::Project::XML");
 		$found_magic = 1 if $self->interpret_data($data);
