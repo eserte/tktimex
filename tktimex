@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.45 1999/09/28 19:29:24 eserte Exp $
+# $Id: tktimex,v 4.46 1999/10/19 20:39:36 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -97,7 +97,7 @@ BEGIN { status_change("nach use locale"); }
 use Tk::DropSite;
 BEGIN { status_change("nach tk::dropsite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.45 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.46 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = 1; # gefährlich für win...
@@ -138,18 +138,26 @@ my $options = {};
 my @opttable =
   ('General',
    ['file|f',             '=s', undef, 'subtype' => 'file'],
-   ['lock',               '!',  1],
+   ['lock',               '!',  1,
+    'longhelp' => "Set to false if you don't want file locking."],
    ['autosave',           '!',  1,
-    'callback' => \&toggle_autosave, 'alias' => ['as'] ],
-   ['update',             '=i', 60*10],
+    'callback' => \&toggle_autosave, 'alias' => ['as'],
+    'longhelp' => "Autosave is recommended!"],
+   ['update',             '=i', 60*10,
+    'longhelp' => "Autosave interval in seconds."],
    ['dateformat',         '=s', 'd',
     'choices' => ['d', 'h', 'hs'],
     'strict' => 1,
     'callback' => \&set_dateformat,
     'alias' => ['df']],
-   ['day8',               '!',  0, 'callback' => \&toggle_time_arbeitstag ],
-   ['archived',           '!',  0, 'callback' => \&toggle_show_archived ],
-   ['onlytop',            '!',  0, 'callback' => \&toggle_show_archived ],
+   ['day8',               '!',  0, 'callback' => \&toggle_time_arbeitstag,
+    "longhelp" => "A day should be treated as 8 hours."],
+   ['archived',           '!',  0, 'callback' => \&toggle_show_archived,
+    "longhelp" => "Show archived projects too.",
+    ],
+   ['onlytop',            '!',  0, 'callback' => \&toggle_show_archived,
+    "longhelp" => "Do not show subprojects.",
+    ],
    ['sort',               '=s', '',
     'choices' => ['nothing', 'name', 'time'],
     'strict' => 1,
@@ -162,7 +170,10 @@ my @opttable =
    ['busyind',            '!', 0],
    ['autoscroll',         '=s', 'none',
     'choices' => ['slow', 'normal', 'fast'],
-    'strict' => 1],
+    'strict' => 1,
+    'longhelp' => "Autoscrolling is not available on all systems.\n" .
+    "Changes are efficive on new start."
+    ],
    ['hourlyrate',         '=f', 0,
     'callback' => sub { update_costs_option(1) },
     ],
@@ -217,6 +228,8 @@ $top->protocol('WM_SAVE_YOURSELF',
 		     $top->command("$^X $0 $options->{'file'}");
 		     $top->destroy;
 		 });
+$SIG{'HUP'} = sub { save_sos(); $top->destroy; };
+
 $top->title($title);
 $top->geometry($options->{'geometry'}) if $options->{'geometry'};
 eval {
@@ -280,18 +293,22 @@ $mb_project->command(-label => 'New subproject',
 		     -command => sub { new_sub_project(get_sel_entry()) });
 $mb_project->command(-label => 'Delete',
 		     -command => \&delete_project);
-$mb_project->command(-label => 'Pause',
-		     -command => \&pause_or_cont);
+## Menü ist zu überladen...
+#$mb_project->command(-label => 'Pause',
+#		     -command => \&pause_or_cont);
 $mb_project->command(-label => 'Undo',
 		     -command => \&undo);
+$mb_project->command(-label => 'Search',
+		     -command => \&search_project);
 $mb_project->command(-label => 'Continue last',
 		     -command => \&cont_last);
 $mb_project->command(-label => 'Attributes',
 		     -command => sub { show_attributes(undef) });
 $mb_project->command(-label => 'Intervals',
 		     -command => sub { show_intervals($top, undef) });
-$mb_project->command(-label => 'Note',
-		     -command => sub { show_note($top) });
+## Menü ist zu überladen...
+#$mb_project->command(-label => 'Note',
+#		     -command => sub { show_note($top) });
 $mb_project->separator;
 $mb_project->command(-label => 'Working time',
 		     -command => \&working_time);
@@ -377,6 +394,7 @@ $mod_sub = sub {
     $self->Store($newval) if $self;
 };
 eval {
+    die;
     require Tie::Watch;
     # earlier versions used Delete instad of Unwatch:
     Tie::Watch->VERSION(0.99);
@@ -388,10 +406,13 @@ eval {
     $mod_sub->();
 };
 if (!$mod_watch || $@) {
-    $save_check = $menu_frame->Checkbutton(-text => '*',
-					   -variable => \$root->{'modified'},
-					   -state => 'disabled',
+    $save_check = $menu_frame->Checkbutton(-variable => \$root->{'modified'},
+					   -selectcolor => "red",
+					   -highlightthickness => 0,
+					   -padx => 0, -pady => 0,
+					   #-font => "times 5",
 					  );
+    $save_check->bindtags([]);
 }
 $save_check->pack(-side => 'right');
 $balloon->attach($save_check, -msg => 'File saved indicator') if $balloon;
@@ -558,10 +579,11 @@ status_change("vor main loop");
 MainLoop;
 
 sub enter_label {
+    my $label = shift || 'New project name:';
     my $action;
     my $res = '';
     $status_edit++;
-    $status_text->configure(-text => 'Project name:');
+    $status_text->configure(-text => $label);
     my $entry = $status_frame->Entry(-bg => $inner_bg,
 				     -fg => $inner_fg,
 				     -textvariable => \$res,
@@ -604,7 +626,7 @@ sub exists_project {
 
 sub new_project {
     my $label = enter_label();
-    if ($label) {
+    if ($label && $root) {
 	return if exists_project($label);
 	my $p = $root->subproject($label);
 	insert_project($p);
@@ -804,16 +826,18 @@ sub gui_set_pause_or_cont {
     my $txt = shift;
     $pause_cont_button->configure(-text => $txt,
 				  -fg => ($txt eq 'Cont' ? 'green4' : 'red'));
-    my $search_txt = ($txt eq 'Cont' ? 'Pause' : 'Cont');
     update_pause_cont_balloon();
-    my $i;
-    for $i (0 .. $mb_project_menu->index('end')) {
-	if ($mb_project_menu->type($i) eq 'command' &&
-	    $mb_project_menu->entrycget($i, -label) eq $search_txt) {
-	    $mb_project_menu->entryconfigure($i, -label => $txt);
-	    last;
-	}
-    }
+
+## Pause/Cont-Eintrag ist aus dem Menü rausgenommen worden
+#     my $search_txt = ($txt eq 'Cont' ? 'Pause' : 'Cont');
+#     my $i;
+#     for $i (0 .. $mb_project_menu->index('end')) {
+# 	if ($mb_project_menu->type($i) eq 'command' &&
+# 	    $mb_project_menu->entrycget($i, -label) eq $search_txt) {
+# 	    $mb_project_menu->entryconfigure($i, -label => $txt);
+# 	    last;
+# 	}
+#     }
 }
 
 sub stop_project {
@@ -866,6 +890,22 @@ sub undo {
     $undo_register = pop(@{$p->{'times'}});
     gui_set_pause_or_cont('Cont');
     act_time($p);
+}
+
+sub search_project {
+    my $regex = enter_label("Search:");
+    if ($regex && $root) {
+	# XXX vielleicht ein eval, um regex-Fehler abzufangen
+	my @res = $root->find_by_regex("(?i)$regex");
+	foreach my $r (@res) {
+	    my $path = make_path($r);
+	    # überprüfen, ob das Projekt überhaupt sichtbar ist:
+	    if ($project_frame->info('exists', $path)) {
+		$project_frame->see($path);
+		last;
+	    }
+	}
+    }
 }
 
 sub act_time {
@@ -1209,13 +1249,16 @@ sub load_file {
 	return;
     }
 
-    my $sos_file = dirname($file_to_load) . "/#" . basename($file_to_load);
+    my $sos_file = sos_filename($file_to_load);
     if (-f $sos_file) {
+	my $mtime = (stat($sos_file))[9];
 	require Tk::Dialog;
 	$top->Dialog
 	  (-title => 'Warning',
 	   -text => "There is a sos file <$sos_file>\n".
-	   "You should check whether this file contains valueable information.",
+	   "from " . scalar(localtime($mtime)) . ".\n".
+	   "You should check whether this file contains valueable information.\n".
+	   "Otherwise delete the file to avoid this warning.",
 	   -popover => 'cursor',
 	   -default_button => 'OK',
 	   -buttons => ['OK'])->Show;
@@ -1472,14 +1515,18 @@ sub save_as_file {
     save_file($autosave);
 }
 
+sub sos_filename {
+    my $file = shift;
+    dirname($file) . "/#" . basename($file) . "#";
+}
+
 sub save_sos {
     return if !$root || !$root->modified;
     my $file;
     if (!$options->{'file'}) {
-	$file = "$home/#tktimex.pj1";
+	$file = sos_filename("$home/tktimex.pj1");
     } else {
-	$file = dirname($options->{'file'}) .
-	  "/#" . basename($options->{'file'});
+	$file = sos_filename($options->{'file'});
     }
     if (defined $current_project) {
 	$current_project->end_time;
@@ -1831,13 +1878,18 @@ sub show_attributes {
        })->grid(-row => $row, -column => 2, -sticky => 'w');
 
     $row++;
-    $f->Button(-text => 'Show intervals',
-	       -command => sub {
-		   show_intervals($f,
-				  $project,
+    my $ff = $f->Frame->grid(-row => $row, -column => 0,
+			     -columnspan => 3, -sticky => "w");
+    $ff->Button(-text => 'Show intervals',
+		-command => sub {
+		    show_intervals($f,
+				   $project,
 				  -readonly => $readonly);
-	       })->grid(-row => $row, -column => 0,
-			-columnspan => 3, -sticky => 'w');
+		})->pack(-side => "left");
+    $ff->Button(-text => 'Note',
+		-command => sub {
+		    show_note($top);
+		})->pack(-side => "left");
 
     my $command_frame = $attribute_top->Frame->pack(-fill => 'x',
 						    -expand => 1);
