@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.6 1998/02/01 23:35:46 eserte Exp $
+# $Id: tktimex,v 4.7 1998/02/03 03:36:22 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -75,7 +75,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.6 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.7 $ =~ /(\d+)\.(\d+)/);
 
 my $root = new Timex::Project;
 
@@ -661,13 +661,17 @@ sub load_file {
     &insert_all;
     &set_autosave;
     $root->modified(0);
+    $save_check->configure(-variable => \$root->{'modified'});
     my $last_project = $root->last_project;
     if ($last_project) {
-	$project_frame->selectionSet(make_path($last_project));
-	$project_frame->idletasks; # XXX see-bug
+	my $last_project_path = make_path($last_project);
+	if ($project_frame->info('exists', $last_project_path)) {
+	    $project_frame->selectionSet($last_project_path);
+	    $project_frame->idletasks; # XXX see-bug
 
-	$project_frame->see(make_path($last_project));
-	gui_set_pause_or_cont('Cont');
+	    $project_frame->see($last_project_path);
+	    gui_set_pause_or_cont('Cont');
+	}
     }
 }
 
