@@ -1,8 +1,8 @@
-#!/usr/local/bin/perl -w
+#!/usr/local/bin/perl 
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 1.1 1996/10/26 15:45:35 eserte Exp $
+# $Id: tktimex,v 1.2 1996/10/28 10:31:23 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -41,15 +41,28 @@ sub pool {
     }
 }
 
+sub label {
+    $_[0]->{'label'};
+}
+
+sub parent {
+    undef;
+}
+
 sub subproject {
     my($self, $label) = @_;
     if (defined $label) {
 	my $sub = Subproject->new($label);
+	$sub->{'parent'} = $self;
 	push(@{$self->{'subprojects'}}, $sub);
 	$sub;
     } else {
 	$self->{'subprojects'};
     }
+}
+
+sub level {
+    0;
 }
 
 sub start_time {
@@ -93,8 +106,6 @@ sub sum_time {
 		} else {
 		    $sum += $to - $since;
 		}
-	    } else {
-		$sum += $to - $from;
 	    }
 	} else {
 	    warn "No start time in $self";
@@ -121,6 +132,15 @@ sub archived {
 package Subproject;
 @Subproject::ISA = qw(Project);
 
+sub parent {
+    $_[0]->{'parent'};
+}
+
+sub level {
+    my $self = shift;
+    $self->parent->level + 1;
+}
+
 sub push_pool { }
 
 ######################################################################
@@ -128,6 +148,7 @@ sub push_pool { }
 package main;
 
 use Tk;
+use Tk::ROText;
 use Data::Dumper;
 
 my $top = new MainWindow;
@@ -135,7 +156,14 @@ $top->protocol('WM_DELETE_WINDOW', \&quit_program);
 
 my $quit_dialog;
 my $datafile = 'mytimex.data';
-
+my $current_project_index = undef;
+my $start_session_time = time;
+my $time_after;
+my $time_update = 1; #60;
+my @nowtime = localtime;
+my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
+my @projects_in_text;
+my %projects_in_text;
 #my $menu_frame = $top->Frame;
 #$menu_frame->pack(-expand => 1, -fill => 'x');
 
@@ -153,53 +181,216 @@ $buttons_frame->Button(-text => 'Pause',
 $buttons_frame->Button(-text => 'Quit',
 		       -command => \&quit_program)->pack(-side => 'left');
 
-my $project_frame = $top->Frame(-relief => 'ridge',
-				-bd => 1);
+my $project_frame = $top->Frame;
 $project_frame->pack(-expand => 1, -fill => 'both');
-$project_frame->gridColumnconfigure(0, -weight => 0.4);
-$project_frame->Label(-text => 'Projects:')->grid(-sticky => 'w');
-$project_frame->Label(-text => 'Time:')->grid(-row => 0, -column => 3,
-					      -sticky => 'e');
+my $header_text = $project_frame->ROText(-tabs => ['4c', '6.5c', '9c'],
+					 -width => 63,
+					 -height => 2,
+					 -relief => 'ridge');
+$header_text->pack(-expand => 1, -fill => 'x');
+$header_text->insert('1.0', "\t\tTime\nProjects:\tSession\tToday\tAll");
+
+my $projects_text = $project_frame->Scrolled('ROText',
+					     -scrollbars => 'e',
+					     -tabs => ['4c', '6.5c', '9c'],
+					     -width => 63,
+					     -height => 10,
+					     -relief => 'ridge');
+$projects_text->pack(-expand => 1, -fill => 'both');
+$projects_text->bindtags(qw(dummy));
+$projects_text->tagConfigure('running',
+			     -relief => 'raised',
+			     -borderwidth => 1,
+			     -background  => 'SeaGreen3');
+$projects_text->tagBind('project',
+			"<Button-1>" =>
+			sub { &start_stop($projects_text->index('current')) });
+$projects_text->tagBind('project',
+			"<Button-3>" =>
+			sub { &new_sub_project($projects_text->index('current')) });
 
 my $status_frame = $top->Frame(-relief => 'ridge',
 			       -bd => 1);
 $status_frame->pack(-expand => 1, -fill => 'x');
+my $status_text = $status_frame->Label(-text => 'tktimex (c) 1996 Slaven Rezic');
+$status_text->pack(-side => 'left');
 
 MainLoop;
 
-sub enter_name {
-    my $label = shift;
-    my $res;
-    my $action;
-    my $toplevel = $top->Toplevel(-title => 'Enter name');
-    $toplevel->grab;
-    $toplevel->Label(-text => $label)->pack(-side => 'left');
-    my $entry = $toplevel->Entry(-textvariable => \$res);
+sub enter_label {
+    my($res, $action);
+    $status_text->configure(-text => 'Project name:');
+    my $entry = $status_frame->Entry(-textvariable => \$res,
+				     -width => 30);
     $entry->pack(-side => 'left');
+    $entry->waitVisibility;
+#    $entry->grab;
     $entry->focus;
-    $toplevel->bind("<Return>", sub { $action = 'yes' });
-    $toplevel->bind("<Escape>", sub { $action = 'no' });
-    $toplevel->protocol('WM_DELETE_WINDOW' => sub { $action = 'no' });
-    $toplevel->waitVariable(\$action);
-    $toplevel->grabRelease;
-    $toplevel->destroy;
+    $entry->bind("<Return>", sub { $action = 'yes' });
+    $entry->bind("<Escape>", sub { $action = 'no' });
+    $entry->waitVariable(\$action);
+#    $entry->grabRelease;
+    $entry->destroy;
+    $status_text->configure(-text => '');
     $action eq 'yes' ? $res : undef;
 }
 
 sub new_project {
-    my $label = &enter_name("New project:");
+    my $label = &enter_label;
     if ($label) {
 	my $p = new Project($label);
-	$project_frame->Button(-text => $label,
-			       -width => 40,
-			       -anchor => 'w')->grid(-column => 0,
-						     -sticky => 'w');
+	&insert_project($p, 0);
     }
 }
 
-sub update_project_frame {
-    my $project_frame = shift;
-    
+sub new_sub_project {
+    my $index = shift;
+    my $label = &enter_label;
+    if ($label) {
+	my $project_index = &get_project_index($index);
+	return if !defined $project_index;
+	my $p = $projects_in_text[$project_index];
+	my $sub_p = $p->subproject($label);
+	&insert_project($sub_p,
+			$sub_p->level,
+			"project-$project_index.last");
+    }
+}
+
+sub insert_project {
+    my($p, $indent, $after) = @_;
+    my $label = $p->label;
+    $indent = 0 unless $indent;
+    $after = 'end' unless $after;
+    push(@projects_in_text, $p);
+    my $index = $#projects_in_text;
+    $projects_in_text{$p} = $index;
+    $projects_text->insert
+      ($after, 
+       ("-" x ($indent-1)) . ($indent ? "> " : "") .
+       $label, ["label-$index", "project-$index", 'project'],
+       "\t" . &sec2time($p->sum_time($start_session_time, 1)) .
+       "\t" . &sec2time($p->sum_time($today_time, 1)) .
+       "\t" . &sec2time($p->sum_time(0, 1)) . "\n",
+       ["time-$index", "project-$index"]);
+}
+
+sub start_stop {
+    my $index = shift;
+    my $project_index = &get_project_index($index);
+    return if !defined $project_index;
+    if (defined $current_project_index &&
+	$current_project_index == $project_index) {
+	&stop_project;
+    } else {
+	&start_project($project_index);
+    }
+}
+
+sub get_project_index {
+    my $index = shift;
+    my @tags = $projects_text->tagNames($index);
+    my $project_index;
+    foreach (@tags) {
+	if (/^project-(.*)/) {
+	    $project_index = $1;
+	    last;
+	}
+    }
+    $project_index;
+}
+
+sub start_project {
+    my $project_index = shift;
+    &stop_project;
+    $current_project_index = $project_index;
+    $projects_text->tagAdd('running',
+			   "label-$project_index.first",
+			   "label-$project_index.last");
+    $projects_in_text[$current_project_index]->start_time;
+    $time_after = $projects_text->after
+      ($time_update*1000, sub { &act_time($project_index); } );
+}
+
+sub pause {
+    if (defined $current_project_index) {
+	&stop_project;
+    }
+}
+
+sub stop_project {
+    if (defined $time_after) {
+	$time_after->cancel;
+	undef $time_after;
+    }
+    if (defined $current_project_index) {
+	$projects_in_text[$current_project_index]->end_time;
+	undef $current_project_index;
+	$projects_text->tagRemove('running', '1.0', 'end');
+    }
+}
+
+sub act_time {
+    my $curr_project_index = shift;
+    my $project_index = $curr_project_index;
+    my $project = $projects_in_text[$project_index];
+    while ($project) {
+	$projects_text->delete("time-$project_index.first",
+			       "time-$project_index.last");
+	$projects_text->insert
+	  ("label-$project_index.last",
+	   "\t" . &sec2time($project->sum_time($start_session_time, 1)) .
+	   "\t" . &sec2time($project->sum_time($today_time, 1)) .
+	   "\t" . &sec2time($project->sum_time(0, 1)) . "\n",
+	   ["time-$project_index", "project-$project_index"]);
+	$project = ($project->isa("Subproject") ? $project->parent : undef);
+	$project_index = $projects_in_text{$project} if $project;
+    }
+    $time_after = $projects_text->after
+      ($time_update*1000, sub { &act_time($curr_project_index); } );
+}
+
+sub load_file {
+    &stop_project;
+#    my $pool;
+    # XXX warum dieser Workaround und kein 'do $datafile' ?
+    if (!open(D, $datafile)) {
+	warn "No $datafile!";
+	return;
+    }
+    local($/) = undef;
+    my $data = <D>;
+    close D;
+    eval $data;
+    print $@, "\n" if $@;
+    Project->pool($pool);
+    $projects_text->delete('1.0', 'end');
+    @projects_in_text = ();
+    %projects_in_text = ();
+    foreach (@{$pool}) {
+	&insert_old_project($_, 0);
+    }
+}
+
+sub insert_old_project {
+    my($p, $indent) = @_;
+    &insert_project($p, $indent);
+    foreach (@{$p->subproject}) {
+	&insert_old_project($_, $indent+1);
+    }
+}
+
+sub save_file {
+    if (defined $current_project_index) {
+	$projects_in_text[$current_project_index]->end_time;
+    }
+    if (!open(OUT, ">$datafile")) {
+	warn "Can't write to $datafile";
+	return;
+    }
+    $Data::Dumper::Purity = 1;
+    print OUT Data::Dumper->Dump([Project->pool], ['pool']), "\n";
+    close OUT;
 }
 
 sub quit_program {
@@ -212,6 +403,18 @@ sub quit_program {
     }
     return 0 if $quit_dialog->Show ne 'Yes';
     $top->destroy;
+}
+
+sub sec2time {
+    my $sec = shift;
+    my($day, $hour, $min);
+    $day  = int($sec / 86400);
+    $sec  = $sec % 86400;
+    $hour = int($sec / 1440);
+    $sec  = $sec % 1440;
+    $min  = int($sec / 60);
+#    sprintf("%3dd %02d:%02d", $day, $hour, $min);
+    sprintf("%02d:%02d:%02d", $hour, $min, $sec % 60); # XXX Test
 }
 
 #my $p = new Project("IHK-CGI");
