@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 5.5 2000/12/03 15:16:12 eserte Exp $
+# $Id: tktimex,v 5.6 2000/12/12 23:35:15 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -97,14 +97,14 @@ use Timex::Project;
 BEGIN { state_change("after Timex::Project"); }
 use strict;
 use vars qw($VERSION);
-#XXX broken in perl5.6.0+Linux: floaing numbers are interpreted as integers?!
+#XXX broken in perl5.6.0+Linux: floating numbers are interpreted as integers?!
 #use locale; # for sort, broken in older FreeBSD
 BEGIN { state_change("after use locale"); }
 # enable DnD
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 5.5 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 5.6 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -130,7 +130,6 @@ my $time_update = 0;
 my $autosave_after;
 my @nowtime = localtime;
 my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
-#XXXmy $project_status = "Left: Select | Middle: Create Subproject | Right: Attributes";
 my $status_text;
 my $project_frame;
 # there are two forms of separators: for intern store in HList
@@ -171,6 +170,7 @@ EOF
 
 state_change("before Getopt definition");
 
+my $max_enterprise_file_list = 4;
 my @all_domains;
 my $options = {};
 my @opttable =
@@ -196,11 +196,14 @@ my @opttable =
    ['securesave',         '!', 0,
     'longhelp' => "Saving data also in a Data::Dumper format. Not really necessary anymore."],
 
-   'Enterprise', # oder company? XXX
+   'Enterprise',
    ['enterpriseprojects', "=s", undef, 'subtype' => 'file',
     'longhelp' => "File with enterprise-wide list of projects"],
    ['enterprisedefaults', "=s", undef, 'subtype' => 'file',
     'longhelp' => "File with enterprise-wide configuration settings"],
+   (map { ["enterprisefile$_", "=s", undef,   'subtype' => 'file',
+	   'longhelp' => "Default enterprise timex file"]
+      } (1 .. $max_enterprise_file_list)),
 
    'Projects',
    ['dateformat',         '=s', 'h',
@@ -390,6 +393,37 @@ state_change("first menubutton loaded");
 $mb_file->command(-label => 'Load',
 		  -command => sub { load_file(1) })
     unless $s_if;
+
+if (!$s_if) {
+    my $show_it = 0;
+    for my $i (1 .. $max_enterprise_file_list) {
+	if (defined $options->{"enterprisefile$i"} &&
+	    $options->{"enterprisefile$i"} ne "") {
+	    $show_it++;
+	    last;
+	}
+    }
+    if ($show_it) {
+	$mb_file->cascade(-label => "Load ...");
+	my $mb_load_menu = $mb_file->cget(-menu);
+	my $mb_load = $mb_load_menu->Menu;
+	$mb_file->entryconfigure('last', -menu => $mb_load);
+	for my $i (1 .. $max_enterprise_file_list) {
+	    if (defined $options->{"enterprisefile$i"} &&
+		$options->{"enterprisefile$i"} ne "") {
+		my $f = $options->{"enterprisefile$i"};
+		$mb_load->command(-label => basename($f),
+				  -command => sub { load_file(0, $f) });
+	    }
+	}
+	if (defined $options->{'file'} && $options->{'file'} ne '') {
+	    $mb_load->command
+		(-label => basename($options->{'file'}),
+		 -command => sub { load_file(0, $options->{'file'}) });
+	}
+    }
+}
+
 $mb_file->command(-label => 'Save',
 		  -command => \&save_file);
 $mb_file->cascade(-label => 'Export');
@@ -650,10 +684,7 @@ $project_frame = $top->Scrolled
    -header => 1,
    -selectmode => 'single',
    -selectbackground => 'SeaGreen3',
-   -browsecmd => sub {
-#XXX       pause();
-#XXX       update_pause_cont_balloon();
-   },
+   -browsecmd => sub { },
    -separator => $separator,
   )->pack(-expand => 1, -fill => 'both');
 my $real_project_frame = $project_frame->Subwidget("scrolled");
@@ -684,19 +715,11 @@ $real_project_frame->bind('<ButtonRelease-1>',
 foreach my $ev (qw(Double-ButtonRelease-1
 		   Return)) {
     $real_project_frame->bind("<$ev>" =>
-#XXX			      sub { start_stop(shift->info('selection')) });
 			      sub { start() });
 }
 if ($options->{'autoscroll'} =~ /^(|none)$/) {
     $real_project_frame->bind("<Button-2>" =>
 			      sub { new_sub_project(get_entry(@_)) });
-}
-#XXX evtl. für Win32 aktivieren (häufig Button2 = Doppelklick)
-#Problem: Single-Button-1 wird auch ausgeführt :-(
-# und weitere Probleme...
-if (0 && $os eq 'win') {
-    $real_project_frame->bind("<Double-Button-1>" =>
-			 sub { new_sub_project(get_entry(@_)); Tk->break });
 }
 
 my $popup_entry;
@@ -1046,10 +1069,6 @@ sub delete_project {
 	return if !$project_frame->info('exists', $path);
 	$p = $project_frame->info('data', $path);
     }
-#XXX      my $path = shift || $project_frame->info('selection');
-#      return unless $path;
-#      return if !$project_frame->info('exists', $path);
-#      my $p = $project_frame->info('data', $path);
     return if !$p;
     return if !not_running(undef, $p);
     require Tk::Dialog;
@@ -1114,31 +1133,34 @@ sub insert_project {
     if ($args{-style}) {
 	$project_frame->itemConfigure($path, 0, -style => $args{-style});
     }
-    my $all_time_sec = $p->sum_time(0, undef, -recursive => 1);
-    $project_frame->itemCreate
-      ($path, $pf_time_index, -itemtype => 'text',
-       -text => sec2time($p->sum_time($start_session_time, undef,
-				      -recursive => 1)));
-    $project_frame->itemCreate
-      ($path, $pf_time_index+1, -itemtype => 'text',
-       -text => sec2time($p->sum_time($today_time, undef,
-				      -recursive => 1)));
-    $project_frame->itemCreate
-      ($path, $pf_time_index+2, -itemtype => 'text',
-       -text => sec2time($all_time_sec));
 
-    if ($has_costs) {
-	my $hours = int($all_time_sec/3600);
-	$hours += ($all_time_sec%3600 > 0 ? 1 : 0);
+    if (!$p->notimes) {
+	my $all_time_sec = $p->sum_time(0, undef, -recursive => 1);
 	$project_frame->itemCreate
-	    ($path, $pf_time_index+3, -itemtype => 'text',
-	     -text => sprintf("%.2f", $hours*hourly_rate($p)));
-    }
+	    ($path, $pf_time_index, -itemtype => 'text',
+	     -text => sec2time($p->sum_time($start_session_time, undef,
+					    -recursive => 1)));
+	$project_frame->itemCreate
+	    ($path, $pf_time_index+1, -itemtype => 'text',
+	     -text => sec2time($p->sum_time($today_time, undef,
+					    -recursive => 1)));
+	$project_frame->itemCreate
+	    ($path, $pf_time_index+2, -itemtype => 'text',
+	     -text => sec2time($all_time_sec));
 
-    for ($pf_time_index .. $pf_time_index+($has_costs?3:2)) {
-	$project_frame->column('width', $_, '');
-	if ($east) {
-	    $project_frame->itemConfigure($path, $_, -style => $east);
+	if ($has_costs) {
+	    my $hours = int($all_time_sec/3600);
+	    $hours += ($all_time_sec%3600 > 0 ? 1 : 0);
+	    $project_frame->itemCreate
+		($path, $pf_time_index+3, -itemtype => 'text',
+		 -text => sprintf("%.2f", $hours*hourly_rate($p)));
+	}
+
+	for ($pf_time_index .. $pf_time_index+($has_costs?3:2)) {
+	    $project_frame->column('width', $_, '');
+	    if ($east) {
+		$project_frame->itemConfigure($path, $_, -style => $east);
+	    }
 	}
     }
 }
@@ -1151,9 +1173,9 @@ sub insert_project_recursive {
     }
 }
 
-#XXXsub start_stop {
 sub start {
     my $path = shift;
+
     my $p;
     if (!$path) {
 	$p = get_project_from_anchor();
@@ -1165,11 +1187,7 @@ sub start {
 	$p = $project_frame->info('data', $path);
     }
     return if !$p;
-#XXX    if (defined $current_project && $current_project eq $p) {
-#	pause_or_cont();
-#    } else {
-	start_project($p);
-#    }
+    start_project($p);
 }
 
 sub common_start_project {
@@ -1180,7 +1198,6 @@ sub common_start_project {
     $project_frame->selectionClear;
     $project_frame->selectionSet($current_pathname);
     $project_frame->anchorSet($current_pathname);
-#XXX    $project_frame->configure(-selectbackground => 'SeaGreen3');
     $project_frame->see($current_pathname);
     gui_set_pause_or_cont('Pause');
 
@@ -1203,6 +1220,12 @@ sub common_start_project {
 
 sub start_project {
     my $p = shift;
+
+    if (!eval { notimes_check(); 1 }) {
+	$project_frame->selectionClear;
+	return;
+    }
+
     common_start_project($p);
     $p->start_time;
 }
@@ -1219,7 +1242,6 @@ sub pause_or_cont {
 	stop_project();
 	gui_set_pause_or_cont('Cont');
     } else {
-#XXX	my $p = get_project_from_selection();
 	my $p = get_project_from_anchor();
 	return if !$p;
 	start_project($p);
@@ -1228,8 +1250,11 @@ sub pause_or_cont {
 
 sub cont_last {
     my $p = shift;
+
+    return unless eval { notimes_check(); 1 };
+
     return if !not_running();
-#XXX    my $p = get_project_from_selection();
+
     if (!$p) {
 	$p = get_project_from_anchor();
     }
@@ -1274,7 +1299,6 @@ sub update_pause_cont_balloon {
     my $txt = $pause_cont_button->cget(-text);
     if ($txt eq 'Cont') { $txt = 'Continue' }
     if ($balloon) {
-#XXX	my $p = get_project_from_selection();
 	my $p = get_project_from_anchor();
 	if ($p) {
 	    $balloon->detach($pause_cont_button);
@@ -1293,6 +1317,9 @@ sub gui_set_pause_or_cont {
 }
 
 sub stop_project {
+
+    return unless eval { notimes_check(); 1 };
+
     if (defined $time_after) {
 	$time_after->cancel;
 	undef $time_after;
@@ -1309,7 +1336,6 @@ sub stop_project {
 	if ($options->{'autosave'}) {
 	    save_file(); # muß nach undef $current_project kommen!!!
 	}
-#XXX	$project_frame->configure(-selectbackground => $orig_selectbg);
 	$project_frame->selectionClear;
 	$top->title($title);
 	create_menu_last_projects();
@@ -1317,6 +1343,9 @@ sub stop_project {
 }
 
 sub undo {
+
+    return unless eval { notimes_check(); 1 };
+
     if (!defined $current_project) {
 	require Tk::Dialog;
 	$top->Dialog(-title => 'Info',
@@ -1534,6 +1563,9 @@ sub working_time {
 }
 
 sub show_one_day {
+
+    return unless eval { notimes_check(); 1 };
+
     my($inner_bg_opt, $inner_fg_opt) = ('-bg', '-fg');
     my %date_args;
     my $has_date;
@@ -2102,7 +2134,6 @@ sub load_file {
     if ($last_project) {
 	my $last_project_path = make_path($last_project);
 	if ($project_frame->info('exists', $last_project_path)) {
-#XXX	    $project_frame->selectionSet($last_project_path);
 	    $project_frame->anchorSet($last_project_path);
 	    $project_frame->see($last_project_path);
 	    gui_set_pause_or_cont('Cont');
@@ -2232,7 +2263,6 @@ sub insert_all {
 			   -changedprojects => \%changed_p);
     }
     if (defined $current_project) {
-#XXX	$project_frame->selectionSet(make_path($current_project));
 	$project_frame->anchorSet(make_path($current_project));
     }
     @all_domains = $root->get_all_domains;
@@ -2465,7 +2495,6 @@ sub save_skeleton {
 }
 
 sub save_subproject {
-#XXX    my $p = get_project_from_selection();
     my $p = get_project_from_anchor();
     return if !$p;
     my($file, $path) = get_file_path();
@@ -2947,6 +2976,8 @@ BEGIN { state_change("parsed 74%"); }
 
 sub show_intervals {
     my($top, $project, %args) = @_;
+
+    return unless eval { notimes_check(); 1 };
 
     my $readonly      = $args{-readonly};
     my $show_seconds  = $args{-show_seconds};
@@ -3552,7 +3583,6 @@ sub create_menu_last_projects {
 	$mb_file_menu->command(-label => "$i: " . $pathname,
 			       -underline => 0,
 			       -command => sub {
-#XXX				   start_stop($p);
 				   start($p);
 			       });
     }
@@ -3760,6 +3790,15 @@ sub project_status {
 	 : "Create Subproject"
 	) .
     " | Right: Attributes";
+}
+
+sub notimes_check {
+    if ($root->notimes) {
+	$top->messageBox(-icon => "warning",
+			 -message => "No times available",
+			);
+	die;
+    }
 }
 
 sub show_about {
