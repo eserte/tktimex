@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.25 1999/02/22 23:23:50 eserte Exp $
+# $Id: tktimex,v 4.26 1999/02/28 02:11:38 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -80,7 +80,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.25 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.26 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -1022,11 +1022,15 @@ sub old_save_file {
 }
 
 sub save_file {
-    if (!$options->{'file'}) {
-	return save_as_file(@_);
-    }
+    my($autosave) = @_;
 
-    my $autosave = shift;
+    if (!$options->{'file'}) {
+	if (!$autosave) {
+	    return save_as_file(@_);
+	} else {
+	    return;
+	}
+    }
 
     if (defined $current_project) {
 	$current_project->end_time;
@@ -1039,10 +1043,6 @@ sub save_file {
 	save_last_projects();
     }
     rename $options->{'file'}, "$options->{'file'}.0";
-
-    if (!$autosave) {
-	return if !lock_file($options->{'file'});
-    }
 
     if (!$root->save("$options->{'file'}")) {
 	$status_text->configure(-text => $@);
@@ -1194,7 +1194,7 @@ sub get_filename {
 	  (-initialdir => $args{-Path},
 	   -defaultextension => $defaultextension,
 	   -title => $args{-Title},
-	   ($Tk::VERSION >= 800.012 ?
+	   ($Tk::VERSION >= 800.012 && $args{'-FPat'} =~ /pj1/ ?
 	    (-filetypes => [['Timex files', '.pj1'],
 			    ['All files',  '*']])
 	    : ()
@@ -1250,18 +1250,18 @@ sub set_autosave {
 	    $autosave_after->cancel;
 	}
 	$autosave_after = $top->after($options->{'update'}*1000,
-				      sub { &save_file(1) });
+				      sub { save_file(1) });
     }
 }
 
 sub toggle_autosave {
-    &set_autosave;
+    set_autosave();
 }
 
 sub set_dateformat {
-    &insert_all;
-    if (&set_time_update) {
-	&set_timeout;
+    insert_all();
+    if (set_time_update()) {
+	set_timeout();
     }
 }
 
@@ -1542,8 +1542,9 @@ sub show_intervals {
 
     $w = $top->Toplevel(-title => "Intervals for " . $project->pathname);
     my $no_cols = 3;
+    my $rev_lifetime_col;
     $no_cols += 2 if $show_seconds;
-    $no_cols ++   if @rev;
+    $no_cols += 2 if @rev;
     $lb = $w->Scrolled('HList', -scrollbars => 'osoe',
 		       -columns => $no_cols,
 		       -width => 80,
@@ -1559,9 +1560,14 @@ sub show_intervals {
 	$lb->header('create', $col++, -text => 'seconds')
 	  if $show_seconds;
 	$lb->header('create', $col++, -text => 'Time');
-	$lb->header('create', $col++, -text => 'RCS')
-	  if @rev;
+	if (@rev) {
+	    $lb->header('create', $col++, -text => 'RCS');
+	    $rev_lifetime_col = $col++;
+	    $lb->header('create', $rev_lifetime_col,
+			-text => 'Version lifetime');
+	}
     }
+    my $last_rev_def;
     my $i = 0;
     foreach (@{$project->{'times'}}) {
 	my($from, $to) = @$_;
@@ -1592,6 +1598,14 @@ sub show_intervals {
 		    my $t = $rev->[0];
 		    if ($rev->[2]) { $t .= " (" . $rev->[2] . ")" }
 		    push(@t, $t);
+		    if (exists $last_rev_def->{'Time'}) {
+			$lb->itemCreate
+			  ($last_rev_def->{'Item'},
+			   $rev_lifetime_col,
+			   -text => sec2time($from-$last_rev_def->{'Time'},
+					     'dd', 0));
+		    }
+		    $last_rev_def = {Time => $to, Item => $i};
 		}
 	    }
 	    if (@t) { $lb->itemCreate($i, $col++, -text => join(", ", @t)) }
@@ -1599,6 +1613,11 @@ sub show_intervals {
 	    $lb->itemCreate($i, $col++, -text => 'Running');
 	}
 	$i++;
+    }
+    if (exists $last_rev_def->{'Time'}) {
+	$lb->itemCreate
+	  ($last_rev_def->{'Item'}, $rev_lifetime_col,
+	   -text => sec2time(time-$last_rev_def->{'Time'}, 'dd', 0));
     }
 
     $w->withdraw;
@@ -1748,7 +1767,7 @@ sub sec2time {
     $dateformat = $options->{'dateformat'} unless defined $dateformat;
     $day8       = $options->{'day8'}       unless defined $day8;
     my($day, $hour, $min);
-    if ($dateformat eq 'd') {
+    if ($dateformat =~ /^d/) {
 	$day = int($sec / ($day8 ? 28800 : 86400));
 	$sec = $sec % ($day8 ? 28800 : 86400);
     }
@@ -1759,6 +1778,8 @@ sub sec2time {
 	sprintf("%3dd %02d:%02d", $day, $hour, $min);
     } elsif ($dateformat eq 'h') {
 	sprintf("%3d:%02d", $hour, $min);
+    } elsif ($dateformat eq 'dd') { # round working days
+	sprintf("%3dd", $day + ($hour >= ($day8 ? 4 : 12) ? 1 : 0));
     } else {
 	sprintf("%02d:%02d:%02d", $hour, $min, $sec % 60);
     }
@@ -1868,7 +1889,12 @@ sub save_last_projects {
 
 sub get_home_dir {
     if (!defined $home) {
-	if ($^O ne 'MSWin32') {
+	if ($^O eq 'MSWin32') {
+	    eval q{
+		use Win32Util;
+		$home = Win32Util::get_user_folder();
+	    };
+	} else {
 	    $home = eval { local $SIG{__DIE__};
 			   (getpwuid($<))[7];
 		       };
