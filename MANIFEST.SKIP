@@ -7,5 +7,4 @@ Makefile
 MANIFEST\.SKIP$
 ~$
 Timex.ppd
-Timex/de_template.csv
 Timex/testdata.xml
