@@ -1,0 +1,8 @@
+Makefile
+\.tar\.gz$
+\bRCS\b
+^blib/
+^index\.html
+^pm_to_blib$
+MANIFEST\.SKIP$
+~$
