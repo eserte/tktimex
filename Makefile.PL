@@ -4,7 +4,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     'NAME'	=> 'Timex',
     'VERSION_FROM' => 'tktimex', # finds $VERSION
-    'ABSTRACT_FROM' => 'tktimex', # finds $VERSION
+    'ABSTRACT' => 'project time manager',
     'EXE_FILES'  => [qw/tktimex ctimex/],
     'dist'      => {'COMPRESS'=>'gzip -9f', 'SUFFIX' => '.gz',
                     'POSTOP'=>'-$(CHMOD) 644 $(DISTVNAME).tar$(SUFFIX)'},
