@@ -417,6 +417,26 @@ sub find_by_pathname {
     return undef;
 }
 
+=head2 find_by_regex
+
+    @projects = $root->find_by_regex($regex);
+
+Search and return the projects, which labels match with $regex. The
+returndes project objects are accumulated in an array.
+
+=cut
+
+sub find_by_regex {
+    my($self, $regex) = @_;
+    my @res;
+    foreach my $p ($self->all_subprojects) {
+	if (defined $p->label and $p->label =~ /$regex/) {
+	    push @res, $p;
+	}
+    }
+    @res;
+}
+
 sub is_descendent {
     my($self, $project) = @_;
     return 1 if $self eq $project;
@@ -797,12 +817,14 @@ to true, do not save times.
 
 sub save {
     my($self, $file, %args) = @_;
+    # first dump data, then open file... so crashes between open and print
+    # are less likely
+    my $buf = $self->dump_data(%args);
     if (!open(FILE, ">$file")) {
 	$@ = "Can't write to <$file>: $!";
 	warn $@;
 	undef;
     } else {
-	my $buf = $self->dump_data(%args);
 	print FILE $buf;
 	close FILE;
 	# Filesize could be actually larger, because of different line
