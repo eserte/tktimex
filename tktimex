@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.36 1999/05/14 21:27:05 eserte Exp $
+# $Id: tktimex,v 4.37 1999/05/26 17:10:46 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -80,7 +80,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.36 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.37 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($os eq 'unix'); # vielleicht geht's mit Win32+perl5.00555? XXX
@@ -103,12 +103,12 @@ my @nowtime = localtime;
 my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
 my $project_status = "Left: Select | Middle: Create Subproject | Right: Attributes";
 my $status_text;
-# there are two forms of separators: for intern store in HList and in
-# .tktimex.last ust $separator, for human-readable output use "/"
+# there are two forms of separators: for intern store in HList
+# use $separator, for human-readable output use "/"
 my $separator = '¶';
 my $undo_register;
 my $status_edit = 0;
-my($old_last_projects, $last_projects);
+my $last_projects;
 my $max_last_projects = 4;
 my $home = get_home_dir();
 
@@ -442,7 +442,8 @@ $root->modified(0);
 
 if ($options->{'file'}) {
     load_file(0);
-    load_last_projects();
+    $last_projects = [ map { $_->pathname }
+                       $root->last_projects($max_last_projects) ];
     create_menu_last_projects();
 }
 
@@ -1154,7 +1155,6 @@ sub save_file {
 	foreach (reverse(0 .. 8)) {
 	    rename "$options->{'file'}.$_", "$options->{'file'}." . ($_+1);
 	}
-	save_last_projects();
     }
     rename $options->{'file'}, "$options->{'file'}.0";
 
@@ -1924,7 +1924,6 @@ sub quit_program {
 	}
 	return 0 if $quit_dialog->Show ne 'Yes';
     }
-    save_last_projects();
     $top->destroy;
 }
 
@@ -2015,42 +2014,6 @@ sub add_last_projects {
     if (@$last_projects > $max_last_projects) {
 	$#$last_projects = $max_last_projects-1; # $max_last_projects Dateien merken
     }
-}
-
-sub load_last_projects {
-    if (open(LAST, "$home/.tktimex.last")) {
-	$last_projects = [];
-	$old_last_projects = [];
-	while(<LAST>) {
-	    chomp;
-	    push @$last_projects, $_;
-	    push @$old_last_projects, $_;
-	}
-	close LAST;
-    }
-}
-
-sub last_projects_changed {
-    my $i;
-    for($i = 0; $i<=$#$last_projects; $i++) {
-	return 1 if (!defined $old_last_projects->[$i]);
-	return 1 if ($old_last_projects->[$i] ne $last_projects->[$i]);
-    }
-    0;
-}
-
-sub save_last_projects {
-    return if !last_projects_changed();
-    if (!open(LAST, ">$home/.tktimex.last")) {
-	$status_text->configure(-text => "Can't write to .tktimex.last");
-	return;
-    }
-    $old_last_projects = [];
-    foreach (@$last_projects) {
-	print LAST "$_\n";
-	push @$old_last_projects, $_;
-    }
-    close LAST;
 }
 
 # XXX bei KDE gibt es das Problem, daﬂ beim ersten Minimize
