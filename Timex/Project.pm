@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-Project - manage a list of projects
+Timex::Project - manage a list of projects
 
 =head1 SYNOPSIS
 
@@ -12,6 +12,11 @@ Project - manage a list of projects
     $helloproject->start_time;
     $helloproject->end_time;
 
+=head1 DESCRIPTION
+
+B<Timex::Project> is a project manager, primarily for the programs timex
+and tktimex. This module supports the following methods:
+
 =cut
 
 package Timex::Project;
@@ -20,6 +25,14 @@ use vars qw($magic $emacsmode $pool);
 
 $magic = '#PJ1';
 $emacsmode = '-*- project -*-';
+
+=head2 new
+
+    $project = new Timex::Project $label
+
+Constructs a new Timex::Project object with label $label.
+
+=cut
 
 sub new {
     my($pkg, $label) = @_;
