@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 5.9 2001/02/07 23:25:33 eserte Exp $
+# $Id: tktimex,v 5.10 2001/02/07 23:45:36 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -110,7 +110,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 5.9 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 5.10 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -149,16 +149,16 @@ $time_update = 0;
 $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
 # there are two forms of separators: for intern store in HList
 # use $separator, for human-readable output use "/"
-my $separator = '¦';
-my $status_edit = 0;
-my $max_last_projects = 4;
-my $username = get_user_name();
-my $home     = get_home_dir();
-my $inner_fg = "black";
-my $inner_bg = "white";
-my $ctrl_s = ($os eq 'win' ? 'Ctrl-' : 'C-');
-my $sbside = ($os eq 'win' ? 'e' : 'w');
-my $use_enterprise = 0;
+$separator = '¦';
+$status_edit = 0;
+$max_last_projects = 4;
+$username = get_user_name();
+$home     = get_home_dir();
+$inner_fg = "black";
+$inner_bg = "white";
+$ctrl_s = ($os eq 'win' ? 'Ctrl-' : 'C-');
+$sbside = ($os eq 'win' ? 'e' : 'w');
+$use_enterprise = 0;
 
 eval {
     require Timex::Utmp;
@@ -3043,6 +3043,7 @@ sub show_intervals {
 		    push(@rev, [$rev->revision,
 				$rev->unixtime,
 				$rcs->symbolic_name($rev)]);
+
 		}
 	    } else {
 		die "Can't create rcs/cvs object";
