@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.16 1998/08/17 18:18:10 eserte Exp $
+# $Id: tktimex,v 4.17 1998/08/20 13:24:08 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -74,7 +74,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.16 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.17 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -181,6 +181,7 @@ $mb_file->command(-label => 'Dump',
 $mb_file->command(-label => 'Quit',
 		  -command => \&quit_program);
 $mb_file->separator;
+my $mb_file_menu = $mb_file->cget(-menu);
 
 my $mb_project = $menu_frame->Menubutton(-text => 'Project'
 					)->pack(-side => 'left');
@@ -353,7 +354,7 @@ if (!$options->{'file'}) {
 }
 load_file(0);
 load_last_projects();
-create_menu_last_projects($mb_file->cget(-menu));
+create_menu_last_projects();
 
 $project_frame->focus;
 
@@ -519,6 +520,7 @@ sub stop_project {
 	&save_file if $options->{'autosave'}; # nach undef $current_project!!!
 	$project_frame->configure(-selectbackground => $orig_selectbg);
 	$top->title($title);
+	create_menu_last_projects();
     }
 }
 
@@ -1388,7 +1390,6 @@ sub adjust_filename {
 
 
 sub create_menu_last_projects {
-    my $mb_file_menu = shift;
     # find last separator
     my $end = $mb_file_menu->index('end');
     my $i = $end;
