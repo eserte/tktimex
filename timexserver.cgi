@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: timexserver.cgi,v 1.2 1999/10/25 23:54:00 eserte Exp $
+# $Id: timexserver.cgi,v 1.3 1999/10/26 00:28:17 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -13,10 +13,13 @@
 # WWW:  http://user.cs.tu-berlin.de/~eserte/
 #
 
+# XXX FCGI verwenden
+
 use FindBin;
 use lib ("$FindBin::RealBin");
 
 use Event;
+#use Storable qw(nstore freeze);
 use Timex::Server;
 use CGI;
 use strict;
@@ -37,7 +40,68 @@ print $q->header(@no_cache);
 if (exists $valid_cmd{$q->param('cmd')}) {
     my $auth =  "user=" . CGI::escape($q->param('user')) .
                "&pw="   . CGI::escape($q->param('pw'));
+    # XXX quote
+    my $auth_hidden =
+      '<input type=hidden name=user value="' . $q->param("user") . '">' .
+      '<input type=hidden name=pw value="' . $q->param("pw") . '">';
 
+    my $list_sub = sub {
+	print <<EOF;
+<html><head><script>
+function startit(pn) {
+    document.forms[0].elements["args"].value = pn;
+    document.forms[0].submit();
+    return false;
+}
+
+function stopit(pn) {
+    document.forms[0].elements["args"].value = pn;
+    document.forms[0].elements["cmd"].value = "stop";
+    document.forms[0].submit();
+    return false;
+}
+
+</script></head>
+<body>
+EOF
+	print "<h1>Timex for " . $q->param('user') . "</h1>";
+	print "<form method=post>";
+	print $auth_hidden;
+	print "<input type=hidden name=cmd value=start>";
+	print "<input type=hidden name=args value=''>";
+	print "<table>\n";
+	my $has_current = 0;
+	foreach (split("\0\1", $_[1])) {
+	    print "<tr>";
+	    my($pn, $c, $t) = split("\0", $_);
+	    print "<td><a href='" . $q->script_name . "?cmd=start&args=" .
+	      CGI::escape($pn) . "&$auth' onclick='return startit(\"$pn\")'>$_</a></td> ";
+	    print "<td>";
+	    if ($c) {
+		print " (<a name=current href='" . $q->script_name . "?cmd=stop&args=" . CGI::escape($pn) . "&$auth' onclick='return stopit(\"$pn\")'>current</a>) ";
+		$has_current = 1;
+	    }
+	    print "</td><td>";
+	    print sec2time($t) . "</td></tr>\n";
+	}
+	print <<EOF;
+</table>
+</form>
+EOF
+        if ($has_current) {
+	    print <<EOF;
+<script>
+window.location.hash = "current";
+</script>
+EOF
+        }
+	print <<EOF;
+</body>
+</html>
+EOF
+	Event::unloop()
+      };
+    
     my $api = 
       [{ name => 'ok', req => 'a*',
 	 code => sub {
@@ -51,28 +115,19 @@ if (exists $valid_cmd{$q->param('cmd')}) {
        },
        
        { name => 'list', req => 'a*',
-	 code => sub {
-	     print "<table>\n";
-	     foreach (split("\0\1", $_[1])) {
-		 print "<tr>";
-		 my($pn, $c, $t) = split("\0", $_);
-		 print "<td><a href='" . $q->script_name . "?cmd=start&args=" .
-		   CGI::escape($pn) . "&$auth'>$_</a></td> ";
-		 print "<td>";
-		 if ($c) {
-		     print " (current) ";
-		 }
-		 print "</td><td>";
-		 print sec2time($t) . "</td></tr>\n";
-	     }
-	     print "</table>\n";
-	     Event::unloop()
-	 } 
+	 code => $list_sub
        },
 
        { name => 'stop', req => 'a*',
-	 code => sub {
-	     print "<a href='" . $q->script_name . "?cmd=stop&$auth'>Stop current $_[1]</a>\n";
+	 code =>
+	 sub {
+	     print "<form method=post>";
+	     print $auth_hidden;
+	     print "<input type=hidden name=cmd value=stop>";
+	     print "<input type=submit value='";
+	     print "Stop current $_[1]";
+	     print "'>";
+	     print "</form>";
 	     Event::unloop()
 	 } 
        },
@@ -103,7 +158,7 @@ if (exists $valid_cmd{$q->param('cmd')}) {
 
     print <<EOF;
 <body>
-<form>
+<form method=post>
 Username: <input type=text name=user><br>
 Password: <input type=password name=pw><br>
 <input type=hidden name=cmd value=list>
