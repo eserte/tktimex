@@ -1,8 +1,22 @@
 # -*- perl -*-
 
+=head1 NAME
+
+Project - manage a list of projects
+
+=head1 SYNOPSIS
+
+    use Project;
+    $root = new Project;
+    $helloproject = $root->project('hello');
+    $helloproject->start_time;
+    $helloproject->end_time;
+
+=cut
+
 package Project;
 use strict;
-use vars qw($magic);
+use vars qw($magic $pool);
 
 $magic = '#PJ1';
 
@@ -245,6 +259,28 @@ sub load {
 	}
 	close FILE;
 	&interpret_data($self, \@data);
+    }
+}
+
+sub load_old {
+    my($self, $file) = @_;
+    do $file;
+    warn "Can't read $file: $@" if $@;
+    foreach (@$pool) {
+	if (ref $_ eq 'Project') {
+	    $self->subproject($_);
+	    $_->rebless_subprojects;
+	} else {
+	    warn "Unknown object $_";
+	}
+    }
+}
+
+sub rebless_subprojects {
+    my $self = shift;
+    foreach (@{$self->subproject}) {
+	bless $_, 'Project';
+	$_->rebless_subprojects;
     }
 }
 
