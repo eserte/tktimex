@@ -13,15 +13,17 @@ WriteMakefile(
 	     'Timex/Project/XML.pm' => '$(INST_LIBDIR)/Timex/Project/XML.pm',
 	     'Timex/Rcs.pm' => '$(INST_LIBDIR)/Timex/Rcs.pm',
 	     'Timex/Server.pm' => '$(INST_LIBDIR)/Timex/Server.pm',
+	     'Timex/de_template.csv' => '$(INST_LIBDIR)/Timex/de_template.csv',
 	     'Tk/UnderlineAll.pm' => '$(INST_LIBDIR)/Tk/UnderlineAll.pm',
 	     'Tk/Autoscroll.pm' => '$(INST_LIBDIR)/Tk/Autoscroll.pm',
 	    },
     'PREREQ_PM' => {'Tk'           => 402.003,
 		    'Tk::Getopt'   => 0.34,
-		    'Tk::Date'     => 0.21,
+		    'Tk::Date'     => 0.30,
 		    'Data::Dumper' => 0,
+		    'Date::Calc'   => 0,
+		    'XML::Parser'  => 0,
 		   },
-    # COREQ: XML::Parser
     'AUTHOR' => 'Slaven Rezic (eserte@cs.tu-berlin.de)',
 );
 
