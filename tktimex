@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.3 1998/01/28 22:19:58 eserte Exp $
+# $Id: tktimex,v 4.4 1998/01/29 14:38:10 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -74,7 +74,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.3 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.4 $ =~ /(\d+)\.(\d+)/);
 
 my $root = new Timex::Project;
 
@@ -545,16 +545,20 @@ sub show_one_day {
     my $f = $top->Toplevel(-title => 'Show one day');
     my $b;
     my @p; # project array for one day
-    my $dw = $f->Date(-fields => 'date',
-		      -value => 'now',
-		      -datefmt => "%12A, %2d.%2m.%4y",
-		      -choices => [qw(today yesterday)],
-		      -command => sub {
-			  if ($options->{'oneday-immediately'}) {
-			      $b->invoke;
-			  }
-		      }
-		     )->pack;
+    my $dw = $f->Date
+      (-fields => 'date',
+       -value => 'now',
+       -datefmt => "%12A, %2d.%2m.%4y",
+       -choices => [qw(today yesterday),
+		    ['one week before' => sub { time()-86400*7}],
+		    ['four weeks before' => sub { time()-86400*7*4}],
+		   ],
+       -command => sub {
+	   if ($options->{'oneday-immediately'}) {
+	       $b->invoke;
+	   }
+       }
+      )->pack;
     my $ff = $f->Frame->pack;
     $b = $ff->Button(-text => 'Show')->pack(-side => 'left');
     my $clb = $ff->Button(-text => 'Close',
@@ -596,12 +600,12 @@ sub show_one_day {
 			  my $diff = $_->sum_time($s_from, $s_to, 0);
 			  $sum += $diff;
 			  $lb->itemCreate($i, 1, -text =>
-					  sec2time($diff, 'h', 0));
+					  sec2time($diff, undef, undef));
 			  $i++;
 		      }
 		      $lb->header('create', 0, -text => '*** sum ***');
 		      $lb->header('create', 1, -text =>
-				  sec2time($sum, 'h', 0));
+				  sec2time($sum, undef, undef));
 		  });
 
     if ($options->{'oneday-immediately'}) { $b->invoke }
@@ -841,7 +845,7 @@ sub toggle_show_only_top {
 }
 
 sub toggle_time_arbeitstag {
-    &not_running(\$options->{'day8'}) && &insert_all;
+    &insert_all;
 }
 
 sub show_attributes {
