@@ -6,7 +6,7 @@ WriteMakefile(
     'VERSION_FROM' => 'tktimex', # finds $VERSION
     'ABSTRACT' => 'project time manager',
     'EXE_FILES'  => [qw/tktimex ctimex timexserver/],
-    'dist'      => {'COMPRESS'=>'gzip -9f', 'SUFFIX' => '.gz',
+    'dist'      => {'COMPRESS'=>'gzip -9', 'SUFFIX' => '.gz',
                     'POSTOP'=>'-$(CHMOD) 644 $(DISTVNAME).tar$(SUFFIX)'},
     'PM' =>
     {
