@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.26 1999/02/28 02:11:38 eserte Exp $
+# $Id: tktimex,v 4.27 1999/03/07 00:17:10 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -80,7 +80,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.26 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.27 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -308,6 +308,19 @@ my $pause_cont_button = $menu_frame->Button
 
 $menu_frame->Button(-text => 'Save',
 		    -command => \&save_file)->pack(-side => 'right');
+
+my $minimized = 0;
+my $save_geometry;
+my($up_photo, $down_photo);
+eval {
+    $up_photo   = $top->Photo(-file => Tk::findINC("plain.up.gif"));
+    $down_photo = $top->Photo(-file => Tk::findINC("plain.down.gif"));
+};
+warn $@ if $@;
+my $min_button = $menu_frame->Button(-image => $up_photo,
+				     -command => \&minmaximze,
+				     -relief => 'flat',
+				    )->pack(-side => 'right');
 
 $menu_frame->pack(-fill => 'x');
 
@@ -1058,6 +1071,8 @@ sub save_file {
     if (!$autosave) {
 	$root->modified(0);
     }
+
+    lock_file($options->{'file'});
 
     &set_autosave;
 }
@@ -1885,6 +1900,20 @@ sub save_last_projects {
 	push @$old_last_projects, $_;
     }
     close LAST;
+}
+
+sub minmaximze {
+    $minimized = !$minimized;
+    if ($minimized) {
+	$min_button->configure(-image => $down_photo);
+	$save_geometry = $top->Width . "x" . $top->Height;
+	my $menu_height = $top->Height
+	  - $project_frame->Height - $status_frame->Height;
+	$top->geometry($top->Width . "x" . $menu_height);
+    } else {
+	$min_button->configure(-image => $up_photo);
+	$top->geometry($save_geometry);
+    }
 }
 
 sub get_home_dir {
