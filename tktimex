@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 3.15 1997/12/10 22:34:39 eserte Exp $
+# $Id: tktimex,v 3.16 1997/12/13 00:15:28 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about
@@ -435,7 +435,7 @@ sub show_one_day {
     my $b;
     my @p; # project array for one day
     my $dw = $f->Date(-date_only => 1,
-		      -datefmt => [qw(%12A , %2d . %2m . %4y)],
+		      -datefmt => [qw(%12A , %2d . %2m . %4y)], # XXX -w
 		      -today_button => 1,
 		      -command => sub {
 			  if ($options->{'oneday-immediately'}) {
@@ -500,10 +500,17 @@ sub load_file {
 	$status_text->configure(-text => $@);
 	return;
     }
+
     $status_text->configure(-text => "Loaded <$options->{'file'}>");
     &insert_all;
     &set_autosave;
     $root->modified(0);
+    my $last_project = $root->last_project;
+    if ($last_project) {
+	$project_frame->selectionSet(make_path($last_project));
+	$project_frame->see(make_path($last_project));
+	$pause_cont_button->configure(-text => 'Cont');
+    }
 }
 
 sub insert_all {
