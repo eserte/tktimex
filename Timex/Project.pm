@@ -294,7 +294,8 @@ sub dump_data {
 sub save {
     my($self, $file) = @_;
     if (!open(FILE, ">$file")) {
-	warn "Can't write to $file";
+	$@ = "Can't write to <$file>: $!";
+	warn $@;
 	undef;
     } else {
 	print FILE $self->dump_data;
@@ -383,7 +384,8 @@ sub load {
     my($self, $file) = @_;
     my @data;
     if (!open(FILE, $file)) {
-	warn "Can't read $file";
+	$@ = "Can't read <$file>: $!";
+	warn $@;
 	undef;
     } else {
 	while(<FILE>) {
