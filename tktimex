@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.37 1999/05/26 17:10:46 eserte Exp $
+# $Id: tktimex,v 4.38 1999/06/08 20:29:42 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -80,7 +80,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.37 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.38 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($os eq 'unix'); # vielleicht geht's mit Win32+perl5.00555? XXX
@@ -134,6 +134,7 @@ my @opttable =
    ['oneday-immediately', '!',  1],
    ['geometry',           '=s', "500x230"], # XXX
    ['securesave',         '!', 0],
+   ['busyind',            '!', 0],
   );
 my $opt;
 eval {
@@ -362,6 +363,13 @@ my $min_button = $menu_frame->Button(-image => $up_photo,
 				     -relief => 'flat',
 				    )->pack(-side => 'right');
 $balloon->attach($min_button, -msg => 'Minimize') if $balloon;
+my $busy_timer;
+my @busy_bar = ('|', '/', '-', '\\');
+my $busy_index = 0;
+my $busy_string = " ";
+my $busy_update = 200;
+my $busy_label = $menu_frame->Label(-textvariable => \$busy_string,
+                                    -width => 1)->pack(-side => 'right');
 
 $menu_frame->pack(-fill => 'x');
 
@@ -392,8 +400,11 @@ $project_frame->bind("<Button-2>" =>
 		     sub { new_sub_project(get_entry(@_)) });
 #XXX evtl. für Win32 aktivieren (häufig Button2 = Doppelklick)
 #Problem: Single-Button-1 wird auch ausgeführt :-(
-$project_frame->bind("<Double-Button-1>" =>
-		     sub { new_sub_project(get_entry(@_)); Tk->break });
+# und weitere Probleme...
+if (0 && $os eq 'win') {
+    $project_frame->bind("<Double-Button-1>" =>
+			 sub { new_sub_project(get_entry(@_)); Tk->break });
+}
 $project_frame->bind("<Button-3>" =>
 		     sub { show_attributes(get_entry(@_)) });
 
@@ -442,8 +453,7 @@ $root->modified(0);
 
 if ($options->{'file'}) {
     load_file(0);
-    $last_projects = [ map { $_->pathname }
-                       $root->last_projects($max_last_projects) ];
+    $last_projects = [ $root->last_projects($max_last_projects) ];
     create_menu_last_projects();
 }
 
@@ -561,6 +571,9 @@ sub insert_project {
 
 sub start_stop {
     my $path = shift;
+    if ($path && ref $path and $path->isa('Timex::Project')) {
+	$path = $path->pathname($separator);
+    }
     return if !$project_frame->info('exists', $path);
     my $p = $project_frame->info('data', $path);
     return if !$p;
@@ -583,7 +596,19 @@ sub common_start_project {
     gui_set_pause_or_cont('Pause');
 
     $top->title($title . " (" . $p->pathname . ")");
-    add_last_projects($current_pathname);
+    add_last_projects($current_project);
+
+    if (defined $busy_timer) {
+	$busy_timer->cancel;
+    }
+    if ($options->{'busyind'}) {
+	$busy_timer = $project_frame->repeat
+	    ($busy_update, sub {
+		$busy_index = ($busy_index >= $#busy_bar ? 0 : $busy_index+1);
+		$busy_string = $busy_bar[$busy_index];
+	    });
+    }
+
     set_timeout();
 }
 
@@ -672,6 +697,11 @@ sub stop_project {
 	$time_after->cancel;
 	undef $time_after;
     }
+    if (defined $busy_timer) {
+	$busy_timer->cancel;
+	undef $busy_timer;
+    }
+    $busy_string = " ";
     if (defined $current_project) {
 	$current_project->end_time;
 	&act_time;
@@ -725,7 +755,7 @@ sub act_time {
 	&act_time_project($project);
 	$project = ($project->level > 1 ? $project->parent : undef);
     }
-    &set_timeout();
+    set_timeout();
 }
 
 sub act_time_project {
@@ -1989,14 +2019,13 @@ sub create_menu_last_projects {
     }
     # insert last_projects
     $i = 0;
-    foreach (@$last_projects) {
-	my $pathname = $_;
-	(my $out_pathname = $pathname) =~ s|$separator|/|g;
+    foreach my $p (@$last_projects) {
+	my $pathname = $p->pathname;
 	$i++;
-	$mb_file_menu->command(-label => "$i: " . $out_pathname,
+	$mb_file_menu->command(-label => "$i: " . $pathname,
 			       -underline => 0,
 			       -command => sub {
-				   start_stop($pathname);
+				   start_stop($p);
 			       });
     }
 }
