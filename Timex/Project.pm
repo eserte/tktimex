@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.33 2000/09/01 23:33:13 eserte Exp $
+# $Id: Project.pm,v 3.34 2000/09/01 23:53:28 eserte Exp $
 #
 
 =head1 NAME
@@ -1218,8 +1218,9 @@ sub interpret_data_project {
 #		print STDERR (">" x $indent) . $label, "\n";
 		$self = new Timex::Project $label;
 		$self->{'times'} = \@times;
-		$self->{'archived'} = delete $attributes{'archived'};
-		$self->{'rcsfile'}  = delete $attributes{'rcsfile'};
+		foreach my $attr (qw/archived rate rcsfile/) {
+		    $self->{$attr} = delete $attributes{$attr};
+		}
 		if (defined $attributes{'note'}) {
 		    $self->set_note($attributes{'note'});
 		    delete $attributes{'note'};
