@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.13 1998/05/27 13:47:09 eserte Exp $
+# $Id: tktimex,v 4.14 1998/07/05 17:59:32 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -74,7 +74,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.13 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.14 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -380,7 +380,7 @@ sub new_project {
     if ($label) {
 	my $p = $root->subproject($label);
 	&insert_project($p);
-	$project_frame->idletasks; # XXX see-bug
+#	$project_frame->idletasks; # XXX see-bug
 	$project_frame->see(make_path($p));
     }
 }
@@ -394,7 +394,7 @@ sub new_sub_project {
 	return if !$p;
 	my $sub_p = $p->subproject($label);
 	&insert_project($sub_p);
-	$project_frame->idletasks; # XXX see-bug
+#	$project_frame->idletasks; # XXX see-bug
 	$project_frame->see(make_path($sub_p));
     }
 }
@@ -754,8 +754,7 @@ sub load_file {
 	my $last_project_path = make_path($last_project);
 	if ($project_frame->info('exists', $last_project_path)) {
 	    $project_frame->selectionSet($last_project_path);
-	    $project_frame->idletasks; # XXX see-bug
-
+#	    $project_frame->idletasks; # XXX see-bug
 	    $project_frame->see($last_project_path);
 	    gui_set_pause_or_cont('Cont');
 	}
@@ -1125,27 +1124,80 @@ sub show_intervals {
 	return if !defined $project;
     }
 
+    my(@saveargs) = ($top, $project, $readonly);
+
     my @rev;
-    if ($project->rcsfile && $^O !~ /(mswin|dos)/i) { # XXX check on win
-	require Timex::Rcs;
-	my $rcs = new Timex::Rcs $project->rcsfile;
-	if ($rcs) {
-	    foreach my $rev ($rcs->revisions) {
-		push(@rev, [$rev->revision,
-			    $rev->unixtime,
-			    $rcs->symbolic_name($rev)]);
+    if ($project->rcsfile) {
+	eval {
+	    require Timex::Rcs;
+	    my $rcs = new Timex::Rcs $project->rcsfile;
+	    if ($rcs) {
+		foreach my $rev ($rcs->revisions) {
+		    push(@rev, [$rev->revision,
+				$rev->unixtime,
+				$rcs->symbolic_name($rev)]);
+		}
+	    } else {
+		die "Can't create rcs object";
 	    }
-	} else {
-	    warn "Can't create rcs object";
-	}
+	};
+	warn $@ if $@;
     }
 
-    my $w = $top->Toplevel(-title => "Intervals for " . $project->pathname);
-    my $lb = $w->Scrolled('HList', -scrollbars => 'osoe',
-			  -columns => 6,
-			  -width => 80,
-			  -header => 1,
-			 )->pack(-fill => 'both', -expand => 1);
+    my($w, $lb);
+    my $interval_editor = sub {
+	my $i = shift;
+	return if $readonly;
+	require Tk::Date;
+	my $t = $w->Toplevel(-title => "Edit line $i");
+	my($from, $to) = @{$project->{'times'}[$i]};
+	$t->Label(-text => 'From:')->grid(-row => 0, -column => 0);
+	my $from_date = $t->Date(-variable => \$from
+				)->grid(-row => 0, -column => 1);
+	$t->Label(-text => 'To:')->grid(-row => 1, -column => 0);
+	my $to_date = $t->Date(-variable => \$to
+			      )->grid(-row => 1, -column => 1);
+	my $f = $t->Frame->grid(-row => 2, -column => 0, -columnspan => 2);
+
+	my $update = sub {
+	    &insert_all;
+	    $t->destroy;
+	    $w->destroy;
+	    show_intervals(@saveargs);
+	};
+
+	my $okb = $f->Button
+	  (-text => 'OK',
+	   -command => sub {
+	       $project->set_times($i, $from, $to);
+	       $update->();
+	   },
+	  )->pack(-side => 'left');
+	my $cancelb = $f->Button
+	  (-text => 'Cancel',
+	   -command => sub {
+	       $t->destroy;
+	   },
+	  )->pack(-side => 'left');
+	my $deleteb = $f->Button
+	  (-text => 'Delete',
+	   -command => sub {
+	       $project->delete_times($i);
+	       $update->();
+	   },
+	  )->pack(-side => 'left');
+	$t->bind('<Return>' => sub { $okb->invoke });
+	$t->bind('<Escape>' => sub { $cancelb->invoke });
+	$t->Popup(-popover => 'cursor');
+    };
+
+    $w = $top->Toplevel(-title => "Intervals for " . $project->pathname);
+    $lb = $w->Scrolled('HList', -scrollbars => 'osoe',
+		       -columns => 6,
+		       -width => 80,
+		       -header => 1,
+		       -command => $interval_editor,
+		      )->pack(-fill => 'both', -expand => 1);
     $lb->header('create', 0, -text => 'From');
     $lb->header('create', 1, -text => 'seconds');
     $lb->header('create', 2, -text => 'To');
@@ -1187,13 +1239,16 @@ sub show_intervals {
 	}
 	$i++;
     }
-    $w->withdraw; $lb->idletasks; # XXX see-bug
+
+    $w->withdraw;
+# $lb->idletasks; # XXX see-bug
     $lb->see($i-1) if $i > 1;
     my $clb = $w->Button(-text => 'Close',
 			 -command => sub { $w->destroy })->pack;
     $clb->focus;
     $w->bind('<Escape>' => sub { $clb->invoke });
-    $w->Popup(-popover => 'cursor')
+    $w->Popup(-popover => 'cursor');
+
 }
 
 sub set_time_update {
