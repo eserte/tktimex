@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 3.1 1997/11/16 02:21:28 eserte Exp $
+# $Id: tktimex,v 3.2 1997/11/16 21:36:35 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -15,54 +15,52 @@ use Tk;
 use Tk::HList;
 #use Tk::Balloon;
 use FindBin;
-use lib "$FindBin::Bin";
+use lib ("$FindBin::Bin", qw(/home/e/eserte/devel /home/e/eserte/devel/adb));
+use Tk::UnderlineAll;
+use Tk::Getopt 0.34;
 use Project;
-#use strict;
+use strict;
 
 my $root = new Project;
 
 my $quit_dialog;
 my $copyright = 'tktimex © 1996, 1997 Slaven Rezic';
-my $datafile = '/home/e/eserte/private/log/mytimex.pj1';
 my $title = 'tktimex';
-#my $datafile = "/tmp/mytimex.pj1"; # XXX
 my $current_project = undef;
 my $start_session_time = time;
 my $time_after;
-my $dateformat = 'h'; # XXX erst wenn ich sicher bin: 'd';
-my $time_update;
-&set_time_update();
+my $time_update = 0;
 my $autosave_after;
-my $autosave_update = 60*20;
-my $autosave = 1;
 my @nowtime = localtime;
 my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
 my $project_status = "Left: Start/Stop | Middle: Attributes | Right: Create Subproject";
-my $show_archived = 0;
-my $show_only_top = 0;
-my $time_arbeitstag = 0;
 my $separator = '¦';
 
-my $xgeometry = "500x230"; # XXX
-
-my $i;
-for ($i = 0; $i <= $#ARGV; ++$i) {
-    $_ = $ARGV[$i];
-  ARGL: {
-	/^-geometry$/ && do { $xgeometry 
-				= &get_arg(\$i, \@ARGV, "-geometry", "$_");
-			      last ARGL; };
-	/^-file$/ && do { $datafile 
-			    = &get_arg(\$i, \@ARGV, "-file", "$_");
-			  last ARGL; };
-	/^-/ && do { &usage("bad argument: $_"); last ARGL; };
-    }
-}
+my $options = {};
+my @opttable =
+  (['file|f', '=s', undef,
+   {'subtype' => 'file'}],
+   ['autosave|as', '!', 1, {'callback' => \&toggle_autosave }],
+   ['update', '=i', 60*10],
+   ['dateformat|df', '=s', 'h', {'choices' => ['d', 'h'], # XXX d default
+				 'strict' => 1,
+				 'callback' => \&toggle_dateformat }],
+   ['day8', '!', 0, {'callback' => \&toggle_time_arbeitstag }],
+   ['archived', '!', 0, {'callback' => \&toggle_show_archived }],
+   ['onlytop', '!', 0, {'callback' => \&toggle_show_archived }],
+   ['geometry', '=s', "500x230"], # XXX
+  );
+my $opt = new Tk::Getopt(-opttable => \@opttable,
+			 -options  => $options,
+			 -filename => "$ENV{HOME}/.tktimex");
+$opt->set_defaults;
+$opt->load_options;
+die $opt->usage if !$opt->get_options;
 
 my $top = new MainWindow;
 $top->protocol('WM_DELETE_WINDOW', \&quit_program);
 $top->title($title);
-$top->geometry($xgeometry) if $xgeometry;
+$top->geometry($options->{'geometry'}) if $options->{'geometry'};
 
 #my $b = $top->Balloon; # XXX
 
@@ -93,21 +91,29 @@ my $mb_options = $menu_frame->Menubutton(-text => 'Options'
 					)->pack(-side => 'left');
 $mb_options->checkbutton(-label => 'Autosave',
 			 -command => \&toggle_autosave,
-			 -variable => \$autosave);
+			 -variable => \$options->{'autosave'},
+			);
 $mb_options->checkbutton(-label => 'Dateformat H:M:S',
 			 -command => \&toggle_dateformat,
 			 -onvalue => 'd',
 			 -offvalue => 'h',
-			 -variable => \$dateformat);
+			 -variable => \$options->{'dateformat'},
+			);
 $mb_options->checkbutton(-label => 'day = 8h',
 			 -command => \&toggle_time_arbeitstag,
-			 -variable => \$time_arbeitstag);
+			 -variable => \$options->{'day8'},
+			);
 $mb_options->checkbutton(-label => 'Show archived',
 			 -command => \&toggle_show_archived,
-			 -variable => \$show_archived);
+			 -variable => \$options->{'archived'},
+			);
 $mb_options->checkbutton(-label => 'Show only top',
 			 -command => \&toggle_show_only_top,
-			 -variable => \$show_only_top);
+			 -variable => \$options->{'onlytop'},
+			);
+$mb_options->separator;
+$mb_options->command(-label => 'Option editor',
+		     -command => sub { $opt->option_editor($top) });
 
 my $mb_help = $menu_frame->Menubutton(-text => 'Help'
 				     )->pack(-side => 'left');
@@ -170,6 +176,12 @@ $project_frame->bind("<Leave>" =>
 		     sub { $status_text->configure(-text => $copyright); });
 
 
+$menu_frame->UnderlineAll;
+
+$opt->process_options;
+
+&set_time_update();
+
 $root->modified(0);
 &load_file;
 
@@ -216,7 +228,7 @@ sub new_sub_project {
 
 sub insert_project {
     my($p) = @_;
-    return if !$p || ($p->archived && !$show_archived);
+    return if !$p || ($p->archived && !$options->{'archived'});
     my $label = $p->label;
     my $path = make_path($p);
     return if !$path;
@@ -245,7 +257,6 @@ sub start_stop {
     my $p = $project_frame->info('data', $path);
     return if !$p;
     if (defined $current_project && $current_project eq $p) {
-#	&stop_project;
 	&pause_or_cont;
     } else {
 	&start_project($p);
@@ -358,11 +369,11 @@ sub load_file {
     }
     &stop_project;
     $root->delete_all;
-    if (!$root->load($datafile)) {
-	$status_text->configure(-text => "Can't load $datafile!");
+    if (!$root->load($options->{'file'})) {
+	$status_text->configure(-text => "Can't load $options->{'file'}!");
 	return;
     }
-    $status_text->configure(-text => "Loaded $datafile");
+    $status_text->configure(-text => "Loaded $options->{'file'}");
     &insert_all;
     &set_autosave;
     $root->modified(0);
@@ -373,12 +384,16 @@ sub insert_all {
     foreach (@{$root->subproject}) {
 	&insert_old_project($_);
     }
+    if (defined $current_project) {
+	$project_frame->selectionSet(make_path($current_project));
+    }
 }
 
 sub insert_old_project {
     my($p) = @_;
     &insert_project($p);
-    if (!$show_only_top) {
+#    if (!$show_only_top) {
+    if (!$options->{'onlytop'}) {
 	foreach (@{$p->subproject}) {
 	    &insert_old_project($_);
 	}
@@ -393,8 +408,8 @@ sub dump_data {
 }
 
 sub old_save_file {
-    if (!open(OUT, ">$datafile.data")) {
-	$status_text->configure(-text => "Can't write to $datafile.data");
+    if (!open(OUT, ">$options->{'file'}.data")) {
+	$status_text->configure(-text => "Can't write to $options->{'file'}.data");
 	return;
     }
     require Data::Dumper;
@@ -413,15 +428,15 @@ sub save_file {
 
     if (!$autosave) {
 	foreach (reverse(0 .. 8)) {
-	    rename "$datafile.$_", "$datafile." . ($_+1);
+	    rename "$options->{'file'}.$_", "$options->{'file'}." . ($_+1);
 	}
     }
-    rename $datafile, "$datafile.0";
+    rename $options->{'file'}, "$options->{'file'}.0";
 
-    if (!$root->save("$datafile")) {
-	$status_text->configure(-text => "Can't write to $datafile");
+    if (!$root->save("$options->{'file'}")) {
+	$status_text->configure(-text => "Can't write to $options->{'file'}");
     } else {
-	$status_text->configure(-text => "Saved $datafile");
+	$status_text->configure(-text => "Saved $options->{'file'}");
     }
     &old_save_file;
 
@@ -437,18 +452,17 @@ sub save_file {
 }
 
 sub set_autosave {
-    if ($autosave) {
+    if ($options->{'autosave'}) {
 	if (defined $autosave_after) {
 	    $autosave_after->cancel;
 	}
-	$autosave_after = $top->after($autosave_update*1000,
+	$autosave_after = $top->after($options->{'update'}*1000,
 				      sub { &save_file(1) });
     }
 }
 
 sub toggle_autosave {
     &set_autosave;
-    print STDERR "Autosave: $autosave\n";
 }
 
 sub toggle_dateformat {
@@ -478,15 +492,15 @@ sub not_running {
 }
 
 sub toggle_show_archived {
-    &not_running(\$show_archived) && &insert_all;
+    &not_running(\$options->{'archived'}) && &insert_all;
 }
 
 sub toggle_show_only_top {
-    &not_running(\$show_only_top) && &insert_all;
+    &not_running(\$options->{'onlytop'}) && &insert_all;
 }
 
 sub toggle_time_arbeitstag {
-    &not_running(\$time_arbeitstag) && &insert_all;
+    &not_running(\$options->{'day8'}) && &insert_all;
 }
 
 sub show_attributes {
@@ -576,7 +590,7 @@ sub show_attributes {
 
 sub set_time_update {
     my $old_time_update = $time_update;
-    $time_update = ($dateformat eq 'd' ? 60 : 1);
+    $time_update = ($options->{'dateformat'} eq 'd' ? 60 : 1);
     $time_update < $old_time_update;
 }
 
@@ -593,6 +607,7 @@ sub set_text_or_image {
 sub make_path {
     my($p) = @_;
     return if !$p;
+    die if !$p->isa('Project');
     my @path = $p->path;
     join($separator, @path[1 .. $#path]);
 }
@@ -622,14 +637,14 @@ sub quit_program {
 sub sec2time {
     my $sec = shift;
     my($day, $hour, $min);
-    if ($dateformat eq 'd') {
-	$day = int($sec / ($time_arbeitstag ? 28800 : 86400));
-	$sec = $sec % ($time_arbeitstag ? 28800 : 86400);
+    if ($options->{'dateformat'} eq 'd') {
+	$day = int($sec / ($options->{'day8'} ? 28800 : 86400));
+	$sec = $sec % ($options->{'day8'} ? 28800 : 86400);
     }
     $hour = int($sec / 3600);
     $sec  = $sec % 3600;
     $min  = int($sec / 60);
-    if ($dateformat eq 'd') {
+    if ($options->{'dateformat'} eq 'd') {
 	sprintf("%3dd %02d:%02d", $day, $hour, $min);
     } else {
 	sprintf("%02d:%02d:%02d", $hour, $min, $sec % 60);
@@ -676,32 +691,6 @@ EOF
 		 -command => sub { $dia->destroy })->pack;
     $dia->Popup(-popover => 'cursor');
 }
-
-# print out how to use this program.
-# the string argument passed to it is printed at the end, with a nl.
-sub usage {
-    my($problem) = @_;
-    require File::Basename;
-    die "usage: ",
-    &File::Basename::basename($0),
-    " []
-\n"
-    . "$problem\n";
-}
-
-# Get the argument, which may be directly after this switch, or the
-# next word entirely.  This works like getopts, in a way.
-sub get_arg {
-    my($index, $array, $prefix, $arg) = @_;
-    if ($arg =~ m/^$prefix$/) {
-	++$$index;
-	die "Too few args - last arg was $arg\n" if ($$index > $#{$array});
-	return $array->[$$index];
-    } else {
-	$arg =~ s/^$prefix//; return "$arg";
-    }
-}
-
 
 =head1 TODO
 
