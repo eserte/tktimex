@@ -2,7 +2,5 @@ MANIFEST
 Makefile.PL
 tktimex
 timex
-Project.pm
+Timex/Project.pm
 Tk/UnderlineAll.pm
-no.gif
-yes.gif
