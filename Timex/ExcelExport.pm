@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: ExcelExport.pm,v 1.7 2003/09/12 20:34:57 eserte Exp $
+# $Id: ExcelExport.pm,v 1.8 2003/09/12 21:37:03 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2000,2003 Slaven Rezic. All rights reserved.
@@ -35,11 +35,23 @@ sub save_dialog {
 
     my $t = $top->Toplevel;
     my $file;
+    my $file_already_checked;
     $t->title("Excel export");
 
     my $f = $t->Frame->pack(-fill => "x");
     $f->Label(-text => "Export file:")->pack(-side => "left");
-    my $fe = $f->Entry(-textvariable => \$file)->pack(-side => "left");
+    my $fe;
+    if (!eval '
+	use Tk::PathEntry;
+	$fe = $f->PathEntry(-textvariable => \$file,
+			    -selectcmd => sub { $fe->Finish },
+                           );
+	1;
+    ') {
+	$fe = $f->Entry(-textvariable => \$file);
+    }
+    $fe->pack(-side => "left");
+
     $fe->focus;
 
     my $can_xls = can_xls();
@@ -58,6 +70,7 @@ sub save_dialog {
 			-title => 'Excel export',
 			-filetypes => \@filetypes,
 		       );
+		   $file_already_checked = 1 if defined $file;
 	       })->pack(-side => "left");
 
     my %date;
@@ -70,11 +83,34 @@ sub save_dialog {
 		 -value => 'now',
 		 -fields => 'date',
 		 -datefmt => "%12A, %2d.%2m.%4y",
-		 -choices => [qw(today yesterday),
-			      ['one week before' => sub {time()-86400*7}],
-			      ['four weeks before' => sub { time()-86400*7*4}],
-			      ],
-		 )->pack(-side => "left");
+		 -choices =>
+		 [qw(today
+		     yesterday),
+		  ($p eq 'From'
+		   ? (['start of working week' => sub {
+			   my @l = localtime;
+			   if ($l[6] == 0) {
+			       time() - 86400*6
+			   } else {
+			       time() - 86400*($l[6]-1)
+			   }
+		       }]
+		     )
+		   : (['end of working week' => sub {
+			   my @l = localtime;
+			   if ($l[6] == 0) {
+			       time() - 86400*2;
+			   } else {
+			       # undefined behaviour Mo..Th
+			       time() - 86400*($l[6]-5);
+			   }
+		       }]
+		     )
+		  ),
+		  ['one week before' => sub {time()-86400*7}],
+		  ['four weeks before' => sub { time()-86400*7*4}],
+		 ],
+		)->pack(-side => "left");
     }
 
     $f = $t->Frame->pack(-fill => "x");
@@ -85,18 +121,27 @@ sub save_dialog {
 				      -message => "No export file specified",
 				      -title => "Can't export",
 				      -type => 'OK');
-		   } else {
-		       my(@from_l) = localtime $date{From};
-		       my(@to_l)   = localtime $date{To};
-		       @from_l[0..2] = (0, 0, 0);
-		       @to_l  [0..2] = (59, 59, 23);
-		       my $from = timelocal @from_l;
-		       my $to   = timelocal @to_l;
-
-		       save($root_project, $file, $from, $to, %args);
-
-		       $t->destroy;
+		       return;
 		   }
+		   if (!$file_already_checked && -e $file) {
+		       if ($t->messageBox
+			   (-icon => "question",
+			    -message => "File already exists. Override?",
+			    -title => "Existing file",
+			    -type => 'YesNo') =~ /no/i) {
+			   return;
+		       }
+		   }
+		   my(@from_l) = localtime $date{From};
+		   my(@to_l)   = localtime $date{To};
+		   @from_l[0..2] = (0, 0, 0);
+		   @to_l  [0..2] = (59, 59, 23);
+		   my $from = timelocal @from_l;
+		   my $to   = timelocal @to_l;
+
+		   save($root_project, $file, $from, $to, %args);
+
+		   $t->destroy;
 	       })->pack(-side => "left");
     $f->Button(-text => "Close",
 	       -command => sub {
@@ -177,10 +222,17 @@ sub save {
     my $template_file = $args{-templatefile} || "Timex/de_template.csv";
     my(@l) = localtime $from;
     my $weeknumber = Week_Number($l[5]+1900, $l[4]+1, $l[3]);
+    my $from_date = sprintf "%04d-%02d-%02d", $l[5]+1900, $l[4]+1, $l[3];
+    my $week_is_partial = $l[6] != 1; # not Mo
     @l = localtime $to;
     my $to_week = Week_Number($l[5]+1900, $l[4]+1, $l[3]);
+    my $to_date = sprintf "%04d-%02d-%02d", $l[5]+1900, $l[4]+1, $l[3];
+    $week_is_partial = 1 if $l[6] < 5; # not Fr,Sa,Su
     if ($to_week != $weeknumber) {
 	$weeknumber .= " - $to_week";
+    }
+    if ($week_is_partial) {
+	$weeknumber .= " (partial)";
     }
 
     my $do_excel = (defined $excel && $file =~ /\.xls$/i);
@@ -226,6 +278,7 @@ sub save {
     my $row = 0;
     my($first_project_row, $last_project_row);
     my($hours_col, $rate_col, $projectsum_col);
+    my $annotation_sep = $do_excel ? ";" : " - ";
     open(T, $template_file) or die "Can't open $template_file: $!";
     while(<T>) {
 	$row++;
@@ -237,6 +290,9 @@ sub save {
 		my $label = $p->pathname("/"); #join("/", $p->path);
 		$label =~ s|^/||; # strip root part
 		my $hours = $p->sum_time($from, $to)/(60*60);
+		my %annotations = map {($_,1)} $p->get_all_annotations($from, $to);
+		my $annotations = join($annotation_sep,
+				       sort keys %annotations);
 		my $rate  = $rate;
 		my $projectsum = $hours * $rate;
 
@@ -253,6 +309,7 @@ sub save {
 		}
 
 		$this_line =~ s/%%PROJECTNAME%%/$label/g;
+		$this_line =~ s/%%ANNOTATIONS%%/$annotations/g;
 		if ($do_excel) {
 		    chomp $this_line;
 		    my @cols = split $excel_separator, $this_line;
@@ -294,6 +351,8 @@ sub save {
 	} else {
 	    s/%%NAME%%/$username/g;
 	    s/%%WEEK%%/$weeknumber/g;
+	    s/%%FROMDATE%%/$from_date/g;
+	    s/%%TODATE%%/$to_date/g;
 
 	    if ($do_excel) {
 		chomp;
@@ -325,6 +384,7 @@ sub save {
 		_excel_print_row($sheet, $row, \@cols);
 	    } else {
 		s/%%SUM%%/$sum/g;
+		s/%%SUMHOURS%%//g; # XXX not yet used
 		print S $_;
 	    }
 	}
