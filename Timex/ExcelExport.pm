@@ -1,14 +1,14 @@
 # -*- perl -*-
 
 #
-# $Id: ExcelExport.pm,v 1.6 2000/11/24 23:02:19 eserte Exp $
+# $Id: ExcelExport.pm,v 1.7 2003/09/12 20:34:57 eserte Exp $
 # Author: Slaven Rezic
 #
-# Copyright (C) 2000 Slaven Rezic. All rights reserved.
+# Copyright (C) 2000,2003 Slaven Rezic. All rights reserved.
 # This package is free software; you can redistribute it and/or
 # modify it under the same terms as Perl itself.
 #
-# Mail: eserte@cs.tu-berlin.de
+# Mail: slaven@rezic.de
 # WWW:  http://user.cs.tu-berlin.de/~eserte/
 #
 
@@ -117,7 +117,7 @@ sub can_xls {
     };
     if (!$excel) {
 	eval q{
-	    use Spreadsheet::WriteExcel;
+	    use Spreadsheet::WriteExcel 0.42;
 	    $excel = "Spreadsheet::WriteExcel";
 	};
     }
@@ -142,7 +142,7 @@ sub _excel_print_row {
     }
     return if !@s;
 
-    if ($sheet->isa('Spreadsheet::Worksheet')) {
+    if ($sheet->isa('Spreadsheet::WriteExcel::Worksheet')) {
 	my $col = 0;
 	foreach my $s (@s) {
 	    $sheet->write($row-1, $col, $s);
@@ -332,7 +332,7 @@ sub save {
     close T;
 
     if ($do_excel) {
-	if ($book->isa('Spreadsheet::Workbook')) {
+	if ($book->isa('Spreadsheet::WriteExcel::Workbook')) {
 	    $book->close;
 	} else {
 	    $book->SaveAs($file);
