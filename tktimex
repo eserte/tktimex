@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 5.3 2000/11/28 01:49:40 eserte Exp $
+# $Id: tktimex,v 5.4 2000/11/28 22:51:38 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -18,6 +18,7 @@
 #BEGIN { eval q{ use utf8 } }
 
 BEGIN {
+    $Devel::Trace::TRACE = 0;
     sub state_change { }
     state_change("before Tk");
 }
@@ -98,13 +99,14 @@ use Timex::Project;
 BEGIN { state_change("after Timex::Project"); }
 use strict;
 use vars qw($VERSION);
-use locale; # for sort, broken in older FreeBSD
+#XXX broken in perl5.6.0+Linux: floaing numbers are interpreted as integers?!
+#use locale; # for sort, broken in older FreeBSD
 BEGIN { state_change("after use locale"); }
 # enable DnD
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 5.3 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 5.4 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -254,6 +256,8 @@ Medium: only limited project manipulation possible"],
     'callback' => sub { update_costs_option(1) },
     'longhelp' => "Currency for hourlyrate option.",
     ],
+   ['tree',               '!', 1,
+    'longhelp' => 'Use tree representation'],
   );
 my $opt;
 eval {
@@ -498,16 +502,21 @@ $mb_options->checkbutton(-label => 'Show only top',
 			 -command => \&toggle_show_only_top,
 			 -variable => \$options->{'onlytop'},
 			);
-$mb_options->separator;
-$mb_options->command
-    (-label => 'Open all',
-     -command => sub { traverse_entries(sub { $project_frame->open($_[0]) }) }
-    );
-$mb_options->command
-    (-label => 'Close all',
-     -command => sub { traverse_entries(sub { $project_frame->close($_[0]) }) }
-    );
-
+if ($options->{'tree'}) {
+    $mb_options->separator;
+    $mb_options->command
+	(-label => 'Open all',
+	 -command => sub { traverse_entries(sub {
+						$project_frame->open($_[0])
+					    }) }
+	);
+    $mb_options->command
+	(-label => 'Close all',
+	 -command => sub { traverse_entries(sub {
+						$project_frame->close($_[0])
+					    }) }
+	);
+}
 
 if (defined $opt) {
     $mb_options->separator;
@@ -629,8 +638,7 @@ $pf_cols = 5; # cannot change -columns of hlists...
 
 state_change("checkpoint 3");
 $project_frame = $top->Scrolled
-  (#'HList', # XXX
-   'Tree',
+  (($options->{'tree'} ? 'Tree' : 'HList'),
    -scrollbars => "oso$sbside",
    -bg => $inner_bg,
    -fg => $inner_fg,
@@ -2693,6 +2701,12 @@ sub show_attributes {
 
     # Domain ##########
     my $domain = my $old_domain = $project->{'domain'};
+    if (!defined $domain) {
+	$domain = $project->domain;
+	if (defined $domain) {
+	    $domain = "($domain)";
+	}
+    }
     $row++;
     $f->Label(-text => 'Domain'
 	     )->grid(-row => $row, -column => 0, -sticky => 'w');
