@@ -1,13 +1,7 @@
 Changes
 MANIFEST
 Makefile.PL
-tktimex
-ctimex
-timexserver
-timexserver.cgi
-clear_times.pl
-get_skeleton.pl
-convert2xml.pl
+README
 Timex/ExcelExport.pm
 Timex/Project.pm
 Timex/Project/Export.pm
@@ -15,14 +9,26 @@ Timex/Project/XML.pm
 Timex/Rcs.pm
 Timex/Server.pm
 Timex/Utmp.pm
-Timex/test.pl
-Tk/Autoscroll.pm
-Tk/UnderlineAll.pm
-kde/Timex.kdelnk
-Win32Util.pm
-plain.up.gif
-plain.down.gif
-mini-clock.xpm
-emacs/project.el
 Timex/de_template.csv
+Timex/test.pl
+Tk/Autoscroll.pm	from Tk-SREZIC
+Tk/UnderlineAll.pm	from Tk-SREZIC
+Win32Util.pm		from Win32Util
+clear_times.pl
+convert2xls.pl
+convert2xml.pl
+ctimex
+emacs/project.el
+get_skeleton.pl
+install.pl		from bbbike
+install.pl.config
+kde/Timex.kdelnk
+mini-clock.xpm
+mini-clock.ico
+plain.down.gif
+plain.up.gif
+restrict_domain.pl
 templates/oo.pjt
+timexserver
+timexserver.cgi
+tktimex
