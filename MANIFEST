@@ -3,4 +3,6 @@ Makefile.PL
 tktimex
 timex
 Timex/Project.pm
+Timex/Rcs.pm
+Timex/test.pl
 Tk/UnderlineAll.pm
