@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 2.3 1996/12/19 12:36:27 eserte Exp $
+# $Id: tktimex,v 2.4 1996/12/19 16:25:33 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -39,6 +39,8 @@ my @projects_in_text;
 my %projects_in_text;
 my $project_status = "Left: Start/Stop | Middle: Attributes | Right: Create Subproject";
 my $show_archived = 0;
+my $show_only_top = 0;
+my $time_arbeitstag = 0;
 
 my $xgeometry;
 
@@ -92,9 +94,15 @@ $mb_options->checkbutton(-label => 'Dateformat H:M:S',
 			 -onvalue => 'd',
 			 -offvalue => 'h',
 			 -variable => \$dateformat);
+$mb_options->checkbutton(-label => 'day = 8h',
+			 -command => \&toggle_time_arbeitstag,
+			 -variable => \$time_arbeitstag);
 $mb_options->checkbutton(-label => 'Show archived',
 			 -command => \&toggle_show_archived,
 			 -variable => \$show_archived);
+$mb_options->checkbutton(-label => 'Show only top',
+			 -command => \&toggle_show_only_top,
+			 -variable => \$show_only_top);
 
 # XXX RO machen!
 $menu_frame->Checkbutton(-text => '*',
@@ -218,7 +226,7 @@ sub insert_project {
       ($after, 
        (">" x $indent),
        ["project-$index"],
-       $label,
+       ($p->archived ? "($label)" : $label),
        ["label-$index", "project-$index", 'project'],
        "\t" . &sec2time($p->sum_time($start_session_time, 1)) .
        "\t" . &sec2time($p->sum_time($today_time, 1)) .
@@ -344,8 +352,10 @@ sub insert_all {
 sub insert_old_project {
     my($p, $indent) = @_;
     &insert_project($p);
-    foreach (@{$p->subproject}) {
-	&insert_old_project($_, $indent+1);
+    if (!$show_only_top) {
+	foreach (@{$p->subproject}) {
+	    &insert_old_project($_, $indent+1);
+	}
     }
 }
 
@@ -425,29 +435,40 @@ sub toggle_dateformat {
     }
 }
 
-sub toggle_show_archived {
+sub not_running {
+    my($var) = @_;
     if (defined $current_project_index) {
 	require Tk::Dialog;
 	$top->Dialog(-title => 'Warning',
-		     -text  => "Can't toggle archived while project running"
+		     -text  => 
+		     "Can't perform this action while project running"
 		     )->Show;
-	# alte Einstellung wiederherstellen
-	$show_archived = ($show_archived ? 0 : 1);
-	return;
+	if (defined $var) {
+	    # alte Einstellung wiederherstellen
+	    $$var = ($$var ? 0 : 1);
+	}
+	return undef;
+    } else {
+	return 1;
     }
-    &insert_all;
+}
+
+sub toggle_show_archived {
+    &not_running(\$show_archived) && &insert_all;
+}
+
+sub toggle_show_only_top {
+    &not_running(\$show_only_top) && &insert_all;
+}
+
+sub toggle_time_arbeitstag {
+    &not_running(\$time_arbeitstag) && &insert_all;
 }
 
 sub show_attributes {
     my $index = shift;
 
-    if (defined $current_project_index) {
-	require Tk::Dialog;
-	$top->Dialog(-title => 'Warning',
-		     -text  => "Can't show attributes while project running"
-		     )->Show;
-	return;
-    }
+    return if !&not_running;
 
     my $project_index = &get_project_index($index);
     return if !defined $project_index;
@@ -457,7 +478,9 @@ sub show_attributes {
     $attribute_top->Label(-text => 'Name: ' . $project->label
 			 )->pack(-anchor => 'w');
     if ($project->parent) {
-	$attribute_top->Label(-text => 'Parent: ' . $project->parent->label
+	$attribute_top->Label(-text => 'Parent: ' .
+			      ($project->parent eq $root ?
+			       '(Root)' : $project->parent->label)
 			     )->pack(-anchor => 'w');
     }
     my $archived = $project->{'archived'};
@@ -467,8 +490,7 @@ sub show_attributes {
     
     my $command_frame = $attribute_top->Frame->pack(-side => 'bottom');
     my $ok = $command_frame->Button
-      (  # XXX Werte sichern
-       -command => sub {
+      (-command => sub {
 	   my $insert_all = 
 	     ($archived && !$project->{'archived'});
 	   $project->archived($archived);
@@ -485,6 +507,8 @@ sub show_attributes {
     &set_text_or_image($cancel,
 		       "/usr/www/bilder/icons/Misc2/answer_bad.gif", "Cancel");
     $cancel->pack(-side => 'left');
+
+    &under_mouse($attribute_top);
 }
 
 sub set_time_update {
@@ -501,6 +525,39 @@ sub set_text_or_image {
     } else {
 	$widget->configure(-text => $text);
     }
+}
+
+sub rdonly_checkbutton {
+    my $checkbutton = shift;
+    $checkbutton->bind("<1>");
+    $checkbutton->bind("<space>");
+}
+
+# aus ~/devel/adb/adb 
+sub under_mouse {
+    my($toplevel) = @_;
+    $toplevel->withdraw;	# unsichtbares Update erzwingen
+    $toplevel->update;
+    my($scrheight, $scrwidth) 
+	= ($toplevel->screenheight, $toplevel->screenwidth);
+    my($x, $y) = $toplevel->pointerxy;
+    # XXX leider ist req(width|height) ohne Rahmen. Deshalb addiere ich
+    # etwas hinzu ...
+    my($topheight, $topwidth)
+	= ($toplevel->reqheight+28, $toplevel->reqwidth+6);
+    my($geomheight, $geomwidth);
+    $geomheight = int($y - $topheight/2);
+    if ($geomheight + $topheight > $scrheight) {
+	$geomheight = $scrheight - $topheight;
+    }
+    $geomheight = 0 if ($geomheight < 0);
+    $geomwidth = int($x - $topwidth/2);
+    if ($geomwidth + $topwidth > $scrwidth) {
+	$geomwidth = $scrwidth - $topwidth;
+    }
+    $geomwidth = 0 if ($geomwidth < 0);
+    $toplevel->geometry("+$geomwidth+$geomheight");
+    $toplevel->deiconify;	# wieder sichtbar machen
 }
 
 sub quit_program {
@@ -520,8 +577,10 @@ sub quit_program {
 sub sec2time {
     my $sec = shift;
     my($day, $hour, $min);
-    $day  = int($sec / 86400);
-    $sec  = $sec % 86400;
+    if ($dateformat eq 'd') {
+	$day = int($sec / ($time_arbeitstag ? 28800 : 86400));
+	$sec = $sec % ($time_arbeitstag ? 28800 : 86400);
+    }
     $hour = int($sec / 3600);
     $sec  = $sec % 3600;
     $min  = int($sec / 60);
@@ -560,8 +619,6 @@ sub get_arg {
 
 =head1 TODO
 
- - rename
- - show/hide old
  - reparent objects
 
 =cut
