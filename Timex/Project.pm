@@ -90,6 +90,43 @@ sub rcsfile {
     }
 }
 
+=head2 last_times
+
+    $time_ref = $project->last_times;
+
+Return an array reference to the last activity of the project, or undef if
+there was no activity at all.
+
+=cut
+
+sub last_times {
+    my $self = shift;
+    return if !@{$self->{'times'}};
+    return $self->{'times'}[$#{$self->{'times'}}];
+}
+
+=head2 last_time_subprojects
+
+    $time_ref = $project->last_time_subprojects;
+
+Return the time of the last activity of all subprojects, or undef if
+there was no activity at all. Note that the method is spelled "time"
+instead of "times".
+
+=cut
+
+sub last_time_subprojects {
+    my($self, $last) = @_;
+    my $this_last = $self->last_times;
+    if ($this_last and (!defined $last or $this_last->[0] > $last)) {
+	$last = $this_last->[0];
+    }
+    foreach ($self->subproject) {
+	$last = $_->last_time_subprojects($last);
+    }
+    return $last;
+}
+
 sub parent {
     my($self, $parent) = @_;
     if (defined $parent) {
@@ -161,8 +198,9 @@ sub subproject {
 
 Return subprojects according to $sorted_by. If $sorted_by is 'name',
 sorting is done lexically by name. If $sorted_by is 'time', sorting is
-done by time (more time consuming subprojects come first). If
-$sorted_by is not given or is 'nothing', no sorting is done.
+done by time (more time consuming subprojects come first). If $sorted_by
+is 'latest', the last active projects come first.
+If $sorted_by is not given or is 'nothing', no sorting is done.
 
 =cut
 
@@ -176,6 +214,12 @@ sub sorted_subprojects {
 	sort { $b->sum_time(0, undef, -recursive => 1) <=> 
 		 $a->sum_time(0, undef, -recursive => 1) }
 	       $self->subproject;
+    } elsif ($sorted_by =~ /^latest$/i) {
+	sort { my $a_t = $a->last_time_subprojects;
+	       my $b_t = $b->last_time_subprojects;
+	       return -1 if (!defined $a_t);
+	       return 1 if (!defined $b_t);
+	       $b_t <=> $a_t } $self->subproject;
     } else {
 	die "Unknown sort type: <$sorted_by>";
     }
@@ -296,6 +340,7 @@ sub end_time {
 sub unend_time {
     my $self = shift;
     my @times = @{ $self->{'times'} };
+    return if (@{ $times[$#times] } != 2);
     pop @{ $times[$#times] };
     $self->update_cached_time;
     $self->modified(1);
@@ -527,7 +572,7 @@ Return the separator for this tree (the root project). Defaults to /.
     $project->separator($separator);
 
 Set the separator for this tree (the root project) to $separator.
- 
+
 =cut
 
 sub separator {
@@ -544,7 +589,8 @@ sub separator {
 }
 
 sub dump_data {
-    my($self, $indent) = @_;
+    my($self, %args) = @_;
+    my $indent = delete $args{'-indent'};
     my $res;
     if (!$indent) {
 	$res = "$magic $emacsmode\n";
@@ -553,30 +599,43 @@ sub dump_data {
 	$res .= (">" x $indent) . "$self->{'label'}\n";
 	$res .= "/archived=$self->{'archived'}\n";
 	$res .= "/rcsfile=" . $self->rcsfile . "\n" if $self->rcsfile;
-	my $time;
-	foreach $time (@{$self->{'times'}}) {
-	    $res .= "|" . $time->[0];
-	    if (defined $time->[1]) {
-		$res .= "-" . $time->[1];
+	if (!$args{'-skeleton'}) {
+	    my $time;
+	    foreach $time (@{$self->{'times'}}) {
+		$res .= "|" . $time->[0];
+		if (defined $time->[1]) {
+		    $res .= "-" . $time->[1];
+		}
+		$res .= "\n";
 	    }
-	    $res .= "\n";
 	}
     }
     my $subproject;
     foreach $subproject (@{$self->{'subprojects'}}) {
-	$res .= $subproject->dump_data($indent+1);
+	$res .= $subproject->dump_data(-indent => $indent+1,
+				       %args,
+                                      );
     }
     $res;
 }
 
+=head2 save
+
+    $project->save($file, ...);
+
+Save the project to file $file. If the optional argument -skeleton is set
+to true, do not save times.
+
+=cut
+
 sub save {
-    my($self, $file) = @_;
+    my($self, $file, %args) = @_;
     if (!open(FILE, ">$file")) {
 	$@ = "Can't write to <$file>: $!";
 	warn $@;
 	undef;
     } else {
-	print FILE $self->dump_data;
+	print FILE $self->dump_data(%args);
 	close FILE;
 	1;
     }
