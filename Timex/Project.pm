@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.38 2000/09/20 02:02:59 eserte Exp $
+# $Id: Project.pm,v 3.39 2000/09/20 19:48:12 eserte Exp $
 #
 
 =head1 NAME
@@ -87,6 +87,11 @@ sub clone {
     bless $self, $pkg;
     $self->rebless_subprojects($pkg);
     $self;
+}
+
+sub equal {
+    my($self, $p2) = @_;
+    $self->pathname eq $p2->pathname;
 }
 
 =head2 concat
@@ -1211,7 +1216,7 @@ sub save {
 }
 
 sub interpret_data {
-    my($self, $data) = @_;
+    my($self, $data, %args) = @_;
     my $i = $[;
     my $found_magic = 0;
     for(; $i < $#$data; $i++) {
@@ -1226,7 +1231,7 @@ sub interpret_data {
 	    eval q{
 		use Timex::Project::XML;
 		$self->rebless_subprojects("Timex::Project::XML");
-		$found_magic = 1 if $self->interpret_data($data);
+		$found_magic = 1 if $self->interpret_data($data, %args);
 	    };
 	    warn $@ if $@;
 	    return 1 if $found_magic;
@@ -1239,14 +1244,14 @@ sub interpret_data {
 	return undef;
     }
 
-    $i = $self->interpret_data_project($data, $i);
+    $i = $self->interpret_data_project($data, $i, %args);
     return undef if !defined $i;
 
     1;
 }
 
 sub interpret_data_project {
-    my($parent, $data, $i) = @_;
+    my($parent, $data, $i, %args) = @_;
     my($indent, $self);
     while(defined $data->[$i]) {
 	if ($data->[$i] !~ /^>+/) {
@@ -1272,9 +1277,12 @@ sub interpret_data_project {
 		    my $rest = $';
 		    last if $first eq '>';
 		    if ($first eq '|') {
-			my(@interval) = split(/-/, $rest);
-			warn "Interval must be two values" if $#interval != 1;
-			push(@times, [@interval]);
+			if (!$args{-skeleton}) {
+			    my(@interval) = split(/-/, $rest);
+			    warn "Interval must be two values"
+				if $#interval != 1;
+			    push @times, [@interval];
+			}
 		    } elsif ($first eq '/') {
 			my(@attrpair) = split(/=/, $rest);
 			# handle multiple attributes:
@@ -1289,7 +1297,7 @@ sub interpret_data_project {
 			    $attributes{$attrpair[0]} = $attrpair[1];
 			}
 		    } elsif ($first eq '#') {
-			push(@comment, $rest);
+			push @comment, $rest;
 		    } else {
 			warn "Unknown command $first, ignoring...\n";
 		    }
@@ -1318,15 +1326,18 @@ sub interpret_data_project {
 
 =head2 load
 
-    $r = $project->load($filename)
+    $r = $project->load($filename, %args)
 
 Load the project file $filename and returns true if the loading was
 successfull. New data is merged to the existing project.
 
+With -skeleton set to a true value, just load the project tree, but no
+times.
+
 =cut
 
 sub load {
-    my($self, $file) = @_;
+    my($self, $file, %args) = @_;
     my @data;
     if (!open(FILE, $file)) {
 	$@ = "Can't read <$file>: $!";
@@ -1337,10 +1348,10 @@ sub load {
 	    chomp;
 	    s/\r//g; # strip dos newlines
 	    next if /^\s*$/; # overread empty lines
-	    push(@data, $_);
+	    push @data, $_;
 	}
 	close FILE;
-	$self->interpret_data(\@data);
+	$self->interpret_data(\@data, %args);
     }
 }
 
@@ -1452,6 +1463,12 @@ sub last_projects {
     splice @all, 0, $number;
 }
 
+=head2 merge
+
+    ($modified, $new_proj_ref, $changed_proj_ref) = $project->merge($other_p)
+
+=cut
+
 sub merge {
     my($self, $other) = @_;
     if (!$other->isa('Timex::Project')) {
@@ -1465,9 +1482,13 @@ sub merge {
     }
 
     my $modified = 0;
+    my @new_p;
+    my @changed_p;
+    my %changed_p;
 
     my $other_sub;
     foreach $other_sub ($other->subproject) {
+	my $other_sub_path = $other_sub->pathname;
 	if (exists $self_label{$other_sub->label}) {
 	    my $sub = $self_label{$other_sub->label};
 	    my $self_i = 0;
@@ -1487,6 +1508,7 @@ sub merge {
 			    warn "Using bigger one...\n";
 			    $sub->{'times'}[$self_i] = $other_t;
 			    $modified++;
+			    $changed_p{$other_sub_path} = $other_sub;
 			}
 		    }
 		    $self_i++;
@@ -1496,6 +1518,7 @@ sub merge {
 		    $self_i++;
 		    $other_i++;
 		    $modified++;
+		    $changed_p{$other_sub_path} = $other_sub;
 		}
 	    }
 	    if ($other_i <= $#{$other_sub->{'times'}}) {
@@ -1503,11 +1526,16 @@ sub merge {
 		     @{$other_sub->{'times'}}[$other_i ..
 					      $#{$other_sub->{'times'}}]);
 		$modified += $#{$other_sub->{'times'}} - $other_i + 1;
+		$changed_p{$other_sub_path} = $other_sub;
 	    }
-	    $modified += $sub->merge($other_sub);
+	    my($mod2, $new_p2_ref, $changed_p2_ref) = $sub->merge($other_sub);
+	    $modified += $mod2;
+	    push @new_p, @$new_p2_ref;
+	    push @changed_p, @$changed_p2_ref;
 	} else {
-	    $self->subproject($other_sub);
+	    my $new_p = $self->subproject($other_sub);
 	    $modified++;
+	    push @new_p, $new_p;
 	}
     }
 
@@ -1515,7 +1543,9 @@ sub merge {
 	$self->modified(1);
     }
 
-    $modified;
+    push @changed_p, values %changed_p;
+
+    ($modified, \@new_p, \@changed_p);
 }
 
 # XXX need work...
