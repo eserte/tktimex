@@ -14,7 +14,7 @@ Timex::Project - manage a list of projects
 
 =head1 DESCRIPTION
 
-B<Timex::Project> is a project manager, primarily for the programs timex
+B<Timex::Project> is a project manager, primarily for the programs ctimex
 and tktimex. This module supports the following methods:
 
 =cut
@@ -45,6 +45,7 @@ sub new {
     $self->{'parent'} = undef;
     $self->{'modified'} = 1;
     $self->{'separator'} = "/";
+    $self->{'current'} = undef;
     $pkg = ref $pkg if (ref $pkg);
     bless $self, $pkg;
 }
@@ -237,6 +238,23 @@ sub reparent {
     return if !$oldparent;         # don't reparent root
     $oldparent->delete_subproject($self);
     $newparent->subproject($self);
+}
+
+=head2 root
+
+    $root = $p->root;
+
+Return root node of the given project $p,
+
+=cut
+
+sub root {
+    my $self = shift;
+    if ($self->parent) {
+	$self->parent->root;
+    } else {
+	$self;
+    }
 }
 
 =head2 delete
@@ -736,14 +754,11 @@ Set the modified attribute (0 or 1) for the root project.
 
 sub modified {
     my($self, $flag) = @_;
-    if ($self->parent) {
-	$self->parent->modified($flag);
+    my $root = $self->root;
+    if (defined $flag) {
+	$root->{'modified'} = ($flag ? 1 : 0);
     } else {
-	if (defined $flag) {
-	    $self->{'modified'} = ($flag ? 1 : 0);
-	} else {
-	    $self->{'modified'};
-	}
+	$root->{'modified'};
     }
 }
 
@@ -761,15 +776,55 @@ Set the separator for this tree (the root project) to $separator.
 
 sub separator {
     my($self, $separator) = @_;
-    if ($self->parent) {
-	$self->parent->separator($separator);
+    my $root = $self->root;
+    if (defined $separator) {
+	$root->{'separator'} = $separator;
     } else {
-	if (defined $separator) {
-	    $self->{'separator'} = $separator;
-	} else {
-	    $self->{'separator'};
-	}
+	$root->{'separator'};
     }
+}
+
+=head2 current
+
+    $p = $project->current
+
+Return the current project for this tree.
+
+=cut
+
+sub current {
+    my($self) = @_;
+    my $root = $self->root;
+    $root->{'current'};
+}
+
+=head2 set_current
+
+    $p->set_current
+
+Set project $p as the current project for the tree. XXX Should
+start/stop be called automatically?
+
+=cut
+
+sub set_current {
+    my($self) = @_;
+    my $root = $self->root;
+    $root->{'current'} = $self;
+}
+
+=head2 no_current
+
+    $p->no_current
+
+Undef the current project setting for the project tree.
+
+=cut
+
+sub no_current {
+    my($self) = @_;
+    my $root = $self->root;
+    $root->{'current'} = undef;
 }
 
 sub dump_data {
