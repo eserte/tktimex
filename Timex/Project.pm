@@ -570,6 +570,67 @@ sub last_project {
     $last_project;
 }
 
+sub merge {
+    my($self, $other) = @_;
+    if (!$other->isa('Timex::Project')) {
+	die "merge: arg must be Timex::Project!";
+    }
+
+    my %self_label;
+    my $sub;
+    foreach $sub ($self->subproject) {
+	$self_label{$sub->label} = $sub;
+    }
+
+    my $modified = 0;
+
+    my $other_sub;
+    foreach $other_sub ($other->subproject) {
+	if (exists $self_label{$other_sub->label}) {
+	    my $sub = $self_label{$other_sub->label};
+	    my $self_i = 0;
+	    my $other_i = 0;
+	    while($self_i <= $#{$sub->{'times'}} &&
+		  $other_i <= $#{$other_sub->{'times'}}) {
+		my $self_t  = $sub->{'times'}[$self_i];
+		my $other_t = $other_sub->{'times'}[$other_i];
+		if ($self_t->[0] < $other_t->[0]) {
+		    $self_i++;
+		} elsif ($self_t->[0] == $other_t->[0]) {
+		    if ($self_t->[1] != $other_t->[1]) {
+			warn "Warning: incompatible times for " .
+			  $sub->label . ": " . $self_t->[1] . " != " .
+			    $other_t->[1];
+		    }
+		    $self_i++;
+		    $other_i++;
+		} else { # $self_t > $other_t
+		    splice @{$sub->{'times'}}, $self_i, 0, $other_t;
+		    $self_i++;
+		    $other_i++;
+		    $modified++;
+		}
+	    }
+	    if ($other_i <= $#{$other_sub->{'times'}}) {
+		push(@{$sub->{'times'}},
+		     @{$other_sub->{'times'}}[$other_i ..
+					      $#{$other_sub->{'times'}}]);
+		$modified += $#{$other_sub->{'times'}} - $other_i + 1;
+	    }
+	    $modified += $sub->merge($other_sub);
+	} else {
+	    $self->subproject($other_sub);
+	    $modified++;
+	}
+    }
+
+    if ($modified) {
+	$self->modified(1);
+    }
+
+    $modified;
+}
+
 ######################################################################
 
 1;
