@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: base.t,v 1.7 1999/09/18 13:36:55 eserte Exp $
+# $Id: base.t,v 1.8 2000/11/28 01:50:46 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -159,6 +159,8 @@ $p2->interpret_data(\@data2);
 
 warn "Merge yields: " . $p1->merge($p2);
 
+warn $p1->merge($p2, -allowduplicates => 1);
+
 #print $p1->dump_data;
 
 # print map { $_->pathname } $p2->find_by_pathname("main project")->subproject;
@@ -219,3 +221,4 @@ $xml_p->load("testdata.xml");
 $xml_p->save("/tmp/test.xml");
 $xml_p->load("/tmp/test.xml");
 #use Data::Dumper; print STDERR "Line " . __LINE__ . ", File: " . __FILE__ . "\n" . Data::Dumper->Dumpxs([$xml_p],[]); # XXX
+
