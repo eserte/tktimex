@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Svn.pm,v 1.1 2003/01/10 20:20:52 eserte Exp $
+# $Id: Svn.pm,v 1.2 2003/01/10 20:34:42 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2003 Slaven Rezic. All rights reserved.
@@ -16,11 +16,13 @@ package Timex::Svn;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 package Timex::Svn::File;
 use vars qw(@ISA);
 @ISA = qw(Timex::RcsFile);
+
+my $tmpdir = "/tmp/timex-svn-file-$$"; # do not hardcode
 
 sub parse_rcsfile {
     shift->parse_svnlog(@_);
@@ -102,6 +104,32 @@ sub create_pseudo_revisions {
     my $self = shift;
     my @pseudo_revisions;
     $self->{Pseudo_Revisions} = \@pseudo_revisions;
+}
+
+sub co_revision {
+    my($self, $revision) = @_;
+    if (!$self->{Info}{Url}) {
+	die "Url needed for co_revision";
+    }
+    require File::Path;
+    require File::Basename;
+    my $dir  = File::Basename::dirname($self->{Info}{Url});
+    my $base = File::Basename::basename($self->{Info}{Url});
+    File::Path::rmtree([$tmpdir]);
+    File::Path::mkpath([$tmpdir], 0, 0700);
+    my $cmd = "svn co -N -r $revision " . $dir . " " . $tmpdir . " 2>&1 >/dev/null";
+    system $cmd;
+    if ($?) {
+	die "Error while doing $cmd: $?";
+    }
+    open(F, "$tmpdir/$base") or die "Can't open $tmpdir/$base: $!";
+    local $/ = undef;
+    my $buf = <F>;
+    close F;
+
+    File::Path::rmtree([$tmpdir]);
+
+    $buf;
 }
 
 1;
