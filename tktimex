@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 5.11 2001/02/08 00:57:10 eserte Exp $
+# $Id: tktimex,v 6.1 2001/02/13 02:04:22 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -27,6 +27,17 @@ BEGIN {
     state_change("after Tk");
 }
 use Tk::ErrorDialog;
+
+BEGIN {
+    if (!eval '
+use blib "/home/e/eserte/src/perl/Msg";
+use Msg;
+1;
+') {
+	warn $@ if $@;
+	eval 'sub M ($) { $_[0] }';
+    }
+}
 
 eval '
 use lib "/home/e/eserte/lib/perl";
@@ -110,7 +121,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 5.11 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.1 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -191,57 +202,57 @@ use vars qw($max_enterprise_file_list @all_domains $options @opttable);
 $max_enterprise_file_list = 4;
 $options = {};
 @opttable =
-  ('General',
+  (M"General",
    ['file|f',             '=s', undef, 'subtype' => 'file',
-    'longhelp' => "Default project file to load on startup",
+    'longhelp' => M"Default project file to load on startup",
     'callback-interactive' => sub { load_file(0) },
    ],
    ['mergedir',           '=s', undef, 'subtype' => 'file', 'nogui' => 1],
    ['lock',               '!',  1,
-    'longhelp' => "Set to false if you don't want file locking."],
+    'longhelp' => M"Set to false if you don't want file locking."],
    ['one-instance',     '!',  0,
-    'longhelp' => "Exit application if there is already another instance running"],
+    'longhelp' => M"Exit application if there is already another instance running"],
    ['autosave',           '!',  1,
     'callback' => \&toggle_autosave, 'alias' => ['as'],
-    'longhelp' => "Autosave is recommended!"],
+    'longhelp' => M"Autosave is recommended!"],
    ['update',             '=i', 60*10,
-    'longhelp' => "Autosave interval in seconds."],
+    'longhelp' => M"Autosave interval in seconds."],
    ['oneday-immediately', '!',  1,
-    'longhelp' => "Daily details: immediate update if changing date"],
+    'longhelp' => M"Daily details: immediate update if changing date"],
    ['geometry',           '=s', "500x230",
-    'longhelp' => "Size of window on startup"], # XXX
+    'longhelp' => M"Size of window on startup"], # XXX
    ['iconified',          '!', 0,
-    'longhelp' => 'Open application iconfied'],
+    'longhelp' => M"Open application iconfied"],
    ['securesave',         '!', 0,
-    'longhelp' => "Saving data also in a Data::Dumper format. Not really necessary anymore."],
+    'longhelp' => M"Saving data also in a Data::Dumper format. Not really necessary anymore."],
 
-   'Enterprise',
+   M"Enterprise",
    ['enterpriseprojects', "=s", undef, 'subtype' => 'file',
-    'longhelp' => "File with enterprise-wide list of projects"],
+    'longhelp' => M"File with enterprise-wide list of projects"],
    ['enterprisedefaults', "=s", undef, 'subtype' => 'file',
-    'longhelp' => "File with enterprise-wide configuration settings"],
+    'longhelp' => M"File with enterprise-wide configuration settings"],
    (map { ["enterprisefile$_", "=s", undef,   'subtype' => 'file',
-	   'longhelp' => "Default enterprise timex file"]
+	   'longhelp' => M"Default enterprise timex file"]
       } (1 .. $max_enterprise_file_list)),
 
-   'Projects',
+   M"Projects",
    ['dateformat',         '=s', 'h',
     'choices' => ['d', 'h', 'hs', 'frac d', 'frac h'],
     'strict' => 1,
     'callback' => \&set_dateformat,
     'alias' => ['df'],
-    'longhelp' => "Format of time display",
+    'longhelp' => M"Format of time display",
     ],
    ['day8',               '!',  1, 'callback' => \&toggle_time_arbeitstag,
-    "longhelp" => "If set: a day should be treated as 8 hours."],
+    "longhelp" => M"If set: a day should be treated as 8 hours."],
    ['archived',           '!',  0, 'callback' => \&toggle_show_archived,
-    "longhelp" => "Show archived projects too.",
+    "longhelp" => M"Show archived projects too.",
     ],
    ['onlytop',            '!',  0, 'callback' => \&toggle_show_archived,
-    "longhelp" => "Do not show subprojects.",
+    "longhelp" => M"Do not show subprojects.",
     ],
    ['domain',             '=s', undef, 'callback' => \&toggle_show_archived,
-    "longhelp" => "Restrict projects to a single domain only.",
+    "longhelp" => M"Restrict projects to a single domain only.",
     'choices' => \@all_domains,
     #'strict' => 1, # geht leider nicht...
     ],
@@ -255,29 +266,29 @@ $options = {};
    ['interface',          '=s', 'all',
     'choices' => ['medium', 'small'],
     'strict' => 1,
-    'longhelp' => "Enable/disable menus and buttons.
+    'longhelp' => M"Enable/disable menus and buttons.
 All: show all menus and buttons.
 Small: show only a minimal set of menus and buttons, no statistics available
 Medium: only limited project manipulation possible"],
    ['busyind',            '!', 0,
-    'longhelp' => 'Show a busy indicator if a project is running'],
+    'longhelp' => M"Show a busy indicator if a project is running"],
    ['autoscroll',         '=s', 'none',
     'choices' => ['slow', 'normal', 'fast'],
     'strict' => 1,
-    'longhelp' => "Autoscrolling is not available on all systems.\n" .
-    "Changes are effective on restart."
+    'longhelp' => M("Autoscrolling is not available on all systems.\n" .
+    "Changes are effective on restart.")
     ],
    ['hourlyrate',         '=f', 0,
     'callback' => sub { update_costs_option(1) },
-    'longhelp' => "Hourly rate for work.",
+    'longhelp' => M"Hourly rate for work.",
     ],
    ['currency',           '=s', "DEM",
     'choices' => ['EUR', 'USD', 'HRD'],
     'callback' => sub { update_costs_option(1) },
-    'longhelp' => "Currency for hourlyrate option.",
+    'longhelp' => M"Currency for hourlyrate option.",
     ],
    ['tree',               '!', 1,
-    'longhelp' => 'Use tree representation'],
+    'longhelp' => M"Use tree representation"],
   );
 
 use vars qw($opt);
@@ -288,7 +299,7 @@ eval {
     state_change("after require Tk::Getopt");
 };
 if ($@) {
-    warn "No Tk::Getopt --- falling back to Getopt::Long\n";
+    warn M"No Tk::Getopt --- falling back to Getopt::Long\n";
     require Getopt::Long;
     my @getopt;
     push @getopt, $options;
@@ -299,14 +310,14 @@ if ($@) {
 	}
     }
 
-    die "Usage?" if !Getopt::Long::GetOptions(@getopt);
+    die M"Usage?" if !Getopt::Long::GetOptions(@getopt);
 
     if ($options->{'enterprisedefaults'} and
 	-r $options->{'enterprisedefaults'}) {
 	standalone_message_box
-	    (-message => "The option -enterprisedefaults does not work\n" .
-	                 "without the perl module Tk::Getopt.\n" .
-	                 "Please install this module from CPAN.\n");
+	    (-message => M("The option -enterprisedefaults does not work
+without the perl module Tk::Getopt
+Please install this module from CPAN.\n"));
     }
 
 } else {
@@ -343,11 +354,12 @@ if ($options->{'one-instance'} and tktimex_running()) {
     require Tk::Dialog;
     my $top = tkinit;
     $top->withdraw;
-    $top->Dialog(-title => 'Error',
-		 -text => "Another tktimex instance is already running.\n" .
-		 "Start tktimex with the option -noone-instance, if you\n" .
-		 "want really two instances of this program running.\n",
-		 -popover => 'cursor')->Show;
+    $top->Dialog
+	(-title => M"Error",
+	 -text => M("Another tktimex instance is already running.
+Start tktimex with the option -noone-instance, if you
+want really two instances of this program running.\n"),
+	 -popover => 'cursor')->Show;
     exit;
 }
 
@@ -428,9 +440,9 @@ use vars qw($menu_frame $mb_file $mb_file_menu $mb_export
 $menu_frame = $top->Frame(-relief => 'raised',
 			  -borderwidth => 2);
 
-$mb_file = $menu_frame->Menubutton(-text => 'File')->pack(-side => 'left');
+$mb_file = $menu_frame->Menubutton(-text => M"File")->pack(-side => 'left');
 state_change("first menubutton loaded");
-$mb_file->command(-label => 'Load',
+$mb_file->command(-label => M"Load",
 		  -command => sub { load_file(1) })
     unless $s_if;
 
@@ -444,7 +456,7 @@ if (!$s_if) {
 	}
     }
     if ($show_it) {
-	$mb_file->cascade(-label => "Load ...");
+	$mb_file->cascade(-label => M"Load ...");
 	my $mb_load_menu = $mb_file->cget(-menu);
 	my $mb_load = $mb_load_menu->Menu;
 	$mb_file->entryconfigure('last', -menu => $mb_load);
@@ -464,22 +476,22 @@ if (!$s_if) {
     }
 }
 
-$mb_file->command(-label => 'Save',
+$mb_file->command(-label => M"Save",
 		  -command => \&save_file);
-$mb_file->cascade(-label => 'Export');
+$mb_file->cascade(-label => M"Export");
 $mb_file_menu = $mb_file->cget(-menu);
 $mb_export = $mb_file_menu->Menu;
 $mb_file->entryconfigure('last', -menu => $mb_export);
 $mb_file->entryconfigure('last', -state => 'disabled') if $s_if || $m_if;
-$mb_export->command(-label => 'Save as ...',
+$mb_export->command(-label => M"Save as ...",
 		    -command => \&save_as_file);
-$mb_export->command(-label => 'Save skeleton',
+$mb_export->command(-label => M"Save skeleton",
 		    -command => \&save_skeleton);
-$mb_export->command(-label => 'Save subproject',
+$mb_export->command(-label => M"Save subproject",
 		    -command => \&save_subproject);
-$mb_export->command(-label => 'Save XML',
+$mb_export->command(-label => M"Save XML",
 		    -command => \&save_xml);
-$mb_export->command(-label => 'Save Excel',
+$mb_export->command(-label => M"Save Excel",
 		    -command => sub {
 			require Timex::ExcelExport;
 		        Timex::ExcelExport::save_dialog
@@ -487,43 +499,43 @@ $mb_export->command(-label => 'Save Excel',
 				 -hourlyrate => $options->{'hourlyrate'},
 				);
 		    });
-$mb_export->command(-label => 'Dump',
+$mb_export->command(-label => M"Dump",
 		    -command => \&dump_data) unless $s_if || $m_if;
-$mb_file->command(-label => 'Merge',
+$mb_file->command(-label => M"Merge",
 		  -command => \&merge_file) unless $s_if || $m_if;
-$mb_file->command(-label => 'Update enterprise projects',
+$mb_file->command(-label => M"Update enterprise projects",
 		  -command => \&update_enterprise_projects);
-$mb_file->command(-label => 'Quit',
+$mb_file->command(-label => M"Quit",
 		  -command => \&quit_program);
 $mb_file->separator;
 
-$mb_project = $menu_frame->Menubutton(-text => 'Project'
+$mb_project = $menu_frame->Menubutton(-text => M"Project"
 				     )->pack(-side => 'left');
-$mb_project->command(-label => 'New',
+$mb_project->command(-label => M"New",
 		     -command => \&new_project)
     unless $s_if || $m_if;
 # strange: -menu is only active if there is already a menu item
 $mb_project_menu = $mb_project->cget(-menu);
 
-$mb_project->command(-label => 'New from template',
+$mb_project->command(-label => M"New from template",
 		     -command => \&new_project_from_template)
     unless $s_if || $m_if;
-$mb_project->command(-label => 'New subproject',
+$mb_project->command(-label => M"New subproject",
 		     -command => sub { new_sub_project(get_sel_entry()) })
     unless $s_if || $m_if;
-$mb_project->command(-label => 'Delete',
+$mb_project->command(-label => M"Delete",
 		     -command => \&delete_project)
     unless $s_if || $m_if;
 ## Menü ist zu überladen...
-#$mb_project->command(-label => 'Pause',
+#$mb_project->command(-label => M"Pause",
 #		     -command => \&pause_or_cont);
-$mb_project->command(-label => 'Undo',
+$mb_project->command(-label => M"Undo",
 		     -command => \&undo);
-$mb_project->command(-label => 'Search',
+$mb_project->command(-label => M"Search",
 		     -command => \&search_project,
 		     -accelerator => $ctrl_s . 's');
 $top->bind('<Control-s>' => \&search_project);
-$mb_project->command(-label => 'Show current',
+$mb_project->command(-label => M"Show current",
 		     -state => "disabled",
 		     -command => sub {
 			 if ($current_project) {
@@ -531,56 +543,56 @@ $mb_project->command(-label => 'Show current',
 			 }
 		     });
 $mb_show_curr_project_index = $mb_project_menu->index("last");
-$mb_project->command(-label => 'Continue last',
+$mb_project->command(-label => M"Continue last",
 		     -command => \&cont_last);
-$mb_project->command(-label => 'Attributes',
+$mb_project->command(-label => M"Attributes",
 		     -command => sub { show_attributes(undef) })
     unless $s_if;
-$mb_project->command(-label => 'Intervals',
+$mb_project->command(-label => M"Intervals",
 		     -command => sub { show_intervals($top, undef) },
 		     -accelerator => $ctrl_s .'i')
     unless $s_if;
 $top->bind('<Control-i>' => sub { show_intervals($top, undef) })
     unless $s_if;
 ## Menü ist zu überladen...
-#$mb_project->command(-label => 'Note',
+#$mb_project->command(-label => M"Note",
 #		     -command => sub { show_note($top) });
 $mb_project->separator
     unless $s_if;
-$mb_project->command(-label => 'Working time',
+$mb_project->command(-label => M"Working time",
 		     -command => \&working_time)
     unless $s_if;
-$mb_project->command(-label => 'Daily details',
+$mb_project->command(-label => M"Daily details",
 		     -command => \&show_one_day,
 		     -accelerator => $ctrl_s . 'd')
     unless $s_if;
 $top->bind('<Control-d>' => \&show_one_day)
     unless $s_if;
 
-$mb_options = $menu_frame->Menubutton(-text => 'Options'
+$mb_options = $menu_frame->Menubutton(-text => M"Options"
 					)->pack(-side => 'left');
-$mb_options->checkbutton(-label => 'Autosave',
+$mb_options->checkbutton(-label => M"Autosave",
 			 -command => \&toggle_autosave,
 			 -variable => \$options->{'autosave'},
 			)
     unless $s_if || $m_if;
-$mb_options->cascade(-label => 'Dateformat');
+$mb_options->cascade(-label => M"Dateformat");
 $mb_options_menu = $mb_options->cget(-menu);
 $dateformat_menu = $mb_options_menu->Menu;
-$mb_options->entryconfigure('Dateformat', -menu => $dateformat_menu);
-$mb_options->entryconfigure('Dateformat', -state => 'disabled')
+$mb_options->entryconfigure(M"Dateformat", -menu => $dateformat_menu);
+$mb_options->entryconfigure(M"Dateformat", -state => 'disabled')
     if $s_if || $m_if;
-$mb_options->checkbutton(-label => 'day = 8h',
+$mb_options->checkbutton(-label => M"day = 8h",
 			 -command => \&toggle_time_arbeitstag,
 			 -variable => \$options->{'day8'},
 			)
     unless $s_if || $m_if;
-$mb_options->checkbutton(-label => 'Show archived',
+$mb_options->checkbutton(-label => M"Show archived",
 			 -command => \&toggle_show_archived,
 			 -variable => \$options->{'archived'},
 			)
     unless $s_if || $m_if;
-$mb_options->checkbutton(-label => 'Show only top',
+$mb_options->checkbutton(-label => M"Show only top",
 			 -command => \&toggle_show_only_top,
 			 -variable => \$options->{'onlytop'},
 			)
@@ -589,13 +601,13 @@ if ($options->{'tree'}) {
     $mb_options->separator
         unless $s_if || $m_if;
     $mb_options->command
-	(-label => 'Open all',
+	(-label => M"Open all",
 	 -command => sub { traverse_entries(sub {
 						$project_frame->open($_[0])
 					    }) }
 	);
     $mb_options->command
-	(-label => 'Close all',
+	(-label => M"Close all",
 	 -command => sub { traverse_entries(sub {
 						$project_frame->close($_[0])
 					    }) }
@@ -605,16 +617,16 @@ if ($options->{'tree'}) {
 if (defined $opt) {
     $mb_options->separator
         unless $s_if || $m_if;
-    $mb_options->command(-label => 'Option editor',
+    $mb_options->command(-label => M"Option editor",
 			 -command => sub { $opt->option_editor($top) })
 	unless $s_if || $m_if;
 }
 
-foreach my $def (['H:M:S'  => 'hs'],
-		 ['H:M'    => 'h'],
-		 ['d H:M'  => 'd'],
-		 ['Frac H' => 'frac h'],
-		 ['Frac d' => 'frac d'],
+foreach my $def ([M"H:M:S"  => 'hs'],
+		 [M"H:M"    => 'h'],
+		 [M"d H:M"  => 'd'],
+		 [M"Frac H" => 'frac h'],
+		 [M"Frac d" => 'frac d'],
 		) {
     $dateformat_menu->radiobutton(-label => $def->[0],
 				  -command => \&set_dateformat,
@@ -623,12 +635,12 @@ foreach my $def (['H:M:S'  => 'hs'],
 				 );
 }
 
-$mb_help = $menu_frame->Menubutton(-text => 'Help'
-				     )->pack(-side => 'left');
-$mb_help->command(-label => 'About',
+$mb_help = $menu_frame->Menubutton(-text => M"Help"
+				  )->pack(-side => 'left');
+$mb_help->command(-label => M"About",
 		  -command => \&show_about);
 $mb_help->command
-  (-label => 'Index',
+  (-label => M"Index",
    -command => sub {
        eval {
 	   require Tk::Pod;
@@ -677,21 +689,21 @@ if (!$mod_watch || $@) {
     $save_check->bindtags([]);
 }
 $save_check->pack(-side => 'right');
-$balloon->attach($save_check, -msg => 'Timex data modified indicator')
+$balloon->attach($save_check, -msg => M"Timex data modified indicator")
   if $balloon;
 
 use vars qw($pause_cont_button $save_button);
 $pause_cont_button = $menu_frame->Button
-  (-text => 'Pause',
+  (-text => M"Pause",
    -fg => 'red',
    -width => 5,
    -command => \&pause_or_cont)->pack(-side => 'right');
 
-$save_button = $menu_frame->Button(-text => 'Save',
+$save_button = $menu_frame->Button(-text => M"Save",
 				   -fg => 'yellow4',
 				   -command => \&save_file
 				  )->pack(-side => 'right');
-$balloon->attach($save_button, -msg => 'Save project data') if $balloon;
+$balloon->attach($save_button, -msg => M"Save project data") if $balloon;
 
 use vars qw($minimized $save_geometry $up_photo $down_photo $min_button);
 $minimized = 0;
@@ -748,12 +760,12 @@ if ($options->{'autoscroll'} !~ /^(|none)$/) {
     require Tk::Autoscroll;
     Tk::Autoscroll::Init($project_frame, -speed => $options->{'autoscroll'});
 }
-$project_frame->header('create', 0, -text => 'Projects:');
+$project_frame->header('create', 0, -text => M"Projects:");
 use vars qw($pf_time_index);
 $pf_time_index = 1;
-$project_frame->header('create', $pf_time_index, -text => 'Session');
-$project_frame->header('create', $pf_time_index+1, -text => 'Today');
-$project_frame->header('create', $pf_time_index+2, -text => 'Total');
+$project_frame->header('create', $pf_time_index, -text => M"Session");
+$project_frame->header('create', $pf_time_index+1, -text => M"Today");
+$project_frame->header('create', $pf_time_index+2, -text => M"Total");
 update_costs_option(1);
 
 state_change("checkpoint 5");
@@ -778,20 +790,20 @@ if ($options->{'autoscroll'} =~ /^(|none)$/) {
 use vars qw($popup_entry $popup_project $popup_menu);
 $popup_menu = $real_project_frame->Menu(-tearoff => 0,
 					-disabledforeground => "darkblue");
-$popup_menu->command(-label => "Project:",
+$popup_menu->command(-label => M"Project:",
 		     -state => "disabled");
-$popup_menu->command(-label => "New subproject",
+$popup_menu->command(-label => M"New subproject",
 		     -command => sub { new_sub_project($popup_entry) })
     unless $s_if || $m_if;
-$popup_menu->command(-label => 'Delete',
+$popup_menu->command(-label => M"Delete",
 		     -command => sub { delete_project($popup_entry) })
     unless $s_if || $m_if;
-$popup_menu->command(-label => 'Continue last',
+$popup_menu->command(-label => M"Continue last",
 		     -command => sub { cont_last($popup_project) });
-$popup_menu->command(-label => 'Attributes',
+$popup_menu->command(-label => M"Attributes",
 		     -command => sub { show_attributes($popup_entry) })
     unless $s_if;
-$popup_menu->command(-label => 'Intervals',
+$popup_menu->command(-label => M"Intervals",
 		     -command => sub { show_intervals($top, $popup_project) })
     unless $s_if;
 if ($real_project_frame->can("menu") &&
@@ -865,7 +877,7 @@ $status_frame = $top->Frame(-relief => 'ridge',
 $status_frame->pack(-fill => 'x');
 
 $status_text = $status_frame->Label
-  (-text => "Current file: " . ($options->{file} || ""));
+  (-text => M("Current file") . ": " . ($options->{file} || ""));
 $status_text->pack(-side => 'left');
 
 state_change("checkpoint 7");
@@ -892,7 +904,7 @@ $project_frame->bind
        }
        $status_timer = $project_frame->after
 	 (3000, sub { $status_text->configure
-			(-text => "Current file: " . ($options->{file} || ""))
+			(-text => M("Current file") . ": " . ($options->{file} || ""))
 			  unless $status_edit;
 		  })
      });
@@ -1020,7 +1032,7 @@ sub enter_label {
 	$entry->destroy;
     }
 
-    $status_text->configure(-text => "Current file: " .
+    $status_text->configure(-text => M("Current file") . ": " .
 			    ($options->{file} || ""));
     $project_frame->focus;
     if ($action eq 'yes') {
@@ -1038,8 +1050,8 @@ sub exists_project {
     if (defined $root->find_by_pathname($path)) {
 	require Tk::Dialog;
 	$top->Dialog
-	    (-title => 'Error',
-	     -text => 'A project labeled ' . $path . ' already exists!',
+	    (-title => M"Error",
+	     -text => Mfmt("A project labeled %s already exists!", $path),
 	     -popover => 'cursor',
 	     )->Show;
 	return 1;
@@ -1048,7 +1060,7 @@ sub exists_project {
 }
 
 sub new_project {
-    my $label = enter_label('New project name:', 'newproject');
+    my $label = enter_label(M"New project name:", 'newproject');
     if ($label && $root) {
 	return if exists_project($label);
 	my $p = $root->subproject($label);
@@ -1081,17 +1093,17 @@ sub get_templates {
 
 sub new_project_from_template {
     my $template = enter_label
-	('Template:', 'template',,
+	(M"Template:", 'template',,
 	 -choices => [map {$_->label} get_templates()->subproject],
 	);
     return if !$template;
     my $template_p = get_templates()->find_by_pathname($template);
     if (!$template_p) {
-	warn "Strange: could not find project with name $template";
+	warn M"Strange: could not find project with name $template";
 	return;
     }
 
-    my $label = enter_label('New project name:', 'newproject');
+    my $label = enter_label(M"New project name:", 'newproject');
     if ($label && $root) {
 	return if exists_project($label);
 	my $p = clone $template_p;
@@ -1105,7 +1117,7 @@ sub new_project_from_template {
 sub new_sub_project {
     my $path = shift;
     return if !defined $path;
-    my $label = enter_label('New subproject name:', 'newproject');
+    my $label = enter_label(M"New subproject name:", 'newproject');
     if ($label) {
 	my $p = entry_to_project($path);
 	return if !$p;
@@ -1130,15 +1142,15 @@ sub delete_project {
     return if !not_running(undef, $p);
     require Tk::Dialog;
     my $ans = $top->Dialog
-      (-title => 'Warning',
+      (-title => M"Warning",
        -text  =>
-       "Do you really want to delete the project " . $p->pathname
-       . " and all its subprojects?",
+       Mfmt("Do you really want to delete the project %s" .
+	    " and all its subprojects?", $p->pathname),
        -popover => 'cursor',
-       -buttons => ['Yes', 'No'],
-       -default_button => 'No',
+       -buttons => [M"Yes", M"No"],
+       -default_button => M"No",
       )->Show;
-    return if $ans ne 'Yes';
+    return if $ans ne M"Yes";
     $p->delete;
     insert_all();
 }
@@ -1154,7 +1166,7 @@ sub insert_project {
     my $path = make_path($p);
     return if !$path;
     if ($project_frame->info('exists', $path)) {
-	warn "Duplicate entry path $path - please check .pj1 file!";
+	warn Mfmt("Duplicate entry path %s - please check .pj1 file!",$path);
 	return;
     }
 
@@ -1255,7 +1267,7 @@ sub common_start_project {
     $project_frame->selectionSet($current_pathname);
     $project_frame->anchorSet($current_pathname);
     $project_frame->see($current_pathname);
-    gui_set_pause_or_cont('Pause');
+    gui_set_pause_or_cont(M"Pause");
 
     $top->title($title . " (" . $p->pathname . ")");
     add_last_projects($current_project);
@@ -1294,14 +1306,14 @@ sub start_project {
 sub pause {
     if (defined $current_project) {
 	stop_project();
-	gui_set_pause_or_cont('Cont');
+	gui_set_pause_or_cont(M"Cont");
     }
 }
 
 sub pause_or_cont {
     if (defined $current_project) {
 	stop_project();
-	gui_set_pause_or_cont('Cont');
+	gui_set_pause_or_cont(M"Cont");
     } else {
 	my $p = get_project_from_anchor();
 	return if !$p;
@@ -1321,16 +1333,23 @@ sub cont_last {
     }
     return if !$p || !@{$p->{'times'}};
     my $last = $p->{'times'}[$#{$p->{'times'}}];
+
+    my $last_start = sec2time(time-$last->[0], "h", 0);
+    my $last_stop  = sec2time(time-$last->[1], "h", 0);
+
     require Tk::Dialog;
     my $d = $top->Dialog
-      (-title => 'Continue last',
-       -text  => "Really continue time from last activity\n(" .
-       $p->pathname . " started at " . scalar(localtime($last->[0])) . ") ?",
-       -default_button => 'No',
-       -buttons => ['Yes', 'No'],
+      (-title => M"Continue last",
+       -text  => Mfmt("Really continue time from last activity?\n" .
+		      "%s\n" .
+		      "started before %sh\n" .
+		      "stopped before %sh",
+		      $p->pathname, $last_start, $last_stop),
+       -default_button => M"No",
+       -buttons => [M"Yes", M"No"],
        -popover => 'cursor',
       );
-    return if $d->Show eq 'No';
+    return if $d->Show eq M"No";
     $p->unend_time;
     insert_all(); # XXX Optimierung: nur aktuelles Projekt modifizieren
     common_start_project($p);
@@ -1358,7 +1377,7 @@ sub get_project_from_anchor_or_selection {
 
 sub update_pause_cont_balloon {
     my $txt = $pause_cont_button->cget(-text);
-    if ($txt eq 'Cont') { $txt = 'Continue' }
+    if ($txt eq M"Cont") { $txt = M"Continue" }
     if ($balloon) {
 	my $p = get_project_from_anchor();
 	if ($p) {
@@ -1372,7 +1391,7 @@ sub update_pause_cont_balloon {
 sub gui_set_pause_or_cont {
     my $txt = shift;
     $pause_cont_button->configure(-text => $txt,
-				  -fg => ($txt eq 'Cont' ? 'green4' : 'red'));
+				  -fg => ($txt eq M"Cont" ? 'green4' : 'red'));
     update_pause_cont_balloon();
 
 }
@@ -1415,34 +1434,34 @@ sub undo {
 
     if (!defined $current_project) {
 	require Tk::Dialog;
-	$top->Dialog(-title => 'Info',
-		     -text  => "No running project.",
-		     -default_button => 'OK',
-		     -buttons => ['OK'],
+	$top->Dialog(-title => M"Info",
+		     -text  => M"No running project.",
+		     -default_button => M"OK",
+		     -buttons => [M"OK"],
 		     -popover => 'cursor',
 		    )->Show;
 	return;
     }
 
     require Tk::Dialog;
-    my $d = $top->Dialog(-title => 'Undo',
-			 -text  => "Really undo last start of "
-			 . $current_project->pathname . "?",
-			 -default_button => 'No',
-			 -buttons => ['Yes', 'No'],
+    my $d = $top->Dialog(-title => M"Undo",
+			 -text  => Mfmt("Really undo last start of "
+					. "%s ?", $current_project->pathname),
+			 -default_button => M"No",
+			 -buttons => [M"Yes", M"No"],
 			 -popover => 'cursor',
 			);
-    return if $d->Show eq 'No';
+    return if $d->Show eq M"No";
 
     my $p = $current_project;
     stop_project();
     $undo_register = pop(@{$p->{'times'}});
-    gui_set_pause_or_cont('Cont');
+    gui_set_pause_or_cont(M"Cont");
     act_time($p);
 }
 
 sub search_project {
-    my $regex = enter_label("Search:", 'search');
+    my $regex = enter_label(M"Search:", 'search');
     if ($regex && $root) {
 
 	my $active;
@@ -1467,7 +1486,7 @@ sub search_project {
 	    $active = $project_frame->info("next", $active);
 	}
 
-	$status_text->configure(-text => "Wrapped search");
+	$status_text->configure(-text => M"Wrapped search");
 
 	# second pass from beginning
 	($active) = $project_frame->info("children");
@@ -1476,7 +1495,7 @@ sub search_project {
 	    $active = $project_frame->info("next", $active);
 	}
 
-	$status_text->configure(-text => "Nothing found");
+	$status_text->configure(-text => M"Nothing found");
     }
 
 }
@@ -1560,13 +1579,13 @@ sub working_time {
     }
 
     require Tk::DialogBox;
-    my $d = $top->DialogBox(-title => 'Today\'s time',
-			    -buttons => ['OK'],
+    my $d = $top->DialogBox(-title => M"Today\'s time",
+			    -buttons => [M"OK"],
 			    -popover => 'cursor',
 			   );
     my $gridy = 0;
     $d->add('Label',
-	    -text => "Today\'s working time:")->grid(-row => $gridy,
+	    -text => M"Today\'s working time:")->grid(-row => $gridy,
 						     -column => 0,
 						     -sticky => 'w');
     $d->add('Label',
@@ -1575,7 +1594,7 @@ sub working_time {
 						   -sticky => 'w');
     $gridy++;
     $d->add('Label',
-	    -text => "Yesterday\'s working time:")->grid(-row => $gridy,
+	    -text => M"Yesterday\'s working time:")->grid(-row => $gridy,
 							 -column => 0,
 							 -sticky => 'w');
     $d->add('Label',
@@ -1586,7 +1605,7 @@ sub working_time {
     $d->add('Label')->grid(-row => $gridy, -column => 0);
     $gridy++;
     $d->add('Label',
-	    -text => "Last week\'s working time (8h-day):"
+	    -text => M"Last week\'s working time (8h-day):"
 	   )->grid(-row => $gridy,
 		   -column => 0,
 		   -sticky => 'w');
@@ -1596,9 +1615,9 @@ sub working_time {
 							     -sticky => 'w');
     $gridy++;
     $d->add('Label',
-	    -text => "  Average per working day:")->grid(-row => $gridy,
-							 -column => 0,
-							 -sticky => 'w');
+	    -text => "  " . M"Average per working day:")->grid(-row => $gridy,
+							       -column => 0,
+							       -sticky => 'w');
     $d->add('Label',
 	    -text => sec2time($last_week_sum/$week_work_days, 'h', 0)
 	   )->grid(-row => $gridy,
@@ -1608,7 +1627,7 @@ sub working_time {
     $d->add('Label')->grid(-row => $gridy, -column => 0);
     $gridy++;
     $d->add('Label',
-	    -text => "Last 4 week\'s working time (8h-day): "
+	    -text => M"Last 4 week\'s working time (8h-day): "
 	   )->grid(-row => $gridy,
 		   -column => 0,
 		   -sticky => 'w');
@@ -1618,9 +1637,9 @@ sub working_time {
 							      -sticky => 'w');
     $gridy++;
     $d->add('Label',
-	    -text => "  Average per working day:")->grid(-row => $gridy,
-							 -column => 0,
-							 -sticky => 'w');
+	    -text => "  " . M"Average per working day:")->grid(-row => $gridy,
+							       -column => 0,
+							       -sticky => 'w');
     $d->add('Label',
 	    -text => sec2time($last_4week_sum/$month_work_days, 'h', 0)
 	   )->grid(-row => $gridy,
@@ -1649,8 +1668,8 @@ sub show_one_day {
 	    require Time::Local;
 	}
     }
-    my $f = $top->Toplevel(-title => 'Show daily details');
-    $f->{WindowType} = "Daily details";
+    my $f = $top->Toplevel(-title => M"Show daily details");
+    $f->{WindowType} = "Daily details"; # no M
     my $btn;
     my @p; # project array for one day
     my($dw, $dw_to);
@@ -1667,8 +1686,8 @@ sub show_one_day {
 	   -value => 'now',
 	   -datefmt => "%12A, %2d.%2m.%4y",
 	   -choices => [qw(today yesterday),
-			['one week before' => sub {time()-86400*7}],
-			['four weeks before' => sub { time()-86400*7*4}],
+			[M"one week before" => sub {time()-86400*7}],
+			[M"four weeks before" => sub { time()-86400*7*4}],
 		       ],
 	   -command => sub {
 	       # XXX if chain button activated, adjust dw_to widget
@@ -1686,8 +1705,8 @@ sub show_one_day {
 	     -value => 'now',
 	     -datefmt => "%12A, %2d.%2m.%4y",
 	     -choices => [qw(today yesterday),
-			  ['one week before' => sub {time()-86400*7}],
-			  ['four weeks before' => sub { time()-86400*7*4}],
+			  [M"one week before" => sub {time()-86400*7}],
+			  [M"four weeks before" => sub { time()-86400*7*4}],
 			 ],
 	     -command => sub {
 		 if ($options->{'oneday-immediately'}) {
@@ -1759,13 +1778,13 @@ sub show_one_day {
 	$dw->insert(0, sprintf("%04d/%02d/%02d", $l[5]+1900, $l[4]+1, $l[3]));
     }
     my $ff = $f->Frame->pack;
-    $btn = $ff->Button(-text => 'Show')->pack(-side => 'left');
+    $btn = $ff->Button(-text => M"Show")->pack(-side => 'left');
     $f->{InvokeButton} = $btn;
-    my $clb = $ff->Button(-text => 'Close',
+    my $clb = $ff->Button(-text => M"Close",
 			  -command => sub { $f->destroy },
 			 )->pack(-side => 'left');
     $f->bind('<Escape>' => sub { $clb->invoke });
-    $ff->Checkbutton(-text => 'immediately',
+    $ff->Checkbutton(-text => M"immediately",
 		     -variable => \$options->{'oneday-immediately'},
 		     -command => sub {
 			 $btn->invoke;
@@ -1773,7 +1792,7 @@ sub show_one_day {
 		     ($has_date_entry ? (-state => 'disabled') : ()),
 		    )->pack(-side => 'left');
     $no_interval_cb =
-	$ff->Checkbutton(-text => 'no interval',
+	$ff->Checkbutton(-text => M"no interval",
 			 -variable => \$one_day_only,
 			 -command => sub {
 			     if ($options->{'oneday-immediately'}) {
@@ -1841,7 +1860,7 @@ sub show_one_day {
 
     if ($has_date) {
 	my $di = $lb->Button
-	  (-text => "Daily intervals",
+	  (-text => M"Daily intervals",
 	   -command => sub {
 	       my $begin_date = $dw->get("%s");
 	       $begin_date = Tk::Date::_begin_of_day($begin_date);
@@ -2115,9 +2134,9 @@ sub standalone_message_box {
 	$mw[0]->withdraw;
 	$mw_created++;
     }
-    $args{-icon}  = 'error' unless exists $args{-icon};
-    $args{-title} = 'Error' unless exists $args{-error};
-    $args{-type}  = 'OK'    unless exists $args{-type};
+    $args{-icon}  = 'error'  unless exists $args{-icon};
+    $args{-title} = M"Error" unless exists $args{-error};
+    $args{-type}  = "OK"     unless exists $args{-type};
     my $answer = $mw[0]->messageBox(%args);
     if ($mw_created) {
 	$mw[0]->destroy;
@@ -2133,13 +2152,13 @@ sub load_file {
 
     if ($root->modified || defined $current_project) {
 	require Tk::Dialog;
-	my $dialog = $top->Dialog(-title => 'Load',
-				  -text  => "Load project data (overwrite current data)?",
-				  -default_button => 'No',
-				  -buttons => ['Yes', 'No'],
+	my $dialog = $top->Dialog(-title => M"Load",
+				  -text  => M"Load project data (overwrite current data)?",
+				  -default_button => M"No",
+				  -buttons => [M"Yes", M"No"],
 				  -popover => 'cursor',
 				 );
-	return if $dialog->Show eq 'No';
+	return if $dialog->Show eq M"No";
     }
     stop_project();
 
@@ -2155,7 +2174,7 @@ sub load_file {
 	}
 
 	$file_to_load = get_filename($top,
-				     -Title  => 'Enter project file',
+				     -Title  => M"Enter project file",
 				     -File   => $file,
 				     -Path   => $path,
 				     -FPat   => '*.pj1',
@@ -2179,14 +2198,16 @@ sub load_file {
 	my $mtime = (stat($sos_file))[9];
 	require Tk::Dialog;
 	$top->Dialog
-	  (-title => 'Warning',
-	   -text => "There is a sos file <$sos_file>\n".
-	   "from " . scalar(localtime($mtime)) . ".\n".
-	   "You should check whether this file contains valueable information.\n".
-	   "Otherwise delete the file to avoid this warning.",
+	  (-title => M"Warning",
+	   -text => Mfmt
+	   ("There is a sos file <%s>\n".
+	    "from %s\n".
+	    "You should check whether this file contains valueable information.\n".
+	    "Otherwise delete the file to avoid this warning.",
+	    $sos_file, scalar(localtime($mtime))),
 	   -popover => 'cursor',
-	   -default_button => 'OK',
-	   -buttons => ['OK'])->Show;
+	   -default_button => M"OK",
+	   -buttons => [M"OK"])->Show;
     }
 
     my $load_root = new Timex::Project;
@@ -2201,8 +2222,8 @@ sub load_file {
     if (!$file_writeable) {
 	require Tk::Dialog;
 	$top->Dialog
-	    (-title => 'Warning',
-	     -text => 'The file ' . $file_to_load . ' is not writeable!',
+	    (-title => M"Warning",
+	     -text => Mfmt("The file %s is not writeable!", $file_to_load),
 	     -popover => 'cursor',
 	     )->Show;
     }
@@ -2211,7 +2232,7 @@ sub load_file {
     $root = $load_root;
     $options->{'file'} = $file_to_load;
 
-    $status_text->configure(-text => "Loaded $options->{file}");
+    $status_text->configure(-text => Mfmt("Loaded %s", $options->{file}));
     insert_all();
     set_autosave();
     $root->modified(0);
@@ -2230,7 +2251,7 @@ sub load_file {
 	if ($project_frame->info('exists', $last_project_path)) {
 	    $project_frame->anchorSet($last_project_path);
 	    $project_frame->see($last_project_path);
-	    gui_set_pause_or_cont('Cont');
+	    gui_set_pause_or_cont(M"Cont");
 	}
     }
 }
@@ -2271,12 +2292,13 @@ sub lock_file {
 	    if (!flock CURRFILE, LOCK_EX|LOCK_NB) {
 		use Tk::Dialog;
 		$top->Dialog
-		  (-title => 'File locked',
-		   -text  => "<$file> is already locked.\n" .
-		   "Please check that there is no other tktimex process\n" .
-		   "using this file and try again.\n",
-		   -default_button => 'OK',
-		   -buttons => ['OK'],
+		  (-title => M"File locked",
+		   -text  => Mfmt
+		   ("<%s> is already locked.\n" .
+		    "Please check that there is no other tktimex process\n" .
+		    "using this file and try again.\n", $file),
+		   -default_button => M"OK",
+		   -buttons => [M"OK"],
 		   -popover => 'cursor',
 		  )->Show;
 		$lock_ok = 0;
@@ -2313,8 +2335,8 @@ sub update_project {
     # get hlist position (i.e. previous element
     my $top_parent_entry = make_path($top_parent);
     if (!$top_parent_entry) {
-	warn "Should not happen: Can't find entry for " .
-	     $top_parent->pathname;
+	warn Mfmt("Should not happen: Can't find entry for %s",
+		  $top_parent->pathname);
 	return;
     }
 
@@ -2328,7 +2350,7 @@ sub update_project {
 		last SEARCH;
 	    }
 	}
-	warn "Can't find $top_parent_entry in children list of HList";
+	warn Mfmt("Can't find %s in children list of HList",$top_parent_entry);
 	return;
     }
 
@@ -2406,8 +2428,9 @@ sub update_costs_option {
 	} else {
 	    $project_frame->header
 		('create', $costs_col,
-		 -text => 'Cost (' . $options->{'hourlyrate'} . ' ' .
-		 $options->{'currency'} . ')');
+		 -text => Mfmt("Cost (%s %s)",
+			       $options->{'hourlyrate'},
+			       $options->{'currency'}));
 	}
     }
 }
@@ -2415,7 +2438,7 @@ sub update_costs_option {
 sub dump_data {
     print STDERR $root->dump_data();
     if (!open(OUT, ">/tmp/timex.data")) {
-	$status_text->configure(-text => "Can't write to timex.data: $!");
+	$status_text->configure(-text => M("Can't write to timex.data").": $!");
 	return;
     }
     print OUT $root->dump_data();
@@ -2438,7 +2461,7 @@ sub old_save_file {
 
     if (!open(OUT, ">$datafile")) {
 	$status_text->configure
-	  (-text => "Can't write to <$datafile>: $!");
+	  (-text => Mfmt("Can't write to <%s>: %s", $datafile, $!));
 	return;
     }
     my $dd = new Data::Dumper [$root], ['root'];
@@ -2478,7 +2501,7 @@ sub save_file {
     if (!$root->save("$options->{'file'}")) {
 	$status_text->configure(-text => $@);
     } else {
-	$status_text->configure(-text => "Saved <$options->{'file'}>");
+	$status_text->configure(-text => Mfmt("Saved <%s>",$options->{'file'}));
     }
     old_save_file() if $options->{'securesave'};
     lock_file("$options->{'file'}") if $lock_is_strict;
@@ -2501,7 +2524,7 @@ sub save_as_file {
 
     my($file, $path) = get_file_path();
     $file = get_filename($top,
-			 -Title => 'Enter project file',
+			 -Title => M"Enter project file",
 			 -File => $file,
 			 -Path => $path,
 			 -FPat => '*.pj1',
@@ -2531,7 +2554,7 @@ sub save_sos {
     if (defined $current_project) {
 	$current_project->end_time;
     }
-    warn "Saving sos file $file...\n";
+    warn Mfmt("Saving sos file %s...\n", $file);
     $root->save($file);
     if (defined $current_project) {
 	$current_project->unend_time;
@@ -2541,13 +2564,15 @@ sub save_sos {
 	require Mail::Send;
 	my $msg = Mail::Send->new;
 	$msg->to($username);
-	$msg->subject("tktimex: sos file");
+	$msg->subject(M"tktimex: sos file");
 	my $fh = $msg->open;
-	print $fh <<EOF;
-A copy of your tktimex data is saved in $file.
+	print $fh Mfmt(<<EOF, $file);
+A copy of your tktimex data is saved in %s.
 Please check whether the data is complete, then copy this file
 as your tktimex data file with:
 
+EOF
+        print $fh <<EOF;
     @{[
          $os eq 'win' ? "copy" : "cp"
       ]} $file $options->{'file'}
@@ -2563,19 +2588,20 @@ sub _overwrite_warning {
     if (-e $file) {
 	require Tk::Dialog;
 	die if ($top->Dialog
-		(-title => 'Warning',
-		 -text => "Really overwrite $file with skeleton data?\n".
-		 "All time information will be lost in $file!",
+		(-title => M"Warning",
+		 -text => Mfmt
+		 ("Really overwrite %s with skeleton data?\n".
+		  "All time information will be lost in %s!",$file,$file),
 		 -popover => 'cursor',
-		 -default_button => 'No',
-		 -buttons => ['Yes', 'No'])->Show ne 'Yes');
+		 -default_button => M"No",
+		 -buttons => [M"Yes", M"No"])->Show ne M"Yes");
     }
 }
 
 sub save_skeleton {
     my($file, $path) = get_file_path();
     $file = get_filename($top,
-			 -Title => 'Enter skeleton project file',
+			 -Title => M"Enter skeleton project file",
 			 -Path => $path,
 			 -FPat => '*.pj1',
 			 -filetypes => [qw/pjt pj1 all/],
@@ -2595,7 +2621,7 @@ sub save_subproject {
     return if !$p;
     my($file, $path) = get_file_path();
     $file = get_filename($top,
-			 -Title => 'Enter project file',
+			 -Title => M"Enter project file",
 			 -Path => $path,
 			 -FPat => '*.pj1',
 			 -filetypes => [qw/pj1 all/],
@@ -2613,7 +2639,7 @@ sub save_subproject {
 sub save_xml {
     my($file, $path) = get_file_path();
     $file = get_filename($top,
-			 -Title => 'Enter XML project file',
+			 -Title => M"Enter XML project file",
 			 -File => $file,
 			 -Path => $path,
 			 -FPat => '*.xml',
@@ -2634,7 +2660,7 @@ sub merge_file {
 	(undef, $path) = fileparse($options->{'file'});
     }
     my $file = get_filename($top,
-			    -Title => 'Enter project file for merge',
+			    -Title => M"Enter project file for merge",
 			    -Path => $path,
 			    -FPat => '*.pj1',
 			    -filetypes => [qw/pj1 pjt all/],
@@ -2662,17 +2688,19 @@ sub merge_file_noninteractive {
     insert_all(-newprojects     => $new_p_ref,
 	       -changedprojects => $changed_p_ref) if $diff;
     $status_text->configure
-      (-text => "Merge completed with $diff difference" .
-       ($diff == 1 ? "" : "s"));
+      (-text => Mfmt("Merge completed with %s %s", $diff,
+		     ($diff == 1 ? M("difference") : M("differences"))),
+      );
 }
 
 sub update_enterprise_projects {
     if (!$options->{'enterpriseprojects'}) {
 	require Tk::Dialog;
 	$top->Dialog
-	    (-title => 'Error',
-	     -text => "There is no enterprise projects file defined.\n" .
-	     "Please go to the enterprise tab in the option editor.\n",
+	    (-title => M"Error",
+	     -text => M
+	     ("There is no enterprise projects file defined.\n" .
+	      "Please go to the enterprise tab in the option editor.\n"),
 	     -popover => 'cursor')->Show;
 	return;
     }
@@ -2680,8 +2708,9 @@ sub update_enterprise_projects {
     if (!-r $options->{'enterpriseprojects'}) {
 	require Tk::Dialog;
 	$top->Dialog
-	    (-title => 'Error',
-	     -text => "File $options->{'enterpriseprojects'} is not readable or does not exist.\n",
+	    (-title => M"Error",
+	     -text => Mfmt("File %s is not readable or does not exist.\n",
+			   $options->{'enterpriseprojects'}),
 	     -popover => 'cursor')->Show;
 	return;
     }
@@ -2706,13 +2735,13 @@ sub get_filename {
     if ($args{-filetypes}) {
 	foreach my $type (@{ $args{-filetypes} }) {
 	    if ($type eq 'pj1') {
-		push @$types, ['Timex files', '.pj1'];
+		push @$types, [M"Timex files", '.pj1'];
 	    } elsif ($type eq 'all') {
-		push @$types, ['All files', '*'];
+		push @$types, [M"All files", '*'];
 	    } elsif ($type eq 'xml') {
-		push @$types, ['Timex XML files', '.xml'];
+		push @$types, [M"Timex XML files", '.xml'];
 	    } elsif ($type eq 'pjt') {
-		push @$types, ['Timex Template files', '.pjt'];
+		push @$types, [M"Timex Template files", '.pjt'];
 	    }
 	}
     }
@@ -2797,7 +2826,8 @@ sub set_dateformat {
 	set_timeout();
     }
     foreach my $w ($top->Descendants("Toplevel")) {
-	if ($w->{WindowType} and $w->{WindowType} eq 'Daily details' and
+	# no M:
+	if ($w->{WindowType} and $w->{WindowType} eq "Daily details" and
 	    $w->{InvokeButton}) {
 	    $w->{InvokeButton}->invoke;
 	}
@@ -2857,7 +2887,7 @@ sub show_attributes {
     my $project = $project_frame->info('data', $path);
     return if !defined $project;
 
-    my $attribute_top = $top->Toplevel(-title => "Attributes");
+    my $attribute_top = $top->Toplevel(-title => M"Attributes");
     my $f = $attribute_top->Frame->pack(-fill => 'both', -expand => 1);
     my $row = 0;
 
@@ -2873,8 +2903,8 @@ sub show_attributes {
     };
 
     # Name/Id ##########
-    $f->Label(-text => 'Name: ')->grid(-row => $row, -column => 0,
-				       -sticky => 'w');
+    $f->Label(-text => M('Name').': ')->grid(-row => $row, -column => 0,
+					     -sticky => 'w');
     my $label = $project->label;
     my $ff1 = $dframe->();
     my $name_entry = $ff1->Entry(-bg => $inner_bg,
@@ -2884,28 +2914,28 @@ sub show_attributes {
     $name_entry->focus;
     if ($readonly) { $name_entry->configure(-state => 'disabled') }
 
-    $f->Label(-text => "Id: " . $project->id)->grid(-row => $row,
-						    -column => 2,
-						    -sticky => "e");
+    $f->Label(-text => M("Id").": " . $project->id)->grid(-row => $row,
+							  -column => 2,
+							  -sticky => "e");
 
     # Old parent ##########
     if ($project->parent) {
 	$row++;
-	$f->Label(-text => 'Parent:')->grid(-row => $row,
-					    -column => 0,
-					    -sticky => 'w');
+	$f->Label(-text => M('Parent').':')->grid(-row => $row,
+						  -column => 0,
+						  -sticky => 'w');
 	$ff1 = $dframe->();
 	$ff1->Label(-text => ($project->parent eq $root ?
-			      '(Root)' : $project->parent->label)
+			      '('.M("Root").')' : $project->parent->label)
 		   )->pack(-side => "left");
     }
 
     # New parent ##########
     $row++;
     my $new_parent;
-    $f->Label(-text => "New Parent")->grid(-row => $row,
-					   -column => 0,
-					   -sticky => 'w');
+    $f->Label(-text => M("New Parent"))->grid(-row => $row,
+					      -column => 0,
+					      -sticky => 'w');
     require Tk::BrowseEntry;
     my $browse = $f->BrowseEntry(-variable => \$new_parent,
 				);
@@ -2930,7 +2960,7 @@ sub show_attributes {
     # Rate ##########
     my $rate = my $old_rate = $project->{'rate'};
     $row++;
-    $f->Label(-text => 'Rate' .
+    $f->Label(-text => M('Rate') .
 	      (defined $options->{'currency'}
 	       ? " (" . $options->{'currency'} . ")"
 	       : "")
@@ -2952,7 +2982,7 @@ sub show_attributes {
 	}
     }
     $row++;
-    $f->Label(-text => 'Domain'
+    $f->Label(-text => M"Domain"
 	     )->grid(-row => $row, -column => 0, -sticky => 'w');
     my $domain_entry = $f->BrowseEntry
 	(-textvariable => \$domain,
@@ -2965,7 +2995,7 @@ sub show_attributes {
     my $archived = $project->{'archived'};
     $row++;
     my $arch_check = $f->Checkbutton
-      (-text => 'Archived',
+      (-text => M"Archived",
        -variable => \$archived
       )->grid(-row => $row, -column => 0, -sticky => 'w');
     if ($readonly) { $arch_check->configure(-state => 'disabled') }
@@ -2973,7 +3003,7 @@ sub show_attributes {
     # RCS/CVS file ##########
     my $rcsfile = $project->rcsfile;
     $row++;
-    $f->Label(-text => 'RCS/CVS file:'
+    $f->Label(-text => M("RCS/CVS file").":"
 	     )->grid(-row => $row, -column => 0, -sticky => 'w');
     $ff1 = $dframe->();
     my $rcs_entry = $ff1->Entry(-bg => $inner_bg,
@@ -2981,12 +3011,12 @@ sub show_attributes {
 				-textvariable => \$rcsfile
 			       )->pack(-side => "left");
     my $browse_entry = $f->Button
-	(-text => 'Browse...',
+	(-text => M("Browse")."...",
 	 -command => sub {
 	     my($file, $path) = fileparse($rcsfile) if $rcsfile;
 	     my $newfile = get_filename
 		 ($attribute_top,
-		  -Title  => 'RCS/CVS file',
+		  -Title  => M"RCS/CVS file",
 		  ($rcsfile ? (-File   => $file,
 			       -Path   => $path) : ()),
 		  -Create => 0,
@@ -3005,13 +3035,13 @@ sub show_attributes {
     $row++;
     my $ff = $f->Frame->grid(-row => $row, -column => 0,
 			     -columnspan => 3, -sticky => "w");
-    $ff->Button(-text => 'Show intervals',
+    $ff->Button(-text => M"Show intervals",
 		-command => sub {
 		    show_intervals($f,
 				   $project,
 				  -readonly => $readonly);
 		})->pack(-side => "left");
-    my $note_label = "Note";
+    my $note_label = M"Note";
     if ($project->has_note) {
 	$note_label .= " *";
     }
@@ -3042,8 +3072,9 @@ sub show_attributes {
 		       $insert_all++;
 		   } else {
 		       require Tk::Dialog;
+#XXX übersetzen
 		       $attribute_top->Dialog
-			 (-title => 'Warning',
+			 (-title => M"Warning",
 			  -text  =>
 			  "Can't reparent " . $project->label . " to " .
 			  $new_parent_p->label,
@@ -3068,14 +3099,14 @@ sub show_attributes {
 	   insert_all() if $insert_all;
        }
       );
-    set_text_or_image($ok, "yes.gif", "OK");
+    set_text_or_image($ok, "yes.gif", M"OK");
     $ok->pack(-side => 'left');
     if ($readonly) { $ok->focus }
     my $cancel = $command_frame->Button
       (-command => sub { $attribute_top->destroy() }
       );
     $attribute_top->bind('<Escape>' => sub { $cancel->invoke });
-    set_text_or_image($cancel, "no.gif", "Cancel");
+    set_text_or_image($cancel, "no.gif", M"Cancel");
     $cancel->pack(-side => 'left');
     $attribute_top->Popup(-popover => 'cursor');
 }
@@ -3105,7 +3136,7 @@ sub show_intervals {
 	    require Date::Calc;
 	};
 	if ($@) {
-	    warn "$@. Reverting to daily";
+	    warn "$@. " . M"Reverting to daily";
 	    $group = "daily";
 	}
     }
@@ -3344,30 +3375,30 @@ sub show_intervals {
     {
 	my $col = 0;
 	if ($group eq 'daily') {
-	    $lb->header('create', $col++, -text => 'Day');
+	    $lb->header('create', $col++, -text => M"Day");
 	} elsif ($group eq 'weekly') {
-	    $lb->header('create', $col++, -text => 'Week');
+	    $lb->header('create', $col++, -text => M"Week");
 	} elsif ($group eq 'monthly') {
-	    $lb->header('create', $col++, -text => 'Month');
+	    $lb->header('create', $col++, -text => M"Month");
 	} else {
-	    $lb->header('create', $col++, -text => 'From');
+	    $lb->header('create', $col++, -text => M"From");
 	}
-	$lb->header('create', $col++, -text => 'seconds')
+	$lb->header('create', $col++, -text => M"seconds")
 	  if $show_seconds;
 	if (!$group) {
-	    $lb->header('create', $col++, -text => 'To');
-	    $lb->header('create', $col++, -text => 'seconds')
+	    $lb->header('create', $col++, -text => M"To");
+	    $lb->header('create', $col++, -text => M"seconds")
 	      if $show_seconds;
 	}
-	$lb->header('create', $col++, -text => 'Time');
+	$lb->header('create', $col++, -text => M"Time");
 	if ($has_costs) {
-	    $lb->header('create', $col++, -text => 'Cost');
+	    $lb->header('create', $col++, -text => M"Cost");
 	}
 	if (@rev) {
-	    $lb->header('create', $col++, -text => 'RCS/CVS');
+	    $lb->header('create', $col++, -text => M"RCS/CVS");
 	    $rev_lifetime_col = $col++;
 	    $lb->header('create', $rev_lifetime_col,
-			-text => 'Version lifetime');
+			-text => M"Version lifetime");
 	}
     }
 
@@ -3453,7 +3484,7 @@ sub show_intervals {
 	    }
 	    if (@t) { $lb->itemCreate($i, $col++, -text => join(", ", @t)) }
 	} else {
-	    $lb->itemCreate($i, $col++, -text => 'Running');
+	    $lb->itemCreate($i, $col++, -text => M"Running");
 	}
 	$i++;
     }
@@ -3475,19 +3506,19 @@ sub show_intervals {
 	$w->destroy;
     };
     $w->protocol('WM_DELETE_WINDOW', $close_sub);
-    my $clb = $f->Button(-text => 'Close',
+    my $clb = $f->Button(-text => M"Close",
 			 -command => $close_sub,
 			)->pack(-side => 'left');
     $f->Label(-text => '  ')->pack(-side => 'left');
     if ($group eq '' && !$subproj) {
-	$f->Button(-text => 'Del',
+	$f->Button(-text => M"Del",
 		   -command => sub {
 		       $project->delete_times($lb->info('selection'));
 		       $modified++;
 		       $update->();
 		   }
 		   )->pack(-side => 'left');
-	$f->Button(-text => 'Ins',
+	$f->Button(-text => M"Ins",
 		   -command => sub {
 		       my @sel = $lb->info('selection');
 		       my $before = (!@sel ? -1 : $sel[$#sel]);
@@ -3503,7 +3534,7 @@ sub show_intervals {
 		   )->pack(-side => 'left');
     }
     if (!$subproj) {
-	$f->Button(-text => 'Re-Sort',
+	$f->Button(-text => M"Re-Sort",
 		   -command => sub {
 		       $project->sort_times;
 		       # $modified++ nicht notwendig, weil sich nichts an der
@@ -3514,19 +3545,19 @@ sub show_intervals {
     }
     if ($group eq '' && !$subproj) {
 	$f->Label(-text => ' ')->pack(-side => 'left');
-	$f->Checkbutton(-text => 'Seconds',
+	$f->Checkbutton(-text => M"Seconds",
 			-variable => \$show_seconds,
 			-command => sub { $update->() },
 			)->pack(-side => 'left');
     }
     $f->Label(-text => ' ')->pack(-side => 'left');
-    $f->Checkbutton(-text => 'Subprojects',
+    $f->Checkbutton(-text => M"Subprojects",
 		    -variable => \$subproj,
 		    -command => sub { $update->() },
 		   )->pack(-side => 'left');
 
     require Tk::Optionmenu;
-    $f->Label(-text => ' Group:')->pack(-side => 'left');
+    $f->Label(-text => " " . M"Group:")->pack(-side => 'left');
     $f->Optionmenu(-variable => \$group,
 		   -options => ['', qw/daily weekly monthly yearly/],
 		   -command => sub { $update->() },
@@ -3551,7 +3582,7 @@ sub show_note {
 	return if !defined $project;
     }
 
-    my $t = $top->Toplevel(-title => 'Note for ' . $project->pathname);
+    my $t = $top->Toplevel(-title => M('Note for').' '.$project->pathname);
     my $txt = $t->Scrolled('Text', -scrollbars => "so$sbside"
 			  )->pack(-fill => 'both', -expand => 1);
     $txt->focus;
@@ -3561,13 +3592,13 @@ sub show_note {
 	}
     }
     my $f = $t->Frame->pack(-fill => 'x', -expand => 1);
-    $f->Button(-text => 'OK',
+    $f->Button(-text => M"OK",
 	       -command => sub {
 		   my $s = $txt->get('1.0', 'end');
 		   $project->set_note(split(/\n/, $s));
 		   $t->destroy;
 	       })->pack(-side => 'left');
-    my $cancel = $f->Button(-text => 'Cancel',
+    my $cancel = $f->Button(-text => M"Cancel",
 	       -command => sub { $t->destroy })->pack(-side => 'left');
     $t->bind('<Escape>' => sub { $cancel->invoke });
     $t->Popup(-popover => 'cursor');
@@ -3594,7 +3625,7 @@ sub set_text_or_image {
 sub make_path {
     my($p) = @_;
     return if !$p;
-    die "wrong arg for make_path: <$p>" if !$p->isa('Timex::Project');
+    die Mfmt("wrong arg for make_path: <%s>",$p) if !$p->isa('Timex::Project');
     my @path = $p->path;
     join $separator, @path[1 .. $#path];
 }
@@ -3627,18 +3658,18 @@ sub quit_program {
     require Tk::Dialog;
     if ($root->modified || defined $current_project) {
 	if (!defined $quit_dialog) {
-	    $quit_dialog = $top->Dialog(-title => 'Quit Program',
-					-text  => "Really quit?\n" .
+	    $quit_dialog = $top->Dialog(-title => M"Quit Program",
+					-text  => M("Really quit?\n") .
 					($root->modified ?
-					 "(modified data) " : "") .
+					 M("(modified data) ") : "") .
 					(defined $current_project ?
-					 "(project running) " : ""),
-					-default_button => 'No',
-					-buttons => ['Yes', 'No'],
+					 M("(project running) ") : ""),
+					-default_button => M"No",
+					-buttons => [M"Yes", M"No"],
 					-popover => 'cursor',
 				       );
 	}
-	return 0 if $quit_dialog->Show ne 'Yes';
+	return 0 if $quit_dialog->Show ne M"Yes";
     }
     $top->destroy;
 }
@@ -3708,7 +3739,7 @@ sub create_menu_last_projects {
 	    last LOOP if ($mb_file_menu->type($i) eq 'separator');
 	    $i--;
 	}
-	$status_text->configure("Separator in Menu File not found");
+	$status_text->configure(M"Separator in Menu File not found");
 	return;
     }
     # delete anything from the item after the separator to the end
@@ -3787,15 +3818,15 @@ sub accept_drop {
 sub load_merge_popup {
     my $filename = shift;
     my $load_menu = $top->Menu(-tearoff => 0);
-    $load_menu->command(-label => "Merge",
+    $load_menu->command(-label => M"Merge",
 			-command => sub {
 			    merge_file_noninteractive($filename);
 			});
-    $load_menu->command(-label => "Load",
+    $load_menu->command(-label => M"Load",
 			-command => sub {
 			    load_file_noninteractive($filename);
 			});
-    $load_menu->command(-label => "Cancel",
+    $load_menu->command(-label => M"Cancel",
 			-command => sub { });
     $load_menu->Popup(-popover => 'cursor');
 }
@@ -3924,30 +3955,31 @@ sub MyButtonRelease1
 }
 
 sub project_status {
-    "Left: Select | Middle: " .
+    M("Left: Select | Middle: ") .
 	($options->{'autoscroll'} !~ /^(|none)$/
-	 ? "Scroll"
-	 : "Create Subproject"
+	 ? M"Scroll"
+	 : M"Create Subproject"
 	) .
-    " | Right: Attributes";
+    M" | Right: Attributes";
 }
 
 sub notimes_check {
     if ($root->notimes) {
 	$top->messageBox(-icon => "warning",
-			 -message => "No times available",
+			 -message => M"No times available",
 			);
 	die;
     }
 }
 
 sub show_about {
-    my $dia = $top->Toplevel(-title => 'Copyright');
+    my $dia = $top->Toplevel(-title => M"Copyright");
+    # XXX Übersetung?
     $dia->Label(-text  => <<'EOF',
 
 tktimex by Slaven Rezic (eserte@cs.tu-berlin.de)
 
-Copyright (c) 1996-2000 Slaven Rezic. All rights reserved.
+Copyright (c) 1996-2001 Slaven Rezic. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
@@ -3977,7 +4009,7 @@ SUCH DAMAGE.
 
 EOF
 		-justify => 'left')->pack;
-    my $okb = $dia->Button(-text => 'OK',
+    my $okb = $dia->Button(-text => M"OK",
 			   -command => sub { $dia->destroy })->pack;
     $okb->focus;
     $dia->bind('<Escape>' => sub { $okb->invoke });
@@ -4096,7 +4128,7 @@ perl(1), Tk(3), rcsintro(1), cvs(1), Timex::Project(3)
 
 Slaven Rezic (eserte@cs.tu-berlin.de)
 
-Copyright (c) 1996-2000 Slaven Rezic. All rights reserved.
+Copyright (c) 1996-2001 Slaven Rezic. All rights reserved.
 
 For a complete copyright see the Help/About menu entry.
 
