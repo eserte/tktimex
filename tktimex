@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.48 1999/11/08 21:33:13 eserte Exp $
+# $Id: tktimex,v 4.49 2000/01/08 22:51:57 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -97,10 +97,10 @@ BEGIN { status_change("nach use locale"); }
 use Tk::DropSite;
 BEGIN { status_change("nach tk::dropsite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.48 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.49 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
-my $can_lock = 1; # gefährlich für win...
+my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
 my $lock_is_strict = ($os eq 'win');
 my $file_writeable;
 
@@ -517,8 +517,11 @@ status_change("x1");
 
 my $orig_selectbg = $project_frame->cget(-selectbackground);
 
-$project_frame->bind("<Double-ButtonRelease-1>" =>
-		     sub { start_stop(shift->info('selection')) });
+foreach my $ev (qw(Double-ButtonRelease-1
+		   Return)) {
+    $project_frame->bind("<$ev>" =>
+			 sub { start_stop(shift->info('selection')) });
+}
 if ($options->{'autoscroll'} =~ /^(|none)$/) {
     $project_frame->bind("<Button-2>" =>
 			 sub { new_sub_project(get_entry(@_)) });
@@ -531,7 +534,7 @@ if (0 && $os eq 'win') {
 			 sub { new_sub_project(get_entry(@_)); Tk->break });
 }
 $project_frame->bind("<Button-3>" =>
-		     sub { show_attributes(get_entry(@_)) });
+                     sub { show_attributes(get_entry(@_)) });
 
 status_change("x2");
 
@@ -1204,7 +1207,7 @@ sub show_one_day {
 		  });
 
     if ($has_date) {
-	my $di = $f->Button
+	my $di = $lb->Button
 	  (-text => "Daily intervals",
 	   -command => sub {
 	       my $begin_date = $dw->get("%s");
@@ -1423,7 +1426,7 @@ sub unlock_file_temp {
 }
 
 sub insert_all {
-    $top->Busy;
+    $top->Busy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
     $project_frame->delete('all');
     foreach ($root->sorted_subprojects($options->{'sort'})) {
 	insert_old_project($_);
@@ -1431,7 +1434,7 @@ sub insert_all {
     if (defined $current_project) {
 	$project_frame->selectionSet(make_path($current_project));
     }
-    $top->Unbusy;
+    $top->Unbusy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
 }
 
 sub insert_old_project {
