@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.41 2000/11/24 23:14:46 eserte Exp $
+# $Id: Project.pm,v 3.42 2000/11/28 01:50:12 eserte Exp $
 #
 
 =head1 NAME
@@ -28,7 +28,7 @@ use vars qw($magic $magic_template $emacsmode $pool @project_attributes);
 $magic = '#PJ1';
 $magic_template = '#PJT';
 $emacsmode = '-*- project -*-';
-@project_attributes = qw/archived rate rcsfile domain/;
+@project_attributes = qw/archived rate rcsfile domain id/;
 
 =head2 new
 
@@ -47,6 +47,8 @@ sub new {
     $self->{'cached_time'} = {};
     $self->{'times'} = [];
     $self->{'parent'} = undef;
+    $self->{'id'} = 0;
+    $self->{'max_id'} = 0;
     $self->{'modified'} = 1;
     $self->{'separator'} = "/";
     $self->{'current'} = undef;
@@ -540,7 +542,7 @@ sub delete_all {
 
 =head2 subproject
 
-    $root->subproject([$label]);
+    $root->subproject([$label,[-useid => 1]]);
 
 With label defined, create a new subproject labeled $label. Without
 label, return either an array of subprojects (in array context) or a
@@ -549,7 +551,7 @@ reference to the array of subprojects (in scalar context).
 =cut 
 
 sub subproject {
-    my($self, $label) = @_;
+    my($self, $label, %args) = @_;
     if (defined $label) {
 	my $sub;
 	my $ref_label = ref $label;
@@ -559,7 +561,10 @@ sub subproject {
 	    $sub = $label;
 	}
 	$sub->parent($self);
-	push(@{$self->{'subprojects'}}, $sub);
+	push @{ $self->{'subprojects'} }, $sub;
+	if (!$args{-useid}) {
+	    $sub->{'id'} = $self->next_id;
+	}
 	$self->modified(1);
 	$sub;
     } else {
@@ -1069,6 +1074,30 @@ sub modified {
     }
 }
 
+=head2 next_id
+
+    $id = $project->next_id
+
+Return the next free id in the project tree.
+
+=cut
+
+sub next_id {
+    my($self) = @_;
+    my $root = $self->root;
+    ++$root->{'max_id'};
+}
+
+=head2 id
+
+    $id = $project->id
+
+Return the id of the project.
+
+=cut
+
+sub id { defined $_[0]->{'id'} ? $_[0]->{'id'} : "" }
+
 =head2 rate
 
     $rate = $project->rate
@@ -1285,6 +1314,7 @@ sub interpret_data {
 
 sub interpret_data_project {
     my($parent, $data, $i, %args) = @_;
+    my $root = $parent->root;
     my($indent, $self);
     while(defined $data->[$i]) {
 	if ($data->[$i] !~ /^>+/) {
@@ -1348,7 +1378,14 @@ sub interpret_data_project {
 		}
 		warn "Unknown attributes: " . join(" ", %attributes)
 		  if %attributes;
-		$parent->subproject($self);
+		$parent->subproject($self, -useid => 1);
+		if ($self->id ne "") {
+		    if ($root->{'max_id'} < $self->id) {
+			$root->{'max_id'} = $self->id;
+		    }
+		} else {
+		    $self->{'id'} = $root->next_id;
+		}
                 $self->update_cached_time;
 	    }
 	}
@@ -1419,7 +1456,7 @@ sub load_old {
     warn "Can't read $file: $@" if $@;
     foreach (@$pool) {
 	if (ref $_ and $_->isa('Timex::Project')) {
-	    $self->subproject($_);
+	    $self->subproject($_, -useid => 1);
 	    $_->rebless_subprojects;
 	} else {
 	    warn "Unknown object $_";
@@ -1503,7 +1540,7 @@ sub last_projects {
 =cut
 
 sub merge {
-    my($self, $other) = @_;
+    my($self, $other, %args) = @_;
     if (!$other->isa('Timex::Project')) {
 	die "merge: arg must be Timex::Project!";
     }
@@ -1518,6 +1555,8 @@ sub merge {
     my @new_p;
     my @changed_p;
     my %changed_p;
+
+    my $allow_duplicates = $args{-allowduplicates};
 
     my $other_sub;
     foreach $other_sub ($other->subproject) {
@@ -1537,10 +1576,11 @@ sub merge {
 		my $other_t = $other_sub->{'times'}[$other_i];
 		if ($self_t->[0] < $other_t->[0]) {
 		    $self_i++;
-		} elsif ($self_t->[0] == $other_t->[0]) {
+		} elsif ($self_t->[0] == $other_t->[0] &&
+			 !$allow_duplicates) {
 		    if ($self_t->[1] != $other_t->[1]) {
 			warn "Warning: incompatible times for " .
-			  $sub->label . ": " . $self_t->[1] . " != " .
+			    $sub->label . ": " . $self_t->[1] . " != " .
 			    $other_t->[1] . "\n";
 			if ($self_t->[1] < $other_t->[1]) {
 			    warn "Using bigger one...\n";
@@ -1554,6 +1594,9 @@ sub merge {
 		} else { # $self_t > $other_t
 		    splice @{$sub->{'times'}}, $self_i, 0, $other_t;
 		    $self_i++;
+		    if ($self_t->[0] == $other_t->[0]) { # duplicate
+			$self_i++;
+		    }
 		    $other_i++;
 		    $modified++;
 		    $changed_p{$other_sub_path} = $other_sub;
