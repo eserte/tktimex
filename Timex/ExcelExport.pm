@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: ExcelExport.pm,v 1.3 2000/08/18 00:35:38 eserte Exp $
+# $Id: ExcelExport.pm,v 1.4 2000/09/01 23:35:16 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2000 Slaven Rezic. All rights reserved.
@@ -54,7 +54,9 @@ sub save_dialog {
     my %date;
     foreach my $p (qw(From To)) {
 	$f = $t->Frame->pack(-fill => "x");
-	$f->Label(-text => "$p:")->pack(-side => "left");
+	$f->Label(-text => "$p:",
+		  -anchor => "e",
+		  -width => 4)->pack(-side => "left");
 	$f->Date(-variable => \$date{$p},
 		 -value => 'now',
 		 -fields => 'date',
