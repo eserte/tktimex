@@ -11,6 +11,7 @@ WriteMakefile(
     'PM' =>
     {
      'Timex/ExcelExport.pm'    => '$(INST_LIBDIR)/Timex/ExcelExport.pm',
+     'Timex/Plugin.pm'         => '$(INST_LIBDIR)/Timex/Plugin.pm',
      'Timex/Project.pm'	       => '$(INST_LIBDIR)/Timex/Project.pm',
      'Timex/Project/Export.pm' => '$(INST_LIBDIR)/Timex/Project/Export.pm',
      'Timex/Project/XML.pm'    => '$(INST_LIBDIR)/Timex/Project/XML.pm',
@@ -51,25 +52,21 @@ WriteMakefile(
 #}
 
 sub MY::postamble {
-    if (defined $ENV{USER} && $ENV{USER} eq 'eserte') {
-	    <<'EOF';
+    my $postamble = '';
 
-release:	dist
-	../sf-upload/sf-upload -project ptktools -package tktimex -release $(VERSION) -file $(DISTVNAME).tar$(SUFFIX) -notesfile README -changes ""
+    if (defined $ENV{USER} && $ENV{USER} eq 'eserte' && $^O =~ /bsd/i && -f "../perl.release.mk") {
+	$postamble .= <<'EOF';
 
 CVS_DIR=${HOME}/work/timex
 
-copy-to-cvs:
-	@echo "Really copy to ${CVS_DIR}? (Hit Ctrl-C otherwise) "
-	@read dummy
-	perl "-MExtUtils::Manifest=manicopy,maniread" -e "manicopy(maniread('MANIFEST'),'${CVS_DIR}', 'cp');"
+SF_PROJECT=ptktools
+SF_PACKAGE=tktimex
 
-cvs-add-missing:
-	cd ${CVS_DIR} && cvsu | grep '^[\?D]' | cut -c2- | xargs cvs add -ko
-
-cvs-standard-commit:
-	cd ${CVS_DIR} && cvs -z9 commit -m ""
+.include "../perl.release.mk"
+.include "../perl.cvs.mk"
 
 EOF
     }
+
+    $postamble;
 }
