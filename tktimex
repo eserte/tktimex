@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.50 2000/04/11 00:06:14 eserte Exp $
+# $Id: tktimex,v 4.51 2000/06/28 18:42:27 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -97,7 +97,7 @@ BEGIN { status_change("nach use locale"); }
 use Tk::DropSite;
 BEGIN { status_change("nach tk::dropsite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.50 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.51 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -715,6 +715,10 @@ sub insert_project {
     my $label = $p->label;
     my $path = make_path($p);
     return if !$path;
+    if ($project_frame->info('exists', $path)) {
+	warn "Duplicate entry path $path - please check .pj1 file!";
+	return;
+    }
     $project_frame->add($path,
 			-text => $p->label,
 			-itemtype => 'text',
@@ -1102,11 +1106,13 @@ sub show_one_day {
 	    require Time::Local;
 	}
     }
-    my $f = $top->Toplevel(-title => 'Show one day');
+    my $f = $top->Toplevel(-title => 'Show daily details');
     my $btn;
     my @p; # project array for one day
-    my $dw;
+    my($dw, $dw_to);
     if ($has_date) {
+	# XXX create chain button
+	# from:
 	$dw = $f->Date
 	  ($inner_bg_opt => $inner_bg,
 	   $inner_fg_opt => $inner_fg,
@@ -1118,11 +1124,29 @@ sub show_one_day {
 			['four weeks before' => sub { time()-86400*7*4}],
 		       ],
 	   -command => sub {
+	       # XXX if chain button activated, adjust dw_to widget
 	       if ($options->{'oneday-immediately'}) {
 		   $btn->invoke;
 	       }
 	   }
 	  )->pack;
+	# to:
+	$dw_to = $f->Date
+	    ($inner_bg_opt => $inner_bg,
+	     $inner_fg_opt => $inner_fg,
+	     -fields => 'date',
+	     -value => 'now',
+	     -datefmt => "%12A, %2d.%2m.%4y",
+	     -choices => [qw(today yesterday),
+			  ['one week before' => sub {time()-86400*7}],
+			  ['four weeks before' => sub { time()-86400*7*4}],
+			 ],
+	     -command => sub {
+		 if ($options->{'oneday-immediately'}) {
+		     $btn->invoke;
+		 }
+	     }
+	    )->pack;
     } else {
 	if ($has_date_entry) {
 	    $dw = $f->DateEntry
@@ -1158,9 +1182,9 @@ sub show_one_day {
 		     },
 		     ($has_date_entry ? (-state => 'disabled') : ()),
 		    )->pack(-side => 'left');
-    my $until_now = 0;
-    $ff->Checkbutton(-text => 'till today',
-		     -variable => \$until_now,
+    my $one_day_only = 1;
+    $ff->Checkbutton(-text => 'only one day', # XXX text
+		     -variable => \$one_day_only,
 		     -command => sub {
 			  if ($options->{'oneday-immediately'}) {
 			      $btn->invoke;
@@ -1196,7 +1220,14 @@ sub show_one_day {
 			  $s_from = Time::Local::timelocal(0, 0, 0,
 							   $d, $m-1, $y);
 		      }
-		      my $s_to = ($until_now ? time() : $s_from + 86400);
+		      my $s_to = $s_from + 86399;
+		      if ($has_date && !$one_day_only) {
+			  $s_to = $dw_to->get("%s");
+			  $s_to = Tk::Date::_begin_of_day($s_to)+86399;
+		      }
+		      if ($has_date) {
+			  $dw_to->configure(-value => $s_to); # XXX ja?
+		      }
 		      @p = $root->projects_by_interval($s_from, $s_to);
 		      $lb->delete('all');
 		      my $i = 0;
