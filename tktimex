@@ -2,14 +2,14 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.23 1999/02/05 21:30:14 eserte Exp $
+# $Id: tktimex,v 4.24 1999/02/21 15:16:34 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
+#            (it's basically a BSD-styled copyright)
 #
-# Mail: <URL:mailto:eserte@cs.tu-berlin.de>
-# WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
-# Talk: <URL:telnet://ole.cs.tu-berlin.de:1211>
+# Mail: mailto:eserte@cs.tu-berlin.de
+# WWW:  http://user.cs.tu-berlin.de/~eserte/
 #
 
 use Tk;
@@ -80,7 +80,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.23 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.24 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -100,6 +100,7 @@ my $autosave_after;
 my @nowtime = localtime;
 my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
 my $project_status = "Left: Select | Middle: Attributes | Right: Create Subproject";
+my $status_text;
 # there are two forms of separators: for intern store in HList and in
 # .tktimex.last ust $separator, for human-readable output use "/"
 my $separator = '¦';
@@ -129,6 +130,7 @@ my @opttable =
    ],
    ['oneday-immediately', '!',  1],
    ['geometry',           '=s', "500x230"], # XXX
+   ['securesave',         '!', 0],
   );
 my $opt;
 eval {
@@ -148,12 +150,12 @@ if ($@) {
 } else {
     $opt = new Tk::Getopt(-opttable => \@opttable,
 			  -options  => $options,
-			  -filename => "$ENV{HOME}/.tktimex");
+			  -filename => "$ENV{HOME}/.tktimexrc");
     $opt->set_defaults;
     $opt->load_options;
     die $opt->usage if !$opt->get_options;
 }
-if (!$options->{'file'} and @ARGV) {
+if (@ARGV) {
     $options->{'file'} = shift @ARGV;
 }
 
@@ -215,6 +217,8 @@ $mb_project->command(-label => 'Attributes',
 		     -command => sub { show_attributes(undef) });
 $mb_project->command(-label => 'Intervals',
 		     -command => sub { show_intervals($top, undef) });
+$mb_project->command(-label => 'Note',
+		     -command => sub { show_note($top) });
 $mb_project->separator;
 $mb_project->command(-label => 'Working time',
 		     -command => \&working_time);
@@ -271,14 +275,18 @@ my $mb_help = $menu_frame->Menubutton(-text => 'Help'
 				     )->pack(-side => 'left');
 $mb_help->command(-label => 'About',
 		  -command => \&show_about);
-$mb_help->command(-label => 'Index',
-		  -command => sub {
-		      use Tk::Pod;
-		      Tk::Pod->Dir($FindBin::Bin);
-		      $top->Pod(-file => "$FindBin::Script",
-				-title => "tktimex",
-			       );
-		  });
+$mb_help->command
+  (-label => 'Index',
+   -command => sub {
+       eval {
+	   require Tk::Pod;
+	   Tk::Pod->Dir($FindBin::Bin);
+	   $top->Pod(-file => "$FindBin::Script",
+		     -title => "tktimex",
+		    );
+       };
+       $status_text->configure(-text => substr($@, 0, 40) . "...") if $@;
+   });
 
 my $save_check = $menu_frame->Checkbutton(-text => '*',
 					  -variable => \$root->{'modified'},
@@ -324,7 +332,7 @@ my $status_frame = $top->Frame(-relief => 'ridge',
 			       -bd => 1);
 $status_frame->pack(-fill => 'x');
 
-my $status_text = $status_frame->Label
+$status_text = $status_frame->Label
   (-text => "Current file: " . ($options->{file} || ""));
 $status_text->pack(-side => 'left');
 
@@ -362,19 +370,6 @@ $opt->process_options if defined $opt;
 &set_time_update();
 
 $root->modified(0);
-# if (!$options->{'file'}) {
-#     my $file = get_filename($top,
-# 			    -Title => 'Enter project file',
-# 			    -File => 'mytimex.pj1',
-# 			    -FPat => '*.pj1',
-# 			    -Create => 0);
-#     if ($file) {
-# 	$file = adjust_filename($file);
-# 	$options->{'file'} = $file;
-#     } else {
-# 	die "No project file specified";
-#     }
-# }
 if ($options->{'file'}) {
     load_file(0);
     load_last_projects();
@@ -531,7 +526,8 @@ sub cont_last {
     require Tk::Dialog;
     my $d = $top->Dialog
       (-title => 'Continue last',
-       -text  => "Really continue time from last activity?",
+       -text  => "Really continue time from last activity\n(" .
+       $p->pathname . " started at " . scalar(localtime($last->[0])) . ") ?",
        -default_button => 'No',
        -buttons => ['Yes', 'No'],
        -popover => 'cursor',
@@ -574,7 +570,7 @@ sub stop_project {
 	&act_time;
 	undef $current_project;
 	if ($options->{'autosave'}) {
-	    save_file(); # nach undef $current_project!!!
+	    save_file(); # muß nach undef $current_project kommen!!!
 	}
 	$project_frame->configure(-selectbackground => $orig_selectbg);
 	$top->title($title);
@@ -583,20 +579,32 @@ sub stop_project {
 }
 
 sub undo {
-    return if !defined $current_project;
+    if (!defined $current_project) {
+	require Tk::Dialog;
+	my $d = $top->Dialog(-title => 'Info',
+			     -text  => "No running project.",
+			     -default_button => 'OK',
+			     -buttons => ['OK'],
+			     -popover => 'cursor',
+			    );
+	$d->Show;
+	return;
+    }
 
     require Tk::Dialog;
     my $d = $top->Dialog(-title => 'Undo',
-			 -text  => "Really undo last start?",
+			 -text  => "Really undo last start of "
+			 . $current_project->pathname . "?",
 			 -default_button => 'No',
 			 -buttons => ['Yes', 'No'],
 			 -popover => 'cursor',
 			);
     return if $d->Show eq 'No';
 
-	my $p = $current_project;
+    my $p = $current_project;
     &stop_project;
     $undo_register = pop(@{$p->{'times'}});
+    gui_set_pause_or_cont('Cont');
     &act_time($p);
 }
 
@@ -981,7 +989,7 @@ sub save_file {
     } else {
 	$status_text->configure(-text => "Saved <$options->{'file'}>");
     }
-    &old_save_file;
+    &old_save_file if $options->{'securesave'};
 
     if (defined $current_project) {
 	$current_project->unend_time;
@@ -1564,6 +1572,33 @@ sub show_intervals {
       unless $geometry;
 }
 
+sub show_note {
+    my($top, $project, %args) = @_;
+
+    if (!defined $project) {
+	$project = entry_to_project(get_sel_entry());
+	return if !defined $project;
+    }
+
+    my $t = $top->Toplevel(-title => 'Note for ' . $project->pathname);
+    my $txt = $t->Scrolled('Text', -scrollbars => 'osoe'
+			  )->pack(-fill => 'both', -expand => 1);
+    if ($project->note) {
+	foreach ($project->note) {
+	    $txt->insert('end', $_ . "\n");
+	}
+    }
+    my $f = $t->Frame->pack(-fill => 'x', -expand => 1);
+    $f->Button(-text => 'OK',
+	       -command => sub {
+		   my $s = $txt->get('1.0', 'end');
+		   $project->note(split(/\n/, $s));
+		   $t->destroy;
+	       })->pack(-side => 'left');
+    $f->Button(-text => 'Cancel',
+	       -command => sub { $t->destroy })->pack(-side => 'left');
+}
+
 sub set_time_update {
     my $old_time_update = $time_update;
     $time_update = ($options->{'dateformat'} eq 'hs' ? 1 : 60);
@@ -1758,7 +1793,7 @@ sub show_about {
 
 tktimex by Slaven Rezic (eserte@cs.tu-berlin.de)
 
-Copyright (c) 1996-1998 Slaven Rezic. All rights reserved.
+Copyright (c) 1996-1999 Slaven Rezic. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
@@ -1815,8 +1850,8 @@ To create a new project, select from the B<Project> menu the item
 B<New>.
 
 To start the timer on a particular project, select the project from
-the list and click on the B<Cont> button. To stop the timer, click on
-the B<Pause> button.
+the list by mouse click and click on the B<Cont> button. To stop the
+timer, click on the B<Pause> button.
 
 If autosaving is on, after each click on B<Pause>, the project list
 will be updated on disk, and so will every 10 minutes. If autosaving
@@ -1848,17 +1883,27 @@ Possible options are:
 
 =head1 TODO
 
-- Pod
+  - better Pod
+  - View by day, by project, by interval, by month, by special attrib
+  - auswE<auml>hlen aus last-accessed-files sollte die aktivitE<auml>t
+    nicht automatisch starten
+  - HUP abfangen (Not-Save?) 
 
-- View by day, by project, by interval, by month, by special attrib
+=head1 FILES
 
-- use getOpen/SaveFile or FBox instead of FileDialog
+    ~/.tktimexrc        personal configuration file
+    ~/.tktimex.last     list of last accessed projects
+    *.pj1               project files
+
+=head1 SEE ALSO
+
+perl(1), Tk(3), rcsintro(1)
 
 =head1 AUTHOR
 
 Slaven Rezic (eserte@cs.tu-berlin.de)
 
-Copyright (c) 1996-1998 Slaven Rezic. All rights reserved.
+Copyright (c) 1996-1999 Slaven Rezic. All rights reserved.
 
 For a complete copyright see the Help/About menu entry.
 
