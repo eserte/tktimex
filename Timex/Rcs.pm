@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.2 1998/07/05 17:59:42 eserte Exp $
+# $Id: Rcs.pm,v 1.3 2000/07/06 00:48:09 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -70,7 +70,13 @@ sub parse_rcsfile {
     my $stage    = 'header';
     my $substage = '';
     my $curr_revision = new Timex::Rcs::Revision;
-    open(RLOG, "rlog $file|") or die "$file: $!";
+    if (-d dirname($file) . "/CVS" and
+	!-d dirname($file) . "/RCS") {
+	# try CVS instead of RCS
+	open(RLOG, "cvs log $file|") or die "$file: $!";
+    } else {
+	open(RLOG, "rlog $file|") or die "$file: $!";
+    }
     while(<RLOG>) {
 	chomp;
 	if ($stage eq 'header') {
