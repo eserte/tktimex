@@ -3,6 +3,7 @@
 package Project;
 
 my $pool = [];
+my $magic = '#PS1';
 
 sub new {
     my($pkg, $label) = @_;
@@ -119,6 +120,112 @@ sub archived {
 	} else {
 	    $self->{'archived'} = 0;
 	}
+    }
+}
+
+sub dump_data {
+    my $pool = $Project::pool;
+    my $res = "$magic\n";
+    foreach (@$pool) {
+	if ($_->isa('Project')) {
+	    $res .= &dump_data_project($_, 1);
+	}
+    }
+    $res;
+}
+
+sub dump_data_project {
+    my($self, $indent) = @_;
+    my $res;
+    $res .= (">" x $indent) . "$self->{'label'}\n";
+    $res .= "/archived=$self->{'archived'}\n";
+    my $time;
+    foreach $time (@{$self->{'times'}}) {
+	$res .= "|" . $time->[0];
+	if (defined $time->[1]) {
+	    $res .= "-" . $time->[1];
+	}
+	$res .= "\n";
+    }
+    my $subproject;
+    foreach $subproject (@{$self->{'subprojects'}}) {
+	$res .= &dump_data_project($subproject, $indent+1);
+    }
+    $res;
+}
+
+sub save {
+    my($file) = @_;
+    if (!open(FILE, ">$file")) {
+	warn "Can't write to $file";
+	undef;
+    } else {
+	print FILE &dump_data();
+	close FILE;
+	1;
+    }
+}
+
+sub interpret_data {
+    my $data = shift;
+    my $i = $[;
+    
+    if ($data->[$i] ne $magic) {
+	warn "Wrong magic!";
+	return undef;
+    }
+    $i++;
+
+    while ($i <= $#{$data}) {
+	($i) = &interpret_data_project($data, 1, $i);
+	return undef if !defined $i;
+    }
+
+    1;
+}
+
+sub interpret_data_project {
+    my($data, $indent, $i) = @_;
+    my($label, %attributes, @times, @comment, @subprojects, $subproject);
+    if ($data->[$i] !~ /^>+/) {
+	warn 'Project does not begin with ">"';
+	return undef;
+    }
+    while(defined $data->[$i]) {
+	$data->[$i] =~ /^./;
+	my $first = $&;
+	my $rest = $';
+	last if $first eq '>';
+	if ($first eq '|') {
+	    my(@interval) = split(/-/, $rest);
+	    warn "Interval must be two values" if $#interval != 1;
+	    push(@times, [@interval]);
+	} elsif ($first eq '/') {
+	    my(@attrpair) = split(/=/, $rest);
+	    $attributes{$attrpair[0]} = $attrpair[1];
+	} elsif ($first eq '#') {
+	    push(@comment, $rest);
+	} else {
+	    warn "Unknown command $first";
+	}
+    }
+
+    $i;
+}
+
+sub load {
+    my($file) = @_;
+    my @data;
+    if (!open(FILE, $file)) {
+	warn "Can't read $file";
+	undef;
+    } else {
+	while(<FILE>) {
+	    chomp;
+	    push(@data, $_);
+	}
+	close FILE;
+	&interpret_data(\@data);
     }
 }
 
