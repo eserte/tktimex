@@ -43,6 +43,7 @@ sub new {
     $self->{'times'} = [];
     $self->{'parent'} = undef;
     $self->{'modified'} = 1;
+    $self->{'separator'} = "/";
     bless $self, $pkg;
     $self;
 }
@@ -69,12 +70,13 @@ sub path {
 }
 
 sub pathname { # virtual pathname!
-    my($self) = @_;
+    my($self, $separator) = @_;
+    $separator = $self->separator if (!defined $separator);
     my @path = $self->path;
     if (!defined $path[0] || $path[0] eq '') {
 	shift @path;
     }
-    join("/", @path);
+    join($separator, @path);
 }
 
 sub rcsfile {
@@ -197,6 +199,25 @@ sub find_by_label {
     return $self if $self->label eq $label;
     foreach (@{$self->subproject}) {
 	my $r = $_->find_by_label($label);
+	return $r if defined $r;
+    }
+    return undef;
+}
+
+=head2 find_by_pathname
+
+    $project = $root->find_by_pathname($pathname);
+
+Search and return the corresponding $project (or undef if no such
+project exists) for the given $pathname.
+
+=cut
+
+sub find_by_pathname {
+    my($self, $pathname) = @_;
+    return $self if $self->pathname eq $pathname;
+    foreach (@{$self->subproject}) {
+	my $r = $_->find_by_pathname($pathname);
 	return $r if defined $r;
     }
     return undef;
@@ -362,7 +383,7 @@ sub archived {
 
     $modfied = $project->modified
 
-Returns true if the root project is modified, that is, one of root's #'
+Return true if the root project is modified, that is, one of root's #'
 subprojects are modified.
 
     $project->modified($modified)
@@ -380,6 +401,31 @@ sub modified {
 	    $self->{'modified'} = ($flag ? 1 : 0);
 	} else {
 	    $self->{'modified'};
+	}
+    }
+}
+
+=head2 separator
+
+    $separator = $project->separator
+
+Return the separator for this tree (the root project). Defaults to /.
+
+    $project->separator($separator);
+
+Set the separator for this tree (the root project) to $separator.
+ 
+=cut
+
+sub separator {
+    my($self, $separator) = @_;
+    if ($self->parent) {
+	$self->parent->separator($separator);
+    } else {
+	if (defined $separator) {
+	    $self->{'separator'} = $separator;
+	} else {
+	    $self->{'separator'};
 	}
     }
 }
