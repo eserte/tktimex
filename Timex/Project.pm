@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.37 2000/09/05 00:17:33 eserte Exp $
+# $Id: Project.pm,v 3.38 2000/09/20 02:02:59 eserte Exp $
 #
 
 =head1 NAME
@@ -937,6 +937,17 @@ sub restricted_times {
 		$to = time;
 	    }
 	}
+	# fix from
+	if ($since > $from && $since < $to) {
+	    $from = $since;
+	}
+	# fix to
+	if (defined $until) {
+	    if ($until > $from && $until < $to) {
+		$to = $until;
+	    }
+	}
+	# check interval
 	if ($since <= $from &&
 	    (!defined $until || ($until >= $to))) {
 	    push @times, [$self, $from, $to];
