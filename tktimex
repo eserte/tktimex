@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.68 2000/09/05 00:35:32 eserte Exp $
+# $Id: tktimex,v 4.69 2000/09/19 00:48:46 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -101,7 +101,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.68 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.69 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -286,7 +286,7 @@ eval {
 
 state_change("checkpoint 2");
 
-my($is_archiv, $east);
+my($is_archiv, $east, %hl_entry);
 my $balloon;
 if ($Tk::VERSION >= 800.005) {
     require Tk::ItemStyle; # erst ab 800.005
@@ -295,6 +295,9 @@ if ($Tk::VERSION >= 800.005) {
     $east = $top->ItemStyle('text', -anchor => 'e',
 			    -background => $inner_bg,
 			    -foreground => $inner_fg);
+
+    $hl_entry{"red"}  = $top->ItemStyle('text', -foreground => 'red');
+    $hl_entry{"blue"} = $top->ItemStyle('text', -foreground => 'blue');
 
     # altes Balloon und HList vertragen sich nicht miteinander
     require Tk::Balloon;
@@ -1518,25 +1521,146 @@ sub daily_intervals {
     require POSIX;
     my $t = $top->Toplevel;
     $t->title(POSIX::strftime("%Y-%m-%d", localtime $begin_date));
-    my $lb = $t->Scrolled('HList', -scrollbars => "oso$sbside",
-			  -columns => 3,
-			  -width => 60,
-			 )->pack(-expand => 1, -fill => 'both');
+
+    my $c;
+    my $lb;
+
+    my $highlight_sub = sub {
+	my $entry = shift;
+	$c->delete("hi");
+	foreach my $it ($c->find("withtag", "entry_$entry")) {
+	    my @coords = $c->coords($it);
+	    $c->createLine(@coords, -fill => "green",
+			   -tags => "hi");
+	}
+    };
+
+    $lb = $t->Scrolled
+	('HList', -scrollbars => "oso$sbside",
+	 -columns => 3,
+	 -width => 60,
+	 -selectmode => "browse",
+	 -browsecmd => $highlight_sub,
+	)->pack(-expand => 1, -fill => 'both',
+		-side => "left");
+
+    my $rad = 50;
+    $c = $t->Canvas(-width => $rad*2,
+		    -height => $rad*2*2+5,
+		    -takefocus => 0,
+		    -highlightthickness => 0,
+		   )->pack(-fill => "both", -side => "left");
+    my $clock1 = [0,0,$rad*2,$rad*2];
+    my $clock2 = [0,$rad*2+4, $rad*2, $rad*2];
+    $c->createOval(@$clock1,
+		   -outline => "black", -width => 3);
+    _draw_hour_ticks($c, @$clock1);
+    $c->createOval($clock2->[0], $clock2->[1],
+		   $clock2->[0]+$clock2->[2],
+		   $clock2->[1]+$clock2->[3],
+		   -outline => "black", -width => 3);
+    _draw_hour_ticks($c, @$clock2);
+    $c->bind("entry", "<1>" => sub {
+		 my $c = shift;
+		 foreach ($c->gettags("current")) {
+		     if (/^entry_(\d+)/) {
+			 my $e = $1;
+			 $lb->see($e);
+			 $lb->anchorClear;
+			 $lb->selectionClear;
+			 $lb->anchorSet($e);
+			 $highlight_sub->($e);
+			 return;
+		     }
+		 }
+	     });
+
     my @res_times = $root->restricted_times($begin_date, $end_date);
     my $i = 0;
+    my $fill_color = "red";
     foreach (@res_times) {
 	my $name = $_->[0]->pathname;
 	if (length($name) > 40) {
 	    $name = "... " . substr($name, -36); #length($name)-36
 	}
-	$lb->add($i, -text => $name);
-	$lb->itemCreate($i, 1, 
-			-text => POSIX::strftime("%H:%M:%S", localtime $_->[1])
-		       );
-	$lb->itemCreate($i, 2, 
-			-text => POSIX::strftime("%H:%M:%S", localtime $_->[2])
-		       );
+	$lb->add($i, -text => $name,
+		 ($hl_entry{$fill_color}
+		  ? (-style => $hl_entry{$fill_color}) : ()));
+
+	my $begin_time = POSIX::strftime("%H:%M:%S", localtime $_->[1]);
+	my $end_time   = POSIX::strftime("%H:%M:%S", localtime $_->[2]);
+
+	$lb->itemCreate($i, 1, -text => $begin_time,
+			($hl_entry{$fill_color}
+			 ? (-style => $hl_entry{$fill_color}) : ()));
+	$lb->itemCreate($i, 2, -text => $end_time,
+			($hl_entry{$fill_color}
+			 ? (-style => $hl_entry{$fill_color}) : ()));
+
+	for(my $time = $_->[1];
+	    $time <= $_->[2];
+	    $time += 5*60) {
+
+	    my $str_time = POSIX::strftime("%H:%M:%S", localtime $time);
+	    my($begin_clock,
+	       $begin_x,
+	       $begin_y) = _get_tic_pos($c, $clock1, $clock2, $str_time);
+
+	    my($midx, $midy);
+	    if ($begin_clock == 0) {
+		($midx, $midy) = ($rad, $rad);
+	    } else {
+		($midx, $midy) = ($rad, $rad*3);
+	    }
+
+	    $c->createLine($begin_x, $begin_y, $midx, $midy,
+			   -fill => $fill_color,
+			   -tags => ["entry_$i", "entry"],
+			  );
+	}
+
+	$fill_color = ($fill_color eq 'red' ? 'blue' : 'red');
+
 	$i++;
+    }
+}
+
+sub _draw_hour_ticks {
+    my $c = shift;
+    my($x, $y, $width, $height) = @_;
+    for my $h (0..11) {
+	$c->createLine
+	    (
+	     $x + $width/2-sin(deg2rad((12-$h)*30))*$width/2,
+	     $y + $height/2-cos(deg2rad((12-$h)*30))*$height/2,
+	     $x + $width/2-sin(deg2rad((12-$h)*30))*($width/2-8),
+	     $y + $height/2-cos(deg2rad((12-$h)*30))*($height/2-8),
+	     -fill => "black",
+	     -width => 3,
+	    );
+    }
+}
+
+sub _get_tic_pos {
+    my($c, $clock1_def, $clock2_def, $time) = @_;
+    my $clock = 0;
+    if ($time =~ /^(\d{1,2}):(\d{2}):(\d{2})/) {
+	my $hour = $1;
+	my $min  = $2;
+	if ($hour >= 12) {
+	    $clock = 1;
+	    $hour-=12;
+	}
+	$hour += $min/60;
+	my $clock_def = ($clock == 0 ? $clock1_def : $clock2_def);
+	($clock,
+	 $clock_def->[0] + $clock_def->[2]/2-sin(deg2rad((12-$hour)*30))
+	       *$clock_def->[2]/2,
+	 $clock_def->[1] + $clock_def->[3]/2-cos(deg2rad((12-$hour)*30))
+	       *$clock_def->[3]/2,
+	);
+    } else {
+	();
     }
 }
 
@@ -3104,6 +3228,9 @@ sub hourly_rate {
     $rate = $options->{'hourlyrate'} if (!defined $rate);
     $rate;
 }
+
+sub pi ()   { 4 * atan2(1, 1) } # 3.141592653
+sub deg2rad { ($_[0]*pi)/180 }
 
 sub show_about {
     my $dia = $top->Toplevel(-title => 'Copyright');
