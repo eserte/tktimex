@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.40 2000/09/26 08:50:19 eserte Exp $
+# $Id: Project.pm,v 3.41 2000/11/24 23:14:46 eserte Exp $
 #
 
 =head1 NAME
@@ -492,7 +492,7 @@ sub reparent {
 
     $root = $p->root;
 
-Return root node of the given project $p,
+Return root node of the given project $p.
 
 =cut
 
