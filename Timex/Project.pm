@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.48 2003/09/01 18:58:55 eserte Exp $
+# $Id: Project.pm,v 3.49 2003/09/12 21:37:17 eserte Exp $
 #
 
 =head1 NAME
@@ -25,14 +25,19 @@ package Timex::Project;
 use strict;
 use vars qw($VERSION $magic $magic_template $emacsmode $pool @project_attributes);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 3.48 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 3.49 $ =~ /(\d+)\.(\d+)/);
 
 $magic = '#PJ1';
 $magic_template = '#PJT';
 $emacsmode = '-*- project -*-';
 @project_attributes = qw/archived rate rcsfile domain id notimes closed icon/;
 
-sub Timex_Project_API { 1 }
+##XXX use some day?
+#use constant TIMES_SINCE      => 0;
+#use constant TIMES_UNTIL      => 1;
+#use constant TIMES_ANNOTATION => 2;
+
+sub Timex_Project_API () { 1 }
 
 =head2 new
 
@@ -437,8 +442,6 @@ sub interval_times {
 
     my %annotations;
     my $out_annotations = sub {
-require Data::Dumper; print STDERR "Line " . __LINE__ . ", File: " . __FILE__ . "\n" . Data::Dumper->new([\%annotations],[])->Indent(1)->Useqq(1)->Dump; # XXX
-
 	if ($do_annotations) {
 	    join "; ", sort keys %annotations;
 	} else {
@@ -1202,6 +1205,49 @@ sub get_all_domains {
     };
     $self->traverse($sub);
     keys %$list;
+}
+
+=head2 get_all_annotations
+
+    @annotations = $project->get_all_annotations($since, $until, %args)
+
+Return all annotations as an array for the given project since $since
+until $until. If $until is undefined, return the time until now.
+
+=cut
+
+sub get_all_annotations {
+    my($self, $since, $until, %args) = @_;
+    my @annotations;
+    if ($args{'-recursive'}) {
+	foreach (@{$self->subproject}) {
+	    push @annotations, $_->get_all_annotations($since, $until, %args);
+	}
+    }
+
+    my @times = @{$self->{'times'}};
+    my $i = -1;
+    foreach (@times) {
+	my($from, $to, $annotation) = (@$_[0..2]);
+	$i++;
+	if (defined $from) {
+	    if (!defined $to) {
+		if ($i != $#times) {
+		    warn "No end time in $self";
+		    next;
+		} else {
+		    $to = time;
+		}
+	    }
+	    my $to = _min($to, $until);
+	    if ($since =~ /^\d+$/ && $to >= $since && $to >= $from) {
+		push @annotations, $annotation if defined $annotation;
+	    }
+	} else {
+	    warn "No start time in $self";
+	}
+    }
+    @annotations;
 }
 
 =head2 notimes
