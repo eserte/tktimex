@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.64 2000/09/02 17:12:06 eserte Exp $
+# $Id: tktimex,v 4.65 2000/09/02 22:19:36 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -101,7 +101,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.64 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.65 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -1259,6 +1259,7 @@ sub show_one_day {
 	    ($inner_bg_opt, $inner_fg_opt) = ('-innerbg', '-innerfg');
 	}
     };
+    my $one_day_only = 1;
     my $has_date = !$@;
     my $has_date_entry;
     if (!$has_date) {
@@ -1276,6 +1277,7 @@ sub show_one_day {
     my @p; # project array for one day
     my($dw, $dw_to);
     my $no_interval_cb;
+    my $adjust_chain;
     if ($has_date) {
 	my $df = $f->Frame->pack;
 	# from:
@@ -1313,6 +1315,7 @@ sub show_one_day {
 		 }
 	     }
 	    )->grid(-row => 1, -column => 0, -sticky => "e");
+
 	my $c = $df->Canvas
 	    (-width => 20,
 	     -height => 40, #XXX$dw->reqheight + $dw_to->reqheight + 5,
@@ -1320,12 +1323,28 @@ sub show_one_day {
 	     -highlightthickness => 0,
 	    )->grid(-row => 0, -column => 1, -rowspan => 2);
 	$c->createLine(5,5, 10,5, 15,10, 15,30, 10,35, 5,35, # XXX verwendung von reqheight etc.
-		       -width => 5, -smooth => 1);
-	# XXX schöner machen
-	my $orig_bg = $c->cget(-bg);
-	$c->Tk::bind('<Enter>' => sub { $c->configure(-bg => 'grey80') }); # XXX
-	$c->Tk::bind('<Leave>' => sub { $c->configure(-bg => $orig_bg) });
-	$c->Tk::bind('<1>' => sub { $no_interval_cb->toggle });
+		       -width => 5, -smooth => 1,
+		       -tags => "chain");
+	my $orig_bg  = $c->cget(-bg);
+	$c->Tk::bind('<Enter>' => sub {
+			 $c->itemconfigure("chain", -fill => 'grey50');
+		     }); # XXX
+	$c->Tk::bind('<Leave>' => sub {
+			 $c->itemconfigure("chain", -fill => "black");
+		     });
+	$adjust_chain = sub {
+	    if ($one_day_only) {
+		$c->delete("broken");
+	    } else {
+		$c->createRectangle(0,13,20,27,-fill=>$orig_bg,
+				    -outline=>undef,
+				    -tags=>"broken");
+	    }
+	};
+	$c->Tk::bind('<1>' => sub {
+			 $no_interval_cb->toggle;
+			 $adjust_chain->();
+		     });
     } else {
 	if ($has_date_entry) {
 	    $dw = $f->DateEntry
@@ -1362,7 +1381,6 @@ sub show_one_day {
 		     },
 		     ($has_date_entry ? (-state => 'disabled') : ()),
 		    )->pack(-side => 'left');
-    my $one_day_only = 1;
     $no_interval_cb = 
 	$ff->Checkbutton(-text => 'no interval',
 			 -variable => \$one_day_only,
@@ -1370,6 +1388,7 @@ sub show_one_day {
 			     if ($options->{'oneday-immediately'}) {
 				 $btn->invoke;
 			     }
+			     $adjust_chain->() if $adjust_chain;
 			 },
 			)->pack(-side => 'left');
     my $act_from_date; # current from date
