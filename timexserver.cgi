@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: timexserver.cgi,v 1.1 1999/10/25 23:33:17 eserte Exp $
+# $Id: timexserver.cgi,v 1.2 1999/10/25 23:54:00 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -52,12 +52,20 @@ if (exists $valid_cmd{$q->param('cmd')}) {
        
        { name => 'list', req => 'a*',
 	 code => sub {
-	     print "<ul>\n";
-	     foreach (split("\0", $_[1])) {
-		 print "<li><a href='" . $q->script_name . "?cmd=start&args=" .
-		   CGI::escape($_) . "&$auth'>$_</a>\n";
+	     print "<table>\n";
+	     foreach (split("\0\1", $_[1])) {
+		 print "<tr>";
+		 my($pn, $c, $t) = split("\0", $_);
+		 print "<td><a href='" . $q->script_name . "?cmd=start&args=" .
+		   CGI::escape($pn) . "&$auth'>$_</a></td> ";
+		 print "<td>";
+		 if ($c) {
+		     print " (current) ";
+		 }
+		 print "</td><td>";
+		 print sec2time($t) . "</td></tr>\n";
 	     }
-	     print "</ul>\n";
+	     print "</table>\n";
 	     Event::unloop()
 	 } 
        },
@@ -104,6 +112,16 @@ Password: <input type=password name=pw><br>
 </form>
 </body>
 EOF
+}
+
+# partly stolen from tktimex
+sub sec2time {
+    my($sec) = @_;
+    my($day, $hour, $min);
+    $hour = int($sec / 3600);
+    $sec  = $sec % 3600;
+    $min  = int($sec / 60);
+    sprintf("%02d:%02d:%02d", $hour, $min, $sec % 60);
 }
 
 __END__
