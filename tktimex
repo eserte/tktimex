@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.73 2000/09/20 19:46:59 eserte Exp $
+# $Id: tktimex,v 4.74 2000/09/26 08:49:58 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -85,6 +85,7 @@ sub Popup
 package main;
 
 use Tk::HList;
+use Tk::Tree;
 BEGIN { state_change("after Tk::HList"); }
 use File::Basename;
 use FindBin;
@@ -101,7 +102,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.73 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.74 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -127,6 +128,7 @@ my @nowtime = localtime;
 my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
 my $project_status = "Left: Select | Middle: Create Subproject | Right: Attributes";
 my $status_text;
+my $project_frame;
 # there are two forms of separators: for intern store in HList
 # use $separator, for human-readable output use "/"
 my $separator = '¦';
@@ -425,6 +427,17 @@ $mb_options->checkbutton(-label => 'Show only top',
 			 -command => \&toggle_show_only_top,
 			 -variable => \$options->{'onlytop'},
 			);
+$mb_options->separator;
+$mb_options->command
+    (-label => 'Open all',
+     -command => sub { traverse_entries(sub { $project_frame->open($_[0]) }) }
+    );
+$mb_options->command
+    (-label => 'Close all',
+     -command => sub { traverse_entries(sub { $project_frame->close($_[0]) }) }
+    );
+
+
 if (defined $opt) {
     $mb_options->separator;
     $mb_options->command(-label => 'Option editor',
@@ -543,9 +556,10 @@ my($pf_cols, $has_costs);
 $pf_cols = 5; # cannot change -columns of hlists...
 
 state_change("checkpoint 3");
-
-my $project_frame = $top->Scrolled
-  ('HList', -scrollbars => "oso$sbside",
+$project_frame = $top->Scrolled
+  (#'HList', # XXX
+   'Tree',
+   -scrollbars => "oso$sbside",
    -bg => $inner_bg,
    -fg => $inner_fg,
    -columns => $pf_cols,
@@ -559,6 +573,9 @@ my $project_frame = $top->Scrolled
    },
    -separator => $separator,
   )->pack(-expand => 1, -fill => 'both');
+my $is_tree = ($project_frame->can('autosetmode') or
+	       ($project_frame->Subwidget("scrolled") and
+		$project_frame->Subwidget("scrolled")->can('autosetmode')));
 
 state_change("checkpoint 4");
 if ($options->{'autoscroll'} !~ /^(|none)$/) {
@@ -1180,6 +1197,16 @@ sub search_project {
 	$status_text->configure(-text => "Nothing found");
     }
 
+}
+
+sub traverse_entries {
+    my $sub = shift;
+    my $active;
+    ($active) = $project_frame->info("children");
+    while (defined $active and $active ne "") {
+	$sub->($active);
+	$active = $project_frame->info("next", $active);
+    }
 }
 
 sub act_time {
@@ -2022,6 +2049,11 @@ sub insert_all {
 	$project_frame->selectionSet(make_path($current_project));
     }
     @all_domains = $root->get_all_domains;
+
+    if ($is_tree) {
+	$project_frame->autosetmode;
+    }
+
     $top->Unbusy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
 }
 
