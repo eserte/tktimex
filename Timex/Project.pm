@@ -1,9 +1,10 @@
 # -*- perl -*-
 
 package Project;
+use strict;
+use vars qw($magic);
 
-my $pool = [];
-my $magic = '#PS1';
+$magic = '#PJ1';
 
 sub new {
     my($pkg, $label) = @_;
@@ -12,38 +13,38 @@ sub new {
     $self->{'subprojects'} = [];
     $self->{'archived'} = 0;
     $self->{'times'} = [];
+    $self->{'parent'} = undef;
     bless $self, $pkg;
-    $self->push_pool;
-    $self;
-}
-
-sub push_pool {
-    my $self = shift;
-    push(@{$Project::pool}, $self);
-}
-
-sub pool {
-    my($pkg, $pool) = @_;
-    if (defined $pool) {
-	$Project::pool = $pool;
-    } else {
-	$Project::pool;
-    }
 }
 
 sub label {
-    $_[0]->{'label'};
+    my($self, $label) = @_;
+    if (defined $label) {
+	$self->{'label'} = $label;
+    } else {
+	$self->{'label'};
+    }
 }
 
 sub parent {
-    undef;
+    my($self, $parent) = @_;
+    if (defined $parent) {
+	$self->{'parent'} = $parent;
+    } else {
+	$self->{'parent'};
+    }
 }
 
 sub subproject {
     my($self, $label) = @_;
     if (defined $label) {
-	my $sub = Subproject->new($label);
-	$sub->{'parent'} = $self;
+	my $sub;
+	if (ref $label ne 'Project') {
+	    $sub = Project->new($label);
+	} else {
+	    $sub = $label;
+	}
+	$sub->parent($self);
 	push(@{$self->{'subprojects'}}, $sub);
 	$sub;
     } else {
@@ -52,7 +53,12 @@ sub subproject {
 }
 
 sub level {
-    0;
+    my $self = shift;
+    if (!defined $self->{'parent'}) {
+	0;
+    } else {
+	$self->{'parent'}->level + 1;
+    }
 }
 
 sub start_time {
@@ -124,50 +130,43 @@ sub archived {
 }
 
 sub dump_data {
-    my $pool = $Project::pool;
-    my $res = "$magic\n";
-    foreach (@$pool) {
-	if ($_->isa('Project')) {
-	    $res .= &dump_data_project($_, 1);
-	}
-    }
-    $res;
-}
-
-sub dump_data_project {
     my($self, $indent) = @_;
     my $res;
-    $res .= (">" x $indent) . "$self->{'label'}\n";
-    $res .= "/archived=$self->{'archived'}\n";
-    my $time;
-    foreach $time (@{$self->{'times'}}) {
-	$res .= "|" . $time->[0];
-	if (defined $time->[1]) {
-	    $res .= "-" . $time->[1];
+    if (!$indent) {
+	$res = "$magic\n";
+    } else {
+	$res .= (">" x $indent) . "$self->{'label'}\n";
+	$res .= "/archived=$self->{'archived'}\n";
+	my $time;
+	foreach $time (@{$self->{'times'}}) {
+	    $res .= "|" . $time->[0];
+	    if (defined $time->[1]) {
+		$res .= "-" . $time->[1];
+	    }
+	    $res .= "\n";
 	}
-	$res .= "\n";
     }
     my $subproject;
     foreach $subproject (@{$self->{'subprojects'}}) {
-	$res .= &dump_data_project($subproject, $indent+1);
+	$res .= $subproject->dump_data($indent+1);
     }
     $res;
 }
 
 sub save {
-    my($file) = @_;
+    my($self, $file) = @_;
     if (!open(FILE, ">$file")) {
 	warn "Can't write to $file";
 	undef;
     } else {
-	print FILE &dump_data();
+	print FILE $self->dump_data;
 	close FILE;
 	1;
     }
 }
 
 sub interpret_data {
-    my $data = shift;
+    my($self, $data) = @_;
     my $i = $[;
     
     if ($data->[$i] ne $magic) {
@@ -176,37 +175,57 @@ sub interpret_data {
     }
     $i++;
 
-    while ($i <= $#{$data}) {
-	($i) = &interpret_data_project($data, 1, $i);
-	return undef if !defined $i;
-    }
+    $i = $self->interpret_data_project($data, $i);
+    return undef if !defined $i;
 
     1;
 }
 
 sub interpret_data_project {
-    my($data, $indent, $i) = @_;
-    my($label, %attributes, @times, @comment, @subprojects, $subproject);
-    if ($data->[$i] !~ /^>+/) {
-	warn 'Project does not begin with ">"';
-	return undef;
-    }
+    my($parent, $data, $i) = @_;
+    my($indent, $self);
     while(defined $data->[$i]) {
-	$data->[$i] =~ /^./;
-	my $first = $&;
-	my $rest = $';
-	last if $first eq '>';
-	if ($first eq '|') {
-	    my(@interval) = split(/-/, $rest);
-	    warn "Interval must be two values" if $#interval != 1;
-	    push(@times, [@interval]);
-	} elsif ($first eq '/') {
-	    my(@attrpair) = split(/=/, $rest);
-	    $attributes{$attrpair[0]} = $attrpair[1];
-	} elsif ($first eq '#') {
-	    push(@comment, $rest);
+	if ($data->[$i] !~ /^>+/) {
+	    warn 'Project does not begin with ">"';
+	    return undef;
+	}
+	my $label = $';
+	my $newindent = length($&);
+	if (!defined $indent) {
+	    $indent = $newindent;
 	} else {
-	    warn "Unknown command $first";
+	    if ($newindent < $indent) { # Rekursion verlassen
+		return $i;
+	    } elsif ($newindent > $indent) { # Subprojekte bearbeiten
+		$i = $self->interpret_data_project($data, $i);
+	    } else { # Projekt bearbeiten
+		$i++;
+		my(%attributes, @times, @comment);
+		while(defined $data->[$i]) {
+		    $data->[$i] =~ /^./;
+		    my $first = $&;
+		    my $rest = $';
+		    last if $first eq '>';
+		    if ($first eq '|') {
+			my(@interval) = split(/-/, $rest);
+			warn "Interval must be two values" if $#interval != 1;
+			push(@times, [@interval]);
+		    } elsif ($first eq '/') {
+			my(@attrpair) = split(/=/, $rest);
+			$attributes{$attrpair[0]} = $attrpair[1];
+		    } elsif ($first eq '#') {
+			push(@comment, $rest);
+		    } else {
+			warn "Unknown command $first";
+		    }
+		    $i++;
+		}
+#		print STDERR (">" x $indent) . $label, "\n";
+		$self = new Project($label);
+		$self->{'times'} = \@times;
+		$self->{'archived'} = $attributes{'archived'};
+		$parent->subproject($self);
+	    }
 	}
     }
 
@@ -214,7 +233,7 @@ sub interpret_data_project {
 }
 
 sub load {
-    my($file) = @_;
+    my($self, $file) = @_;
     my @data;
     if (!open(FILE, $file)) {
 	warn "Can't read $file";
@@ -225,26 +244,11 @@ sub load {
 	    push(@data, $_);
 	}
 	close FILE;
-	&interpret_data(\@data);
+	&interpret_data($self, \@data);
     }
 }
 
 ######################################################################
 
-package Subproject;
-@Subproject::ISA = qw(Project);
-
-sub parent {
-    $_[0]->{'parent'};
-}
-
-sub level {
-    my $self = shift;
-    $self->parent->level + 1;
-}
-
-sub push_pool { }
-
-######################################################################
-
 1;
+
