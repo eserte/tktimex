@@ -2,7 +2,7 @@ Changes
 MANIFEST
 Makefile.PL
 tktimex
-timex
+ctimex
 Timex/Project.pm
 Timex/Rcs.pm
 Timex/test.pl
