@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 1.8 1996/11/03 00:41:29 eserte Exp $
+# $Id: tktimex,v 1.9 1996/12/12 19:30:16 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -67,6 +67,8 @@ $buttons_frame->Button(-text => 'Load',
 		       -command => \&load_file)->pack(-side => 'left');
 $buttons_frame->Button(-text => 'Save',
 		       -command => \&save_file)->pack(-side => 'left');
+$buttons_frame->Button(-text => 'Dump',
+		       -command => \&dump_data)->pack(-side => 'left');
 $buttons_frame->Button(-text => 'Pause',
 		       -command => \&pause)->pack(-side => 'left');
 $buttons_frame->Button(-text => 'Quit',
@@ -303,6 +305,13 @@ sub insert_old_project {
     foreach (@{$p->subproject}) {
 	&insert_old_project($_, $indent+1);
     }
+}
+
+sub dump_data {
+    print STDERR Project::dump_data();
+    open(OUT, ">/tmp/timex.data") || warn "Can't write timex.data";
+    print OUT Project::dump_data();
+    close OUT;
 }
 
 sub save_file {
