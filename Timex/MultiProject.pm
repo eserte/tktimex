@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: MultiProject.pm,v 1.2 2001/04/04 21:50:13 eserte Exp $
+# $Id: MultiProject.pm,v 1.3 2001/04/04 22:39:17 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Slaven Rezic. All rights reserved.
@@ -31,12 +31,30 @@ use vars qw($AUTOLOAD);
 use Timex::Project;
 use File::Basename;
 
+sub Timex_Project_API { 1 }
+
 sub new {
     my($pkg, @files) = @_;
     my $self = {};
     $self->{Master} = shift @files;
     $self->{Backup} = \@files;
     bless $self, $pkg;
+}
+
+sub set {
+    my($self, %args) = @_;
+    $self->master_project(delete $args{-masterproject})
+	if $args{-masterproject};
+    $self->master(delete $args{-master})
+	if $args{-master};
+    $self->backups(@{ delete $args{-backups} })
+	if $args{-backups};
+    if ($args{-files}) {
+	$self->master(shift @{ $args{-files} });
+	$self->backups(@{ $args{-files} });
+	delete $args{-files};
+    }
+    die "Unknown argument" if keys %args;
 }
 
 sub master_project {
@@ -103,6 +121,8 @@ sub save {
     my $master_project = $self->master_project;
     die "No master project found" if !$master_project;
 
+    my $saved = 0;
+
     foreach my $file ($self->master, $self->backups) {
 	my $dir = dirname $file;
 	my $writable;
@@ -122,9 +142,13 @@ sub save {
 	}
 
 	if ($writable) {
-	    $master_project->save($file, %args);
+	    if ($master_project->save($file, %args)) {
+		$saved++;
+	    }
 	}
     }
+
+    $saved;
 }
 
 sub merge { die "No merging with " . __PACKAGE__ }
