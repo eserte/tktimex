@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.4 2000/08/23 23:31:43 eserte Exp $
+# $Id: Rcs.pm,v 1.5 2001/02/07 23:45:24 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -137,7 +137,9 @@ sub parse_rcsfile {
 	    }
 	} elsif ($stage eq 'desc') {
 	    if (/$delim_regex/ || /$file_delim_regex/) {
-		push @{$self->{Revisions}}, $curr_revision;
+		if (keys %$curr_revision) { # non-empty
+		    push @{$self->{Revisions}}, $curr_revision;
+		}
 		$curr_revision = new Timex::Rcs::Revision;
 		$substage = '';
 		if (/$file_delim_regex/) {
