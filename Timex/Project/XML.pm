@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: XML.pm,v 1.2 1999/09/18 17:44:59 eserte Exp $
+# $Id: XML.pm,v 1.3 1999/11/07 02:35:08 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -17,7 +17,28 @@ use base qw(Timex::Project);
 use XML::Parser;
 
 *convert1 = \&escape_special;
-*convert2 = \&utf8_latin1;
+
+# XXX noch nicht getestet
+eval q{
+    use utf8;
+    sub convert2 {
+	my $s = shift;
+	return "" unless defined $s;
+	$s =~ tr/\0-\x{ff}//UC;
+	$s;
+    }
+    sub convert3 {
+	my $s = shift;
+	return "" unless defined $s;
+	$s =~ tr/\0-\xff//CU;
+	$s;
+    }
+};
+if ($@) {
+    warn "Can't handle unicode in perl, using workaround...\n";
+    *convert2 = \&utf8_latin1;
+    *convert3 = \&latin1_utf8;
+}
 
 sub load {
     my($self, $file) = @_;
@@ -121,8 +142,7 @@ sub interpret_tree {
     1;
 }
 
-# XXX only german latin1 characters are translated with these functions
-
+# not yet used...
 sub latin1_utf8 {
     my $s = shift;
     return "" unless defined $s;
