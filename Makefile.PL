@@ -16,6 +16,7 @@ WriteMakefile(
      'Timex/Project/XML.pm'    => '$(INST_LIBDIR)/Timex/Project/XML.pm',
      'Timex/Rcs.pm'	       => '$(INST_LIBDIR)/Timex/Rcs.pm',
      'Timex/Server.pm'	       => '$(INST_LIBDIR)/Timex/Server.pm',
+     'Timex/Utmp.pm'	       => '$(INST_LIBDIR)/Timex/Utmp.pm',
 
      'Tk/Autoscroll.pm'	       => '$(INST_LIBDIR)/Tk/Autoscroll.pm',
      'Tk/UnderlineAll.pm'      => '$(INST_LIBDIR)/Tk/UnderlineAll.pm',
