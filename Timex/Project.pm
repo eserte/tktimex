@@ -116,9 +116,38 @@ sub sorted_subprojects {
 	$self->subproject;
     } elsif ($sorted_by =~ /^name$/i) {
 	sort { lc($a->label) cmp lc($b->label) } $self->subproject;
+    } elsif ($sorted_by =~ /^time$/i) {
+	sort { $b->sum_time(0, undef, 1) <=> $a->sum_time(0, undef, 1) }
+	       $self->subproject;
     } else {
 	die "Unknown sort type: <$sorted_by>";
     }
+}
+
+sub _in_interval {
+    my($myfrom, $myto, $from, $to) = @_;
+    ((!defined $from || $myfrom >= $from) &&
+     (!defined $to || $myfrom <= $to))    ||
+    ((!defined $from || $myto >= $from) &&
+     (!defined $to || $myto <= $to));
+}
+
+sub projects_by_interval {
+    my($self, $from, $to) = @_;
+    my @res;
+    my $p;
+    foreach $p ($self->subproject) {
+	my $t;
+	foreach $t (@{$p->{'times'}}) {
+	    my($myfrom, $myto) = ($t->[0], $t->[1]);
+	    if (_in_interval($myfrom, $myto, $from, $to)) {
+		push(@res, $p);
+		last;
+	    }
+	}
+	push(@res, $p->projects_by_interval($from, $to));
+    }
+    @res;
 }
 
 sub level {
@@ -182,21 +211,31 @@ sub unend_time {
     $self->modified(1);
 }
 
+sub _min {
+    my $min = shift;
+    foreach (@_) {
+	next if !defined $_;
+	$min = $_ if $_ < $min;
+    }
+    $min;
+}
+
 =head2 sum_time
 
-    $time = $project->sum_time($since, $recursive)
+    $time = $project->sum_time($since, $until, $recursive)
 
-Returns the time the given project accumulated since $since. If $recursive
+Returns the time the given project accumulated since $since until $until.
+If $until is undefined, returns the time until now. If $recursive
 is true, recurse into subprojects of $project.
 
 =cut
 
 sub sum_time {
-    my($self, $since, $recursive) = @_;
+    my($self, $since, $until, $recursive) = @_;
     my $sum = 0;
     if ($recursive) {
 	foreach (@{$self->subproject}) {
-	    $sum += $_->sum_time($since, $recursive);
+	    $sum += $_->sum_time($since, $until, $recursive);
 	}
     }
     my @times = @{$self->{'times'}};
@@ -213,7 +252,8 @@ sub sum_time {
 		    $to = time;
 		}
 	    }
-	    if ($since =~ /^\d+$/ && $to >= $since) {
+	    my $to = _min($to, $until);
+	    if ($since =~ /^\d+$/ && $to >= $since && $to >= $from) {
 		if ($from >= $since) {
 		    $sum += $to - $from;
 		} else {
