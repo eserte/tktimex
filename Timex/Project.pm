@@ -214,6 +214,21 @@ sub reparent {
     $newparent->subproject($self);
 }
 
+=head2 delete
+
+    $p->delete;
+
+Delete project $p. Note that you cannot delete the root project itself.
+
+=cut
+
+sub delete {
+    my($self) = @_;
+    my $parent = $self->parent;
+    return if !$parent;
+    $parent->delete_subproject($self);
+}
+
 sub delete_subproject {
     my($self, $subp) = @_;
     my @subprojects = @{$self->subproject};
@@ -222,6 +237,7 @@ sub delete_subproject {
 	push(@newsubprojects, $_) unless $_ eq $subp;
     }
     $self->{'subprojects'} = \@newsubprojects;
+    $self->modified(1);
 }
 
 sub delete_all {
