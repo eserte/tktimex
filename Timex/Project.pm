@@ -46,7 +46,42 @@ sub new {
     $self->{'modified'} = 1;
     $self->{'separator'} = "/";
     bless $self, $pkg;
-    $self;
+}
+
+=head2 clone
+
+    $new_project = clone Timex::Project $old_project
+
+Clone a new Timex::Project object from an old one.
+
+=cut
+
+sub clone {
+    my($pkg, $orig_project) = @_;
+    my $self = _deep_copy($orig_project);
+    bless $self, $pkg;
+}
+
+# private sub: does a deep recursive copy of the given reference
+sub _deep_copy {
+    my($ref) = @_;
+    my $new_ref;
+    if (!ref $ref) {
+	$new_ref = $ref;
+    } elsif (UNIVERSAL::isa($ref, 'ARRAY')) {
+	$new_ref = [];
+	foreach (@$ref) {
+	    push @$new_ref, _deep_copy($_);
+	}
+    } elsif (UNIVERSAL::isa($ref, 'HASH')) {
+	$new_ref = {};
+	while(my($k,$v) = each %$ref) {
+	    $new_ref->{$k} = _deep_copy($v);
+	}
+    } else {
+	die "Unknown ref type for $ref";
+    }
+    $new_ref;
 }
 
 sub label {
@@ -1002,6 +1037,70 @@ sub merge {
 
     $modified;
 }
+
+# XXX need work...
+# =head2 diff
+
+#     $diff_project = $project->diff($other_project);
+
+# Create a pseudo-project containing the differences between $project
+# and $other_project (more exact: the additions in $other_project in
+# respect of $project).
+
+# =cut
+ 
+# sub diff {
+#     my($self, $other, %args) = @_;
+#     my $diff_project = new Project;
+
+#     # XXX duplicate code with merge!!!
+#     my %self_label;
+#     my $sub;
+#     foreach $sub ($self->subproject) {
+# 	$self_label{$sub->label} = $sub;
+#     }
+
+#     my $other_sub;
+#     foreach $other_sub ($other->subproject) {
+# 	if (exists $self_label{$other_sub->label}) {
+# 	    my $sub = $self_label{$other_sub->label};
+# 	    my $self_i = 0;
+# 	    my $other_i = 0;
+# 	    while($self_i <= $#{$sub->{'times'}} &&
+# 		  $other_i <= $#{$other_sub->{'times'}}) {
+# 		my $self_t  = $sub->{'times'}[$self_i];
+# 		my $other_t = $other_sub->{'times'}[$other_i];
+# 		if ($self_t->[0] < $other_t->[0]) {
+# 		    $self_i++;
+# 		} elsif ($self_t->[0] == $other_t->[0]) {
+# 		    if ($self_t->[1] != $other_t->[1]) {
+# 			warn "Warning: incompatible times for " .
+# 			  $sub->label . ": " . $self_t->[1] . " != " .
+# 			    $other_t->[1];
+# 		    }
+# 		    $self_i++;
+# 		    $other_i++;
+# 		} else { # $self_t > $other_t
+# 		    splice @{$sub->{'times'}}, $self_i, 0, $other_t;
+# 		    $self_i++;
+# 		    $other_i++;
+# 		    $modified++;
+# 		}
+# 	    }
+# 	    if ($other_i <= $#{$other_sub->{'times'}}) {
+# 		push(@{$sub->{'times'}},
+# 		     @{$other_sub->{'times'}}[$other_i ..
+# 					      $#{$other_sub->{'times'}}]);
+# 		$modified += $#{$other_sub->{'times'}} - $other_i + 1;
+# 	    }
+# 	    $modified += $sub->merge($other_sub);
+# 	} else {
+# 	    $self->subproject($other_sub);
+# 	    $modified++;
+# 	}
+#     }
+
+# }
 
 ######################################################################
 
