@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.60 2000/08/25 02:28:40 eserte Exp $
+# $Id: tktimex,v 4.61 2000/08/29 17:29:34 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -99,7 +99,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.60 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.61 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -2161,6 +2161,7 @@ sub show_intervals {
 
     my @rev;
     if ($project->rcsfile) {
+	$top->Busy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
 	eval {
 	    my $rcs = get_rcs_from_cache($project);
 	    if ($rcs) {
@@ -2174,6 +2175,7 @@ sub show_intervals {
 	    }
 	};
 	warn $@ if $@;
+	$top->Unbusy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
     }
 
     my($w, $lb, $real_lb, $times);
@@ -2358,7 +2360,10 @@ sub show_intervals {
     my $anchor_set = 0;
     my $last_rev_def;
     my $i = 0;
-    $times = [ $project->interval_times($group, -recursive => $subproj) ];
+    $times = $project->interval_times($group,
+				      -recursive => $subproj,
+				      -asref => 1,
+				     );
 
     foreach (@$times) {
 	my($from, $to, $interval) = @$_;
