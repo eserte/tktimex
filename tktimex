@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.21 1998/11/21 23:40:54 eserte Exp $
+# $Id: tktimex,v 4.22 1998/11/22 00:11:03 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -13,6 +13,7 @@
 #
 
 use Tk;
+use Tk::ErrorDialog;
 
 package Tk::Wm;
 
@@ -73,9 +74,9 @@ eval { require Tk::UnderlineAll };
 use Timex::Project;
 use strict;
 use vars qw($VERSION);
-use locale; # for sort XXX broken in FreeBSD
+use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.21 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.22 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -173,18 +174,23 @@ $mb_file->command(-label => 'Load',
 		  -command => sub { load_file(1) });
 $mb_file->command(-label => 'Save',
 		  -command => \&save_file);
-$mb_file->command(-label => 'Save as ...',
-		  -command => \&save_as_file);
-$mb_file->command(-label => 'Save skeleton',
-		  -command => \&save_skeleton);
+$mb_file->cascade(-label => 'Export');
+my $mb_file_menu = $mb_file->cget(-menu);
+my $mb_export = $mb_file_menu->Menu;
+$mb_file->entryconfigure('last', -menu => $mb_export);
+$mb_export->command(-label => 'Save as ...',
+		    -command => \&save_as_file);
+$mb_export->command(-label => 'Save skeleton',
+		    -command => \&save_skeleton);
+$mb_export->command(-label => 'Save subproject',
+		    -command => \&save_subproject);
+$mb_export->command(-label => 'Dump',
+		    -command => \&dump_data);
 $mb_file->command(-label => 'Merge',
 		  -command => \&merge_file);
-$mb_file->command(-label => 'Dump',
-		  -command => \&dump_data);
 $mb_file->command(-label => 'Quit',
 		  -command => \&quit_program);
 $mb_file->separator;
-my $mb_file_menu = $mb_file->cget(-menu);
 
 my $mb_project = $menu_frame->Menubutton(-text => 'Project'
 					)->pack(-side => 'left');
@@ -289,8 +295,7 @@ my $project_frame = $top->Scrolled
    -drawbranch => 1,
    -header => 1,
    -selectmode => 'single',
-   -browsecmd => sub { pause(); #&start_stop(@_)
-		   },
+   -browsecmd => sub { pause(); },
    -separator => $separator,
   )->pack(-expand => 1, -fill => 'both');
 $project_frame->header('create', 0, -text => 'Projects:');
@@ -373,7 +378,8 @@ $top->repeat(5*60*1000, \&check_still_today);
 MainLoop;
 
 sub enter_label {
-    my($res, $action);
+    my $action;
+    my $res = '';
     $status_edit++;
     $status_text->configure(-text => 'Project name:');
     my $entry = $status_frame->Entry(-textvariable => \$res,
@@ -988,6 +994,20 @@ sub save_as_file {
     save_file($autosave);
 }
 
+sub _overwrite_warning {
+    my $file = shift;
+    if (-e $file) {
+	require Tk::Dialog;
+	die if ($top->Dialog
+		(-title => 'Warning',
+		 -text => "Really overwrite $file with skeleton data?\n".
+		 "All time information will be lost in $file!",
+		 -popover => 'cursor',
+		 -default_button => 'No',
+		 -buttons => ['Yes', 'No'])->Show ne 'Yes');
+    }
+}
+
 sub save_skeleton {
     my($file, $path) = fileparse($options->{'file'});
     $file = get_filename($top,
@@ -995,22 +1015,33 @@ sub save_skeleton {
 			 -Path => $path,
 			 -FPat => '*.pj1');
     return unless $file;
-
     $file = adjust_filename($file);
-
-    if (-e $file) {
-	require Tk::Dialog;
-	return if ($top->Dialog
-		   (-title => 'Warning',
-		    -text => "Really overwrite $file with skeleton data?\n".
-		    "All time information will be lost in $file!",
-		    -popover => 'cursor',
-		    -default_button => 'No',
-		    -buttons => ['Yes', 'No'])->Show ne 'Yes');
-    }
+    eval {
+	_overwrite_warning($file);
+    };
+    return if ($@);
 
     $root->save($file, -skeleton => 1);
 }
+
+sub save_subproject {
+    my $p = get_project_from_selection();
+    return if !$p;
+    my($file, $path) = fileparse($options->{'file'});
+    $file = get_filename($top,
+			 -Title => 'Enter project file',
+			 -Path => $path,
+			 -FPat => '*.pj1');
+    return unless $file;
+    $file = adjust_filename($file);
+    eval {
+	_overwrite_warning($file);
+    };
+    return if ($@);
+
+    $p->save($file);
+}
+
 
 sub merge_file {
     my $path = dirname($options->{'file'});
@@ -1733,13 +1764,9 @@ XXX
 
 - Pod
 
-- Redo, a better undo or editing possiblities
-
 - View by day, by project, by interval, by month, by special attrib
 
 - use getOpen/SaveFile or FBox instead of FileDialog
-
-- lasches import/load, das nur den teil vom magic ab beachtet (Project.pm)
 
 =head1 AUTHOR
 
