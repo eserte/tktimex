@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.6 2001/04/20 21:53:41 eserte Exp $
+# $Id: Rcs.pm,v 1.7 2001/04/26 21:34:30 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -51,6 +51,7 @@ sub unixtime2rcsdate {
 }
 sub author   { $_[0]->{Author} }
 sub desc     { $_[0]->{Desc} }
+sub log      { shift->{Log} }
 
 ######################################################################
 
@@ -146,6 +147,11 @@ sub parse_rcsfile {
 		if (/$file_delim_regex/) {
 		    $stage = 'header';
 		}
+	    } elsif ($substage eq 'log') {
+		if (!defined $curr_revision->{Log}) {
+		    $curr_revision->{Log} = "";
+		}
+		$curr_revision->{Log} .= $_ . "\n";
 	    } elsif ($substage eq 'desc') {
 		$curr_revision->{Desc} .= $_ . "\n";
 	    } elsif (/^revision\s+(\S+)/) {
@@ -153,6 +159,7 @@ sub parse_rcsfile {
 	    } elsif (/^date:\s+([^;]+);\s+author:\s+([^;]+)/) {
 		$curr_revision->{Date} = $1;
 		$curr_revision->{Author} = $2;
+		$substage = 'log';
 	    } else {
 		$substage = 'desc';
 		redo;
@@ -165,14 +172,19 @@ sub parse_rcsfile {
 sub rcs_file       { $_[0]->{RCS_File} }
 sub working_file   { $_[0]->{Working_File} }
 sub symbolic_names { @{$_[0]->{Symbolic_Names}} }
+# In scalar context, return the first symbolic name for a revision.
+# In array context, return all symbolic names for a revision.
 sub symbolic_name  {
     my($self, $rev_o) = @_;
     my $rev = $rev_o->revision;
+    my @res;
     foreach ($self->symbolic_names) {
 	if ($_->[1] eq $rev) {
-	    return $_->[0];
+	     return $_->[0] if (!wantarray);
+	     push @res, $_->[0];
 	}
     }
+    @res;
 }
 sub revisions      { @{$_[0]->{Revisions}} }
 sub versions       { $_[0]->revisions } # VCS.pm compatibility
