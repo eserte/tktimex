@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.59 2000/08/25 02:21:10 eserte Exp $
+# $Id: tktimex,v 4.60 2000/08/25 02:28:40 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -99,7 +99,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.59 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.60 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -2304,7 +2304,8 @@ sub show_intervals {
 	    }
 	}
 
-	if ($group eq '' && (!defined $lb_column || $lb_column < 3)) {
+	if ($group eq '' && !$subproj &&
+	    (!defined $lb_column || $lb_column < 3)) {
 	    $interval_editor->($i);
 	} else {
 	    $log_viewer->($i);
@@ -2448,7 +2449,7 @@ sub show_intervals {
 			 -command => $close_sub,
 			)->pack(-side => 'left');
     $f->Label(-text => '  ')->pack(-side => 'left');
-    if ($group eq '') {
+    if ($group eq '' && !$subproj) {
 	$f->Button(-text => 'Del',
 		   -command => sub {
 		       $project->delete_times($lb->info('selection'));
@@ -2468,15 +2469,17 @@ sub show_intervals {
 		   }
 		   )->pack(-side => 'left');
     }
-    $f->Button(-text => 'Re-Sort',
-	       -command => sub {
-		   $project->sort_times;
-		   # $modified++ nicht notwendig, weil sich nichts an der
-		   # Gesamtzeit ändert
-		   $update->();
-	       }
-	      )->pack(-side => 'left');
-    if ($group eq '') {
+    if (!$subproj) {
+	$f->Button(-text => 'Re-Sort',
+		   -command => sub {
+		       $project->sort_times;
+		       # $modified++ nicht notwendig, weil sich nichts an der
+		       # Gesamtzeit ändert
+		       $update->();
+		   }
+		  )->pack(-side => 'left');
+    }
+    if ($group eq '' && !$subproj) {
 	$f->Label(-text => ' ')->pack(-side => 'left');
 	$f->Checkbutton(-text => 'Seconds',
 			-variable => \$show_seconds,
