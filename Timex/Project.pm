@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.35 2000/09/02 02:17:06 eserte Exp $
+# $Id: Project.pm,v 3.36 2000/09/02 17:12:16 eserte Exp $
 #
 
 =head1 NAME
@@ -407,6 +407,26 @@ sub parent {
 	$self->modified(1);
     } else {
 	$self->{'parent'};
+    }
+}
+
+=head2 top_parent
+
+    $top_parent = $project->top_parent
+
+Return real top parent (that is, not the root project) of $project.
+
+=cut
+
+sub top_parent {
+    my $self = shift;
+    if (!$self->parent) {
+	# this is already the root project, not defined
+	undef;
+    } elsif (!$self->parent->parent) {
+	$self;
+    } else {
+	$self->parent->top_parent;
     }
 }
 
