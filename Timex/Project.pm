@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.49 2003/09/12 21:37:17 eserte Exp $
+# $Id: Project.pm,v 3.50 2005/03/05 23:33:02 eserte Exp $
 #
 
 =head1 NAME
@@ -25,12 +25,12 @@ package Timex::Project;
 use strict;
 use vars qw($VERSION $magic $magic_template $emacsmode $pool @project_attributes);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 3.49 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 3.50 $ =~ /(\d+)\.(\d+)/);
 
 $magic = '#PJ1';
 $magic_template = '#PJT';
 $emacsmode = '-*- project -*-';
-@project_attributes = qw/archived rate rcsfile domain id notimes closed icon/;
+@project_attributes = qw/archived rate rcsfile domain id notimes closed icon jobnumber/;
 
 ##XXX use some day?
 #use constant TIMES_SINCE      => 0;
@@ -239,6 +239,15 @@ sub closed {
     }
 }
 
+=head2 icon
+
+    $icon = $project->icon;
+    $project->icon($icon);
+
+Get or set icon for project.
+
+=cut
+
 sub icon {
     my($self, $icon) = @_;
     if (defined $icon) {
@@ -248,6 +257,44 @@ sub icon {
 	$self->{'icon'};
     }
 }
+
+=head2 jobnumber
+
+    $jobnumber = $project->jobnumber;
+    $project->jobnumber($jobnumber);
+
+Get or set jobnumber for project.
+
+=cut
+
+sub jobnumber {
+    my($self, $jobnumber) = @_;
+    if (defined $jobnumber) {
+	$self->{'jobnumber'} = $jobnumber;
+	$self->modified(1);
+    } else {
+	$self->{'jobnumber'};
+    }
+}
+
+=head2 jobnumber_from_parent
+
+    $jobnumber = $project->jobnumber_from_parent;
+
+Get jobnumber for this project, either from the project itself or from
+any of the parents. Return undef if no jobnumber could be found.
+
+=cut
+
+sub jobnumber_from_parent {
+    my($self) = @_;
+    my $jobnumber = $self->{'jobnumber'};
+    return $jobnumber if defined $jobnumber && $jobnumber ne "";
+    my $parent = $self->parent;
+    return undef if !defined $parent;
+    $self->parent->jobnumber_from_parent;
+}
+
 
 =head2 note
 
@@ -976,7 +1023,7 @@ sub sum_time {
 	    if (defined $from) {
 		if (!defined $to) {
 		    if ($i != $#times) {
-			warn "No end time in $self";
+			warn "No end time in " . $self->pathname . " (pos $i)";
 			next;
 		    } else {
 			$dont_cache++; # implizites Setzen, daher nicht cachen
@@ -1070,19 +1117,21 @@ sub restricted_times {
     sort { $a->[1] <=> $b->[1] } @times;
 }
 
-=head2 _get_from_upper
+=head2 get_from_upper
 
-    $value = $project->_get_from_upper($attribute)
-    $project->_get_from_upper($attribute, $value)
+    $value = $project->get_from_upper($attribute)
+    $project->get_from_upper($attribute, $value)
 
 Get the value for an attribute for this project, or, if undefined, for
 one of the parents of this project.
 
 With two arguments, set the value of the attribute of this project.
 
+An alias C<_get_from_upper> exists for backward compatibility.
+
 =cut
 
-sub _get_from_upper {
+sub get_from_upper {
     my($self, $attribute) = (shift, shift);
     if (@_ > 0) {
 	$self->{$attribute} = shift;
@@ -1090,12 +1139,13 @@ sub _get_from_upper {
 	if (defined $self->{$attribute} && $self->{$attribute} ne "") {
 	    $self->{$attribute};
 	} elsif ($self->parent) {
-	    $self->parent->_get_from_upper($attribute);
+	    $self->parent->get_from_upper($attribute);
 	} else {
 	    undef;
 	}
     }
 }
+*_get_from_upper = \&get_from_upper;
 
 =head2 archived
 
@@ -1177,7 +1227,7 @@ Get or set the rate for this project.
 
 =cut
 
-sub rate { shift->_get_from_upper("rate", @_) }
+sub rate { shift->get_from_upper("rate", @_) }
 
 =head2 domain
 
@@ -1186,7 +1236,7 @@ can be used to separate private from corporate projects.
 
 =cut
 
-sub domain { shift->_get_from_upper("domain", @_) }
+sub domain { shift->get_from_upper("domain", @_) }
 
 =head2 get_all_domains
 
@@ -1259,7 +1309,7 @@ Get or set the notimes flag for this project.
 
 =cut
 
-sub notimes { shift->_get_from_upper("notimes", @_) }
+sub notimes { shift->get_from_upper("notimes", @_) }
 
 =head2 separator
 
