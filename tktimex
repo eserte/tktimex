@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.53 2000/07/06 00:48:43 eserte Exp $
+# $Id: tktimex,v 4.54 2000/08/01 18:43:27 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -95,7 +95,7 @@ BEGIN { status_change("nach use locale"); }
 use Tk::DropSite;
 BEGIN { status_change("nach tk::dropsite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.53 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.54 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -2105,15 +2105,13 @@ sub show_intervals {
     my $update = sub {
 	my $t = shift;
 	$t->destroy if $t;
-	my $geometry = $w->geometry,
+	$args{-geometry}     = $w->geometry;
+	$args{-show_seconds} = $show_seconds;
+	$args{-daily}        = $daily;
+	$args{-modified}     = $modified;
 	$w->destroy;
 	show_intervals($top, $project,
-		       -readonly     => $readonly,
-		       -show_seconds => $show_seconds,
-		       -daily        => $daily,
-		       -modified     => $modified,
-		       -geometry     => $geometry,
-		      );
+		       %args);
     };
 
     my $interval_editor = sub {
