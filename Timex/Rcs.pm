@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.8 2001/05/05 15:18:34 eserte Exp $
+# $Id: Rcs.pm,v 1.9 2001/05/05 15:58:43 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -228,13 +228,27 @@ use strict;
 use File::Find;
 
 sub new {
-    my($pkg, $dir) = @_;
-    my $self = {Dirname => $dir};
+    my($pkg, $dir, %args) = @_;
+
+    require File::Spec;
+    # make absolute:
+    if (!File::Spec->file_name_is_absolute($dir)) {
+	require Cwd;
+	$dir = File::Spec->catdir(Cwd::cwd(), $dir);
+    }
+
+    my $self = {Dirname   => $dir,
+		Recursive => $args{-recursive},
+		Fast      => $args{-fast},
+	       };
     bless $self, $pkg;
 
     $self->{Files} = [];
 
     my $wanted_rcs = sub {
+  	if (!$self->{Recursive} && -d $_ && $_ !~ /^(\.|rcs)$/i) {
+  	    $File::Find::prune = 1;
+  	}
 	if (-f $_ and $File::Find::name =~ m|^(.*)/RCS/(.*),v$|) {
 	    my $orig_file = "$1/$2";
 	    push @{ $self->{Files} }, $orig_file if (-f $orig_file);
@@ -242,6 +256,9 @@ sub new {
     };
 
     my $wanted_cvs = sub {
+  	if (!$self->{Recursive} && -d $_ && $_ !~ /^(\.|cvs)$/i) {
+  	    $File::Find::prune = 1;
+  	}
 	if (-f $_ and $File::Find::name =~ m|^(.*)/CVS/Entries$|) {
 	    my $cvsdir = $1;
 	    if (!open(ENTRIES, $_)) {
@@ -267,8 +284,10 @@ sub new {
 	find($wanted_rcs, $self->{Dirname});
     }
 
-    $self->parse_rcsfile;
-    $self->create_pseudo_revisions;
+    unless ($self->{Fast}) {
+	$self->parse_rcsfile;
+	$self->create_pseudo_revisions;
+    }
 
     $self;
 }
@@ -296,6 +315,7 @@ sub create_pseudo_revisions {
 
 sub revisions     { @{ $_[0]->{Pseudo_Revisions} } }
 sub symbolic_name { undef }
+sub files         { @{ $_[0]->{Files} } }
 
 ######################################################################
 
