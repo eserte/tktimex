@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: clear_times.pl,v 1.1 1999/04/07 19:33:11 eserte Exp $
+# $Id: clear_times.pl,v 1.2 1999/04/29 08:13:00 eserte Exp $
 #
 # Author: Slaven Rezic
 #
@@ -10,9 +10,19 @@
 # WWW:  http://user.cs.tu-berlin.de/~eserte/
 #
 
+# two possible operations:
+# * clear_times.pl: Clear all the times in the file
+# * get_skeleton.pl: Save as skeleton without times
+# $1000000-question: where's the difference???
+
 use FindBin;
 use lib "$FindBin::RealBin";
 use Timex::Project;
+
+my $operation = "clear";
+if ($0 =~ /get_skeleton(\.pl)?$/) {
+    $operation = "skeleton";
+}
 
 my($infile, $outfile);
 if ($^O ne 'MSWin32') { # XXX - stdin/out does not work with win32
@@ -35,7 +45,13 @@ if ($^O ne 'MSWin32') { # XXX - stdin/out does not work with win32
 
 my $root = new Timex::Project;
 $root->load($infile);
-foreach my $p ($root->all_subprojects) {
-    $p->delete_times("all");
+if ($operation eq 'clear') {
+    foreach my $p ($root->all_subprojects) {
+	$p->delete_times("all");
+    }
+    $root->save($outfile);
+} elsif ($operation eq 'skeleton') {
+    $root->save($outfile, -skeleton => 1);
+} else {
+    die "Unknown operation: $operation";
 }
-$root->save($outfile);
