@@ -490,6 +490,7 @@ sub load {
     } else {
 	while(<FILE>) {
 	    chomp;
+	    s/\r//g; # strip dos newlines
 	    push(@data, $_);
 	}
 	close FILE;
