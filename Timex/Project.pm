@@ -205,23 +205,23 @@ sub daily_times {
     my @res;
     my($last_wday, $last_year);
     for(my $i = 0; $i<=$#times; $i++) {
-	my $d = $times[$i];
-	next if !defined $d->[1]; # ignore running project
-	my(@a1) = localtime $d->[0];
-	my(@a2) = localtime $d->[1];
+	my @d = @{ $times[$i] }; # important: don't operate on ref!
+	next if !defined $d[1]; # ignore running project
+	my(@a1) = localtime $d[0];
+	my(@a2) = localtime $d[1];
 	if ($a1[7] != $a2[7]) {
 	    # split into today and tomorrow
-	    my $old_end = $d->[1];
-	    $d->[1] = Time::Local::timelocal(59,59,23,$a1[3],$a1[4],$a1[5]);
-	    splice @times, $i+1, 0, [$d->[1]+1, $old_end];
+	    my $old_end = $d[1];
+	    $d[1] = Time::Local::timelocal(59,59,23,$a1[3],$a1[4],$a1[5]);
+	    splice @times, $i+1, 0, [$d[1]+1, $old_end];
 	}
-	my $interval = $d->[1] - $d->[0];
+	my $interval = $d[1] - $d[0];
 	if (defined $last_wday &&
 	    $last_wday == $a1[7] && $last_year == $a1[7]) {
-	    $res[$#res]->[1] = $d->[1]; # correct end time
+	    $res[$#res]->[1] = $d[1]; # correct end time
 	    $res[$#res]->[2] += $interval; # update daily interval
 	} else {
-	    push @res, [$d->[0], $d->[1], $interval];
+	    push @res, [$d[0], $d[1], $interval];
 	}
 	$last_wday = $a1[7];
 	$last_year = $a1[7];
