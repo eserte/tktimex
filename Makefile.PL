@@ -26,6 +26,7 @@ WriteMakefile(
      'mini-clock.xpm'          => '$(INST_LIBDIR)/mini-clock.xpm',
 
      'Timex/de_template.csv'   => '$(INST_LIBDIR)/Timex/de_template.csv',
+     'templates/oo.pjt'        => '$(INST_LIBDIR)/Timex/templates/oo.pjt',
     },
     'PREREQ_PM' => {'Tk'           => 402.003,
 		    'Tk::Getopt'   => 0.34,
