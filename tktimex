@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.1 1998/01/26 03:28:00 eserte Exp $
+# $Id: tktimex,v 4.2 1998/01/27 23:07:40 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about
@@ -26,7 +26,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.2 $ =~ /(\d+)\.(\d+)/);
 
 my $root = new Timex::Project;
 
@@ -412,8 +412,12 @@ sub set_timeout {
 
 sub working_time {
     my $sum = 0;
-    my $last_4week_time = $today_time - 86400*7*4;
-    my $last_week_time = $today_time - 86400*7;
+    my $week_days = 7;
+    my $week_work_days = 5;
+    my $month_days = 7*4;
+    my $month_work_days = 5*4;
+    my $last_4week_time = $today_time - 86400*$month_days;
+    my $last_week_time = $today_time - 86400*$week_days;
     my $yesterday_time = $today_time - 86400;
     my $last_4week_sum = 0;
     my $last_week_sum = 0;
@@ -440,13 +444,15 @@ sub working_time {
 	    "Today\'s working time:                " .
 	    &sec2time($sum, 'h', 0) . "\n" . 
 	    "Yesterday\'s working time:            " . 
-	    &sec2time($yesterday_sum, 'h', 0) . "\n" .
+	    &sec2time($yesterday_sum, 'h', 0) . "\n\n" .
 	    "Last week\'s working time (8h-day):   " .
 	    &sec2time($last_week_sum, 'd', 1) . "\n" .
+	    "  Average per working day:           " .
+	    &sec2time($last_week_sum/$week_work_days, 'h', 0) . "\n\n" .
 	    "Last 4 week\'s working time (8h-day): " .
 	    &sec2time($last_4week_sum, 'd', 1) . "\n" .
-	    "Average per working day:             " .
-	    &sec2time($last_4week_sum/20, 'h', 0)
+	    "  Average per working day:           " .
+	    &sec2time($last_4week_sum/$month_work_days, 'h', 0)
 	   );
     $d->Show;
 }
@@ -471,7 +477,17 @@ sub show_one_day {
     $ff->Button(-text => 'Close',
 		-command => sub { $f->destroy })->pack(-side => 'left');
     $ff->Checkbutton(-text => 'immediately',
-		     -variable => \$options->{'oneday-immediately'}
+		     -variable => \$options->{'oneday-immediately'},
+		     -command => sub { $b->invoke },
+		    )->pack(-side => 'left');
+    my $until_now = 0;
+    $ff->Checkbutton(-text => 'till today',
+		     -variable => \$until_now,
+		     -command => sub {
+			  if ($options->{'oneday-immediately'}) {
+			      $b->invoke;
+			  }
+		      },
 		    )->pack(-side => 'left');
     my $lb = $f->Scrolled('HList',
 			  -columns => 2,
@@ -485,7 +501,7 @@ sub show_one_day {
 				 -fill => 'both');
     $b->configure(-command => sub {
 		      my $s_from = $dw->get("%s");
-		      my $s_to = $s_from + 86400;
+		      my $s_to = ($until_now ? time() : $s_from + 86400);
 		      @p = $root->projects_by_interval($s_from, $s_to);
 		      $lb->delete('all');
 		      my $i = 0;
