@@ -49,7 +49,7 @@ WriteMakefile(
 #}
 
 sub MY::postamble {
-    <<EOF .
+    <<EOF;
 
 release:	dist
 	../sf-upload/sf-upload -project ptktools -package tktimex -release \$(VERSION) -file \$(DISTVNAME).tar\$(SUFFIX) -notesfile README -changes ""
