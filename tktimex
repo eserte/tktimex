@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.66 2000/09/02 22:27:02 eserte Exp $
+# $Id: tktimex,v 4.67 2000/09/02 22:51:10 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -101,7 +101,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.66 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.67 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -1732,11 +1732,7 @@ sub insert_old_project {
 
 sub update_costs_option {
     my $interactive = shift;
-    if ($options->{'hourlyrate'} > 0) {
-	$has_costs = 1;
-    } else {
-	$has_costs = 0;
-    }
+    $has_costs = ($options->{'hourlyrate'} > 0) ? 1 : 0;
     if ($interactive) {
 	insert_all();
 	my $costs_col = $pf_time_index+3;
@@ -2532,6 +2528,7 @@ sub show_intervals {
     $no_cols ++   if !$group; # zusätzliche To-Spalte
     $no_cols ++   if $show_seconds; # für From/Date-Spalte
     $no_cols ++   if $show_seconds and !$group; # für To-Spalte
+    $no_cols ++   if $has_costs;
     $no_cols += 2 if @rev;
     $lb = $w->Scrolled('HList', -scrollbars => "oso$sbside",
 		       -bg => $inner_bg,
@@ -2561,6 +2558,9 @@ sub show_intervals {
 	      if $show_seconds;
 	}
 	$lb->header('create', $col++, -text => 'Time');
+	if ($has_costs) {
+	    $lb->header('create', $col++, -text => 'Cost');
+	}
 	if (@rev) {
 	    $lb->header('create', $col++, -text => 'RCS/CVS');
 	    $rev_lifetime_col = $col++;
@@ -2624,6 +2624,15 @@ sub show_intervals {
 	    $interval = $to-$from if !$group;
 	    $lb->itemCreate($i, $col++, -text => sec2time($interval,
 							  undef, undef));
+
+	    if ($has_costs) {
+		# hier nicht runden, wegen der Granularität...
+		my $hours = $interval/3600;
+		$lb->itemCreate
+		    ($i, $col++,
+		     -text => sprintf("%.2f", $hours*hourly_rate($project)));
+	    }
+
 	    my @t;
 	    foreach my $rev (@rev) {
 		if ($rev->[1] >= $from and $rev->[1] <= $to) {
