@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.51 2000/06/28 18:42:27 eserte Exp $
+# $Id: tktimex,v 4.52 2000/07/06 00:30:06 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -83,8 +83,6 @@ BEGIN { status_change("nach Tk::HList"); }
 use File::Basename;
 use FindBin;
 use lib ("$FindBin::RealBin");
-#use lib ("/home/e/eserte/lib/perl");
-#use lib ("/home/e/eserte/devel"); # XXX für ComboBox
 eval { require Tk::UnderlineAll };
 BEGIN { status_change("vor Timex::Project"); }
 use Timex::Project;
@@ -97,7 +95,7 @@ BEGIN { status_change("nach use locale"); }
 use Tk::DropSite;
 BEGIN { status_change("nach tk::dropsite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.51 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.52 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -132,6 +130,7 @@ my $max_last_projects = 4;
 my $home = get_home_dir();
 my $inner_fg = "black";
 my $inner_bg = "white";
+my %history;
 
 status_change("getopt def");
 
@@ -251,7 +250,7 @@ my $top = new MainWindow;
 $top->protocol('WM_DELETE_WINDOW', \&quit_program);
 $top->protocol('WM_SAVE_YOURSELF',
 	       sub { save_sos();
-		     # XXX andere Optionen
+		     # XXX andere Optionen mit speichern (?)
 		     $top->command("$^X $0 $options->{'file'}");
 		     $top->destroy;
 		 });
@@ -615,15 +614,28 @@ status_change("vor main loop");
 MainLoop;
 
 sub enter_label {
-    my $label = shift || 'New project name:';
+    my $label = shift;
+    my $caller = shift;
     my $action;
     my $res = '';
     $status_edit++;
     $status_text->configure(-text => $label);
-    my $entry = $status_frame->Entry(-bg => $inner_bg,
-				     -fg => $inner_fg,
-				     -textvariable => \$res,
-				     -width => 30);
+    my $Entry = "Entry";
+    my @extra_args;
+    eval {
+	require Tk::HistEntry;
+	Tk::HistEntry->VERSION(0.33);
+	$Entry = "SimpleHistEntry";
+	@extra_args = (-match => 1, -dup => 0);
+    };
+    my $entry = $status_frame->$Entry(-bg => $inner_bg,
+				      -fg => $inner_fg,
+				      -textvariable => \$res,
+				      -width => 30,
+				      @extra_args);
+    if ($entry->can('history') and ref $history{$caller} eq 'ARRAY') {
+	$entry->history($history{$caller});
+    }
     $entry->pack(-side => 'left');
     $entry->waitVisibility;
     $entry->grab;
@@ -633,6 +645,15 @@ sub enter_label {
     $entry->OnDestroy(sub { $status_edit-- });
     $entry->waitVariable(\$action);
     $entry->grabRelease;
+
+    # Muss vor $entry->destroy kommen!
+    if ($action eq 'yes') {
+	if ($entry->can('historyAdd')) {
+	    $entry->historyAdd();
+	    $history{$caller} = [ $entry->history ];
+	}
+    }
+
     $entry->destroy;
     $status_text->configure(-text => "Current file: " .
 			    ($options->{file} || ""));
@@ -661,12 +682,11 @@ sub exists_project {
 }
 
 sub new_project {
-    my $label = enter_label();
+    my $label = enter_label('New project name:', 'newproject');
     if ($label && $root) {
 	return if exists_project($label);
 	my $p = $root->subproject($label);
 	insert_project($p);
-#	$project_frame->idletasks; # XXX see-bug
 	$project_frame->see(make_path($p));
     }
 }
@@ -674,7 +694,7 @@ sub new_project {
 sub new_sub_project {
     my $path = shift;
     return if !defined $path;
-    my $label = enter_label();
+    my $label = enter_label('New subproject name:', 'newproject');
     if ($label) {
 	my $p = entry_to_project($path);
 	return if !$p;
@@ -682,7 +702,6 @@ sub new_sub_project {
 	return if exists_project($path);
 	my $sub_p = $p->subproject($label);
 	insert_project($sub_p);
-#	$project_frame->idletasks; # XXX see-bug
 	$project_frame->see(make_path($sub_p));
     }
 }
@@ -777,6 +796,7 @@ sub common_start_project {
     my $current_pathname = $p->pathname($separator);
     $project_frame->selectionClear;
     $project_frame->selectionSet($current_pathname);
+    $project_frame->anchorSet($current_pathname);
     $project_frame->configure(-selectbackground => 'SeaGreen3');
     $project_frame->see($current_pathname);
     gui_set_pause_or_cont('Pause');
@@ -933,7 +953,7 @@ sub undo {
 }
 
 sub search_project {
-    my $regex = enter_label("Search:");
+    my $regex = enter_label("Search:", 'search');
     if ($regex && $root) {
 	# XXX vielleicht ein eval, um regex-Fehler abzufangen
 	my @res = $root->find_by_regex("(?i)$regex");
@@ -942,6 +962,7 @@ sub search_project {
 	    # überprüfen, ob das Projekt überhaupt sichtbar ist:
 	    if ($project_frame->info('exists', $path)) {
 		$project_frame->see($path);
+		$project_frame->anchorSet($path);
 		last;
 	    }
 	}
@@ -1111,9 +1132,9 @@ sub show_one_day {
     my @p; # project array for one day
     my($dw, $dw_to);
     if ($has_date) {
-	# XXX create chain button
+	my $df = $f->Frame->pack;
 	# from:
-	$dw = $f->Date
+	$dw = $df->Date
 	  ($inner_bg_opt => $inner_bg,
 	   $inner_fg_opt => $inner_fg,
 	   -fields => 'date',
@@ -1129,9 +1150,9 @@ sub show_one_day {
 		   $btn->invoke;
 	       }
 	   }
-	  )->pack;
+	  )->grid(-row => 0, -column => 0, -sticky => "e");
 	# to:
-	$dw_to = $f->Date
+	$dw_to = $df->Date
 	    ($inner_bg_opt => $inner_bg,
 	     $inner_fg_opt => $inner_fg,
 	     -fields => 'date',
@@ -1146,7 +1167,16 @@ sub show_one_day {
 		     $btn->invoke;
 		 }
 	     }
-	    )->pack;
+	    )->grid(-row => 1, -column => 0, -sticky => "e");
+	my $c = $df->Canvas
+	    (-width => 20,
+	     -height => 40, #XXX$dw->reqheight + $dw_to->reqheight + 5,
+	     -takefocus => 0,
+	     -highlightthickness => 0,
+	    )->grid(-row => 0, -column => 1, -rowspan => 2);
+	$c->createLine(5,5, 10,5, 15,10, 15,30, 10,35, 5,35, # XXX verwendung von reqheight etc.
+		       -width => 5, -smooth => 1);
+	# XXX weiter implementieren
     } else {
 	if ($has_date_entry) {
 	    $dw = $f->DateEntry
@@ -1183,7 +1213,7 @@ sub show_one_day {
 		     ($has_date_entry ? (-state => 'disabled') : ()),
 		    )->pack(-side => 'left');
     my $one_day_only = 1;
-    $ff->Checkbutton(-text => 'only one day', # XXX text
+    $ff->Checkbutton(-text => 'no interval',
 		     -variable => \$one_day_only,
 		     -command => sub {
 			  if ($options->{'oneday-immediately'}) {
@@ -1226,7 +1256,7 @@ sub show_one_day {
 			  $s_to = Tk::Date::_begin_of_day($s_to)+86399;
 		      }
 		      if ($has_date) {
-			  $dw_to->configure(-value => $s_to); # XXX ja?
+			  $dw_to->configure(-value => $s_to);
 		      }
 		      @p = $root->projects_by_interval($s_from, $s_to);
 		      $lb->delete('all');
@@ -1313,8 +1343,6 @@ sub load_file {
 	if ($path =~ m|^\.|) {
 	    require Cwd;
 	    $path = Cwd::abs_path($path);
-#	    my $cwd = Cwd::cwd();
-#	    $path =~ s|^\.|$cwd|;
 	}
 
 	$file_to_load = get_filename($top,
@@ -1391,7 +1419,6 @@ sub load_file {
 	my $last_project_path = make_path($last_project);
 	if ($project_frame->info('exists', $last_project_path)) {
 	    $project_frame->selectionSet($last_project_path);
-#	    $project_frame->idletasks; # XXX see-bug
 	    $project_frame->see($last_project_path);
 	    gui_set_pause_or_cont('Cont');
 	}
@@ -2249,7 +2276,6 @@ sub show_intervals {
     }
 
     $w->withdraw;
-# $lb->idletasks; # XXX see-bug
     $lb->see($i-1) if $i > 1;
     my $f = $w->Frame->pack(-fill => 'x');
     my $close_sub = sub {
