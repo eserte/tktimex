@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.2 2001/03/23 00:29:58 eserte Exp $
+# $Id: tktimex,v 6.3 2001/04/04 22:38:52 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -123,7 +123,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.2 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.3 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -208,6 +208,9 @@ $options = {};
    ['file|f',             '=s', undef, 'subtype' => 'file',
     'longhelp' => M"Default project file to load on startup",
     'callback-interactive' => sub { load_file(0) },
+   ],
+   ['offlinefile',        '=s', undef, 'subtype' => 'file',
+    'longhelp' => M"Fallback project file for offline operation",
    ],
    ['mergedir',           '=s', undef, 'subtype' => 'file', 'nogui' => 1],
    ['lock',               '!',  1,
@@ -1251,7 +1254,7 @@ sub start {
     if (!$path) {
 	$p = get_project_from_anchor();
     } else {
-	if ($path && ref $path and $path->isa('Timex::Project')) {
+	if ($path && ref $path and $path->can('Timex_Project_API')) {
 	    $path = $path->pathname($separator);
 	}
 	return if !$project_frame->info('exists', $path);
@@ -2149,9 +2152,31 @@ sub standalone_message_box {
 
 # REPO END
 
+sub _multiproject {
+    my(@files) = @_;
+
+    require Timex::MultiProject;
+    my $mp1 = Timex::MultiProject->new;
+    $mp1->set(-masterproject => $root,
+	      -files => \@files);
+    $mp1;
+}
+
+sub load_files {
+    my $mp1 = _multiproject(@_);
+    $mp1->load or return 0;
+    $mp1->save; # try to save updated project files
+    $mp1->master_project; # return master project
+}
+
+sub save_files {
+    _multiproject(@_)->save;
+}
+
 sub load_file {
     my $interactive = shift;
     my $file_to_load = shift;
+    my $offline_file;
 
     if ($root->modified || defined $current_project) {
 	require Tk::Dialog;
@@ -2167,6 +2192,7 @@ sub load_file {
 
     if (!defined $file_to_load) {
 	$file_to_load = $options->{'file'};
+	$offline_file = $options->{'offlinefile'};
     }
 
     if ($interactive) {
@@ -2184,6 +2210,8 @@ sub load_file {
 				     -filetypes => [qw/pj1 xml all/],
 				     -Create => 0);
 	return if !$file_to_load;
+
+	$offline_file = '';
     }
 
     if ($is_opened and $lock_is_strict) {
@@ -2215,22 +2243,35 @@ sub load_file {
 
     my $load_root = new Timex::Project;
     unlock_file_temp() if $lock_is_strict;
+
     my $ok = 1;
-    if (!$load_root->load($file_to_load)) {
-	$status_text->configure(-text => $@);
-	$ok = 0;
+    if ($offline_file ne '') {
+	$load_root = load_files($file_to_load, $offline_file);
+	if (!$load_root) {
+	    $status_text->configure(-text => $@);
+	    $ok = 0;
+	}
+    } else {
+	if (!$load_root->load($file_to_load)) {
+	    $status_text->configure(-text => $@);
+	    $ok = 0;
+	}
     }
     return unless $ok;
-    $file_writeable = -w $file_to_load;
-    if (!$file_writeable) {
-	require Tk::Dialog;
-	$top->Dialog
-	    (-title => M"Warning",
-	     -text => Mfmt("The file %s is not writeable!", $file_to_load),
-	     -popover => 'cursor',
-	     )->Show;
+
+    # no check if there is also an offline file
+    if ($offline_file eq '') {
+	$file_writeable = -w $file_to_load;
+	if (!$file_writeable) {
+	    require Tk::Dialog;
+	    $top->Dialog
+		(-title => M"Warning",
+		 -text => Mfmt("The file %s is not writeable!", $file_to_load),
+		 -popover => 'cursor',
+		)->Show;
+	}
+	lock_file($file_to_load) if $lock_is_strict;
     }
-    lock_file($file_to_load) if $lock_is_strict;
 
     $root = $load_root;
     $options->{'file'} = $file_to_load;
@@ -2501,7 +2542,15 @@ sub save_file {
     rename $options->{'file'}, "$options->{'file'}.0";
 
     unlock_file_temp() if $lock_is_strict;
-    if (!$root->save("$options->{'file'}")) {
+
+    my $offline_file = $options->{'offlinefile'};
+    my $ret;
+    if ($offline_file ne "") {
+	$ret = save_files($options->{'file'}, $offline_file);
+    } else {
+	$ret = $root->save("$options->{'file'}");
+    }
+    if (!$ret) {
 	$status_text->configure(-text => $@);
     } else {
 	$status_text->configure(-text => Mfmt("Saved <%s>",$options->{'file'}));
@@ -2678,9 +2727,9 @@ sub merge_file {
 sub merge_file_noninteractive {
     my $file = shift;
     my %args = @_;
-    my %load_args;
-
-    $load_args{-skeleton} = delete $load_args{-skeleton};
+###XXXX del:
+#      my %load_args;
+#      $load_args{-skeleton} = delete $load_args{-skeleton};
 
     my $new_project = new Timex::Project;
     if (!$new_project->load($file, %args)) {
@@ -3628,7 +3677,7 @@ sub set_text_or_image {
 sub make_path {
     my($p) = @_;
     return if !$p;
-    die Mfmt("wrong arg for make_path: <%s>",$p) if !$p->isa('Timex::Project');
+    die Mfmt("wrong arg for make_path: <%s>",$p) if !$p->can('Timex_Project_API');
     my @path = $p->path;
     join $separator, @path[1 .. $#path];
 }
