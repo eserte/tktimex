@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: XML.pm,v 1.1 1999/09/18 13:36:41 eserte Exp $
+# $Id: XML.pm,v 1.2 1999/09/18 17:44:59 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -16,16 +16,37 @@ package Timex::Project::XML;
 use base qw(Timex::Project);
 use XML::Parser;
 
-sub load { # XXX error handling
+*convert1 = \&escape_special;
+*convert2 = \&utf8_latin1;
+
+sub load {
     my($self, $file) = @_;
+    $self->_common_load(File => $file);
+}
+
+sub interpret_data {
+    my($self, $data) = @_;
+    $self->_common_load(Data => $data);
+}
+
+sub _common_load { # XXX error handling
+    my($self, %args) = @_;
     my $p1 = new XML::Parser(Style => 'Tree');
-    my $tree = $p1->parsefile($file);
+    my $tree;
+    if (exists $args{Data}) {
+	$tree = $p1->parse(join("\n", @{ $args{Data} }),
+			   ProtocolEncoding => 'ISO-8859-1');
+    } elsif (exists $args{File}) {
+	$tree = $p1->parsefile($args{File});
+    } else {
+	die "Neither Data nor File fiven in _common_load";
+    }
     if ($tree->[0] ne 'timexdata') {
 	die "This is not timexdata";
     }
     $tree = $tree->[1];
     $self->interpret_tree($tree);
-
+    
 }
 
 sub dump_data {
@@ -39,13 +60,14 @@ sub dump_data {
     $res;
 }
 
-sub dump_data_subproject {
+sub dump_data_subproject { # XXX note is missing...
     my($p, %args) = @_;
     my $res = "";
     my $is = " " x ($args{Indent} || 0);
-    $res .= $is."<project name='" . $p->label . "'";
+    $res .= $is."<project name='" . convert1($p->label) . "'";
     $res .=     " archived='" . $p->archived . "'";
-    $res .=     " rcsfile='" . $p->rcsfile . "'" if defined $p->rcsfile;
+    $res .=     " rcsfile='" . convert1($p->rcsfile) . "'" 
+      if defined $p->rcsfile;
     $res .=     ">\n";
     $res .= $is." <times>\n";
     foreach my $ts (@{ $p->{'times'} }) {
@@ -64,12 +86,11 @@ sub interpret_tree {
     my($self, $tree) = @_;
 
     my $attributes = $tree->[0];
-    $self->label(delete $attributes->{'name'});
+    $self->label(convert2(delete $attributes->{'name'}));
     $self->{'archived'} = delete $attributes->{'archived'};
-    $self->{'rcsfile'}  = delete $attributes->{'rcsfile'};
+    $self->{'rcsfile'}  = convert2(delete $attributes->{'rcsfile'});
     if (defined $attributes->{'note'}) {
-	$self->note($attributes->{'note'});
-	delete $attributes->{'note'};
+	$self->note(convert2(delete $attributes->{'note'}));
     }
     warn "Unknown attributes: " . join(" ", %$attributes)
       if %$attributes;
@@ -97,7 +118,48 @@ sub interpret_tree {
 	      "Next tag: " . $tree->[$i+1];
 	}
     }
+    1;
 }
+
+# XXX only german latin1 characters are translated with these functions
+
+sub latin1_utf8 {
+    my $s = shift;
+    return "" unless defined $s;
+    $s =~ s/ä/\xc3\xa4/g;
+    $s =~ s/ö/\xc3\xb6/g;
+    $s =~ s/ü/\xc3\xbc/g;
+    $s =~ s/Ä/\xc3\x84/g;
+    $s =~ s/Ö/\xc3\x96/g;
+    $s =~ s/Ü/\xc3\x9c/g;
+    $s =~ s/ß/\xc3\x9f/g;
+    $s;
+}
+
+sub escape_special {
+    my $s = shift;
+    return "" unless defined $s;
+    $s =~ s/&/&amp;/g;
+    $s =~ s/</&lt;/g;
+    $s =~ s/>/&gt;/g;
+    $s =~ s/\'/&apos;/g;
+    $s;
+}
+
+sub utf8_latin1 {
+    my $s = shift;
+    return "" unless defined $s;
+    $s =~ s/\xc3\xa4/ä/g;
+    $s =~ s/\xc3\xb6/ö/g;
+    $s =~ s/\xc3\xbc/ü/g;
+    $s =~ s/\xc3\x84/Ä/g;
+    $s =~ s/\xc3\x96/Ö/g;
+    $s =~ s/\xc3\x9c/Ü/g;
+    $s =~ s/\xc3\x9f/ß/g;
+    $s;
+}
+
+sub nil { $_[0] }
 
 1;
 
