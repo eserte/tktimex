@@ -1,4 +1,6 @@
 # -*- perl -*-
+# $Id: Project.pm,v 3.29 1999/11/02 23:55:49 eserte Exp $
+#
 
 =head1 NAME
 
@@ -1167,7 +1169,12 @@ sub merge {
 		    if ($self_t->[1] != $other_t->[1]) {
 			warn "Warning: incompatible times for " .
 			  $sub->label . ": " . $self_t->[1] . " != " .
-			    $other_t->[1];
+			    $other_t->[1] . "\n";
+			if ($self_t->[1] < $other_t->[1]) {
+			    warn "Using bigger one...\n";
+			    $sub->{'times'}[$self_i] = $other_t;
+			    $modified++;
+			}
 		    }
 		    $self_i++;
 		    $other_i++;
