@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.31 2000/08/25 02:21:52 eserte Exp $
+# $Id: Project.pm,v 3.32 2000/08/29 17:31:10 eserte Exp $
 #
 
 =head1 NAME
@@ -212,11 +212,20 @@ sub last_time_subprojects {
 
 =head2 interval_times
 
-    @times = $project->interval_times("daily")
+    @times = $project->interval_times("daily", %args)
 
 Return the @times array (like $project->{'times'}) aggregated to an
 interval. Valid argument values are: "" (no aggregation), daily,
 weekly, monthly and yearly.
+
+Further options:
+
+-recursive: if given and true, sum times for all subprojects too.
+
+-asref: if given and true, then the returned value is a reference to
+an array. This is useful for the "" interval, because it returns the
+@times array of the project itself, which makes it easier for
+manipulation.
 
 =cut
 
@@ -225,7 +234,9 @@ sub interval_times {
     my $interval_type = shift;
     my %args = @_;
 
-    my @times;
+    my $times;
+
+    my $as_ref = $args{'-asref'};
 
     if ($args{'-recursive'}) {
 
@@ -234,11 +245,11 @@ sub interval_times {
 	my $combined = new Timex::Project;
 	@{ $combined->{'times'} } = @all_times;
 	$combined->sort_times;
-	@times = @{ $combined->{'times'} }
+	$times = $combined->{'times'};
 
     } else {
 
-	@times = @{ $self->{'times'} };
+	$times = $self->{'times'};
 
     }
 
@@ -266,12 +277,13 @@ sub interval_times {
 	     }->{$interval_type};
 
     if ($it == INTERVAL_TYPE_NONE) {
-	return @times;
+	return ($as_ref ? $times : @$times);
     }
 
     require Time::Local;
 
     my @res;
+    my @times = @$times; # see ref note below
     my($last_wday); # not really wday... for weeks this is the week number etc.
 
     for(my $i = 0; $i<=$#times; $i++) {
@@ -283,7 +295,7 @@ sub interval_times {
 	    # split into today and tomorrow
 	    my $old_end = $d[1];
 	    $d[1] = Time::Local::timelocal(59,59,23,$a1[3],$a1[4],$a1[5]);
-	    splice @times, $i+1, 0, [$d[1]+1, $old_end];
+	    splice @$times, $i+1, 0, [$d[1]+1, $old_end];
 	}
 	my $interval = $d[1] - $d[0];
 
@@ -310,7 +322,9 @@ sub interval_times {
 	}
 	$last_wday = $this_wday;
     }
-    @res;
+
+    # the ref thingy is unnecassary here, but do it for consistency...
+    ($as_ref ? \@res : @res);
 
 }
 
