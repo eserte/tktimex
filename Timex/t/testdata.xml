@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='ISO-8859-1' standalone='yes'?>
+<timexdata>
+ <project name="tktimex"
+          archived="0"
+	  rcsfile="/home/e/eserte/src/timex/tktimex">
+  <times>
+   <timeslice from="846498764" to="846498917" />
+   <timeslice from="846498917" to="846498919" />
+  </times>
+  <project name="Project"
+           archived="0">
+   <times>
+   </times>
+  </project>
+ </project>
+</timexdata>
