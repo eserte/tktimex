@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.32 2000/08/29 17:31:10 eserte Exp $
+# $Id: Project.pm,v 3.33 2000/09/01 23:33:13 eserte Exp $
 #
 
 =head1 NAME
@@ -23,9 +23,10 @@ and tktimex. This module supports the following methods:
 
 package Timex::Project;
 use strict;
-use vars qw($magic $emacsmode $pool);
+use vars qw($magic $magic_template $emacsmode $pool);
 
 $magic = '#PJ1';
+$magic_template = '#PJT';
 $emacsmode = '-*- project -*-';
 
 =head2 new
@@ -48,6 +49,7 @@ sub new {
     $self->{'modified'} = 1;
     $self->{'separator'} = "/";
     $self->{'current'} = undef;
+    $self->{'rate'} = undef;
     $pkg = ref $pkg if (ref $pkg);
     bless $self, $pkg;
 }
@@ -55,13 +57,22 @@ sub new {
 =head2 clone
 
     $new_project = clone Timex::Project $old_project
+    $new_project = $old_project->clone
 
 Clone a new Timex::Project object from an old one.
 
 =cut
 
 sub clone {
-    my($pkg, $orig_project) = @_;
+    my $pkg = shift;
+    my $orig_project;
+    if (ref $pkg and $pkg->isa('Timex::Project')) {
+	$orig_project = $pkg;
+	$pkg = ref $orig_project;
+    } else {
+	$orig_project = shift;
+    }
+
     require Data::Dumper;
     my $self;
     eval {
@@ -73,8 +84,36 @@ sub clone {
     };
     warn $@ if $@;
     bless $self, $pkg;
-    $self->rebless_subprojects("Timex::Project::XML");
+    $self->rebless_subprojects($pkg);
     $self;
+}
+
+=head2 concat
+
+    $project = concat Timex::Project $proj1, $proj2 ...
+
+Concats the specified projects and create a new one. The concatenated
+projects are not cloned.
+
+=cut
+
+sub concat {
+    my $class = shift;
+    my @p = @_;
+    my $project = $class->new;
+    my %seen;
+    foreach my $p (@p) {
+	foreach my $subp ($p->subproject) {
+	    my $label = $subp->label;
+	    if ($seen{$label}) {
+		warn "There is already a project labelled $label\n";
+	    } else {
+		$project->subproject($subp);
+		$seen{$label}++;
+	    }
+	}
+    }
+    $project;
 }
 
 sub label {
@@ -350,6 +389,15 @@ sub parent {
 	$self->{'parent'};
     }
 }
+
+=head2 reparent
+
+    $project->reparent($newparent)
+
+Use this method only if there is already a parent. Otherwise, use the
+parent method.
+
+=cut
 
 sub reparent {
     my($self, $newparent) = @_;
@@ -857,11 +905,38 @@ sub restricted_times {
     sort { $a->[1] <=> $b->[1] } @times;
 }
 
+=head2 _get_from_upper
+
+    $value = $project->_get_from_upper($attribute)
+    $project->_get_from_upper($attribute, $value)
+
+Get the value for an attribute for this project, or, if undefined, for
+one of the parents of this project.
+
+With two arguments, set the value of the attribute of this project.
+
+=cut
+
+sub _get_from_upper {
+    my($self, $attribute) = (shift, shift);
+    if (@_ > 0) {
+	$self->{$attribute} = shift;
+    } else {
+	if (defined $self->{$attribute} && $self->{$attribute} ne "") {
+	    $self->{$attribute};
+	} elsif ($self->parent) {
+	    $self->parent->_get_from_upper($attribute);
+	} else {
+	    undef;
+	}
+    }
+}
+
 =head2 archived
 
     $archived = $project->archived
 
-Return true if the project or one of the parent projects are archived. 
+Return true if the project or one of the parent projects are archived.
 Use $project->{'archived'} for the value of *this* project.
 
     $project->archived($archived)
@@ -903,6 +978,17 @@ sub modified {
 	$root->{'modified'};
     }
 }
+
+=head2 rate
+
+    $rate = $project->rate
+    $project->rate($rate)
+
+Get or set the rate for this project.
+
+=cut
+
+sub rate { shift->_get_from_upper("rate", @_) }
 
 =head2 separator
 
@@ -972,14 +1058,20 @@ sub no_current {
 sub dump_data {
     my($self, %args) = @_;
     my $indent = delete $args{'-indent'};
+    my $magic = ($args{-template} ? $magic_template : $magic);
     my $res;
     if (!$indent) {
 	$res = "$magic $emacsmode\n";
 	$indent = 0; # because of $^W
     } else {
 	$res .= (">" x $indent) . "$self->{'label'}\n";
-	$res .= "/archived=$self->{'archived'}\n";
-	$res .= "/rcsfile=" . $self->rcsfile . "\n" if $self->rcsfile;
+
+	# normal attributes
+	foreach my $attr (qw/archived rate rcsfile/) {
+	    $res .= "/$attr=$self->{$attr}\n"
+		if defined $self->{$attr} and $self->{$attr} ne "";
+	}
+
 	if ($self->note) {
 	    $res .= join("\n", map { "/note=" . $_ } $self->note) . "\n";
 	}
@@ -1043,7 +1135,7 @@ sub interpret_data {
     my $i = $[;
     my $found_magic = 0;
     for(; $i < $#$data; $i++) {
-	if ($data->[$i] =~ /^$magic/) {
+	if ($data->[$i] =~ /^($magic|$magic_template)/) {
 	    $found_magic++;
 	    last;
 	}
@@ -1187,7 +1279,7 @@ sub is_project_file {
     } else {
 	my $res = 1;
 	chomp(my $magicline = <F>);
-	if ($magicline !~ /^$magic/) {
+	if ($magicline !~ /^($magic|$magic_template)/) {
 	    $@ = "Wrong magic <$magicline>.";
 	    $res = undef;
 	}
@@ -1201,7 +1293,7 @@ sub load_old {
     do $file;
     warn "Can't read $file: $@" if $@;
     foreach (@$pool) {
-	if (ref $_ eq 'Timex::Project') {
+	if (ref $_ and $_->isa('Timex::Project')) {
 	    $self->subproject($_);
 	    $_->rebless_subprojects;
 	} else {
