@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 3.13 1997/11/29 14:16:01 eserte Exp $
+# $Id: tktimex,v 3.14 1997/12/04 10:09:44 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about
@@ -433,6 +433,7 @@ sub show_one_day {
     require Tk::Date;
     my $f = $top->Toplevel(-title => 'Show one day');
     my $b;
+    my @p; # project array for one day
     my $dw = $f->Date(-date_only => 1,
 		      -datefmt => [qw(%12A , %2d . %2m . %4y)],
 		      -today_button => 1,
@@ -444,7 +445,7 @@ sub show_one_day {
 		     )->pack;
     my $ff = $f->Frame->pack;
     $b = $ff->Button(-text => 'Show')->pack(-side => 'left');
-    $ff->Button(-text => 'Cancel',
+    $ff->Button(-text => 'Close',
 		-command => sub { $f->destroy })->pack(-side => 'left');
     $ff->Checkbutton(-text => 'immediately',
 		     -variable => \$options->{'oneday-immediately'}
@@ -453,12 +454,16 @@ sub show_one_day {
 			  -columns => 2,
 			  -width => 40,
 			  -header => 1,
-			  -scrollbars => 'osoe')->pack(-expand => 1,
-						       -fill => 'both');
+			  -scrollbars => 'osoe',
+			  -command => sub {
+			      show_intervals($f, $p[$_[0]]) 
+			  },
+			 )->pack(-expand => 1,
+				 -fill => 'both');
     $b->configure(-command => sub {
 		      my $s_from = $dw->get("%s");
 		      my $s_to = $s_from + 86400;
-		      my @p = $root->projects_by_interval($s_from, $s_to);
+		      @p = $root->projects_by_interval($s_from, $s_to);
 		      $lb->delete('all');
 		      my $i = 0;
 		      my $sum = 0;
@@ -773,7 +778,7 @@ sub show_intervals {
 	$lb->itemCreate($i, 4, -text => sec2time($to-$from, 'h', 0));
 	$i++;
     }
-    $w->Button(-text => 'OK',
+    $w->Button(-text => 'Close',
 	       -command => sub { $w->destroy })->pack;
     $w->Popup(-popover => 'cursor')
 }
