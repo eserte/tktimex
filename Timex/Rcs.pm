@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.1 1998/02/01 23:34:08 eserte Exp $
+# $Id: Rcs.pm,v 1.2 1998/07/05 17:59:42 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -11,6 +11,12 @@
 # Mail: eserte@cs.tu-berlin.de
 # WWW:  http://user.cs.tu-berlin.de/~eserte/
 #
+
+BEGIN {
+    die "Timex::Rcs does not work with DOS/Windows"
+      if $^O =~ /(mswin|dos)i/;
+}
+
 
 package Timex::Rcs::Revision;
 
