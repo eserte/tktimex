@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: multiproject.t,v 1.2 2001/04/04 21:49:35 eserte Exp $
+# $Id: multiproject.t,v 1.3 2001/04/04 22:39:51 eserte Exp $
 # Author: Slaven Rezic
 #
 
@@ -27,7 +27,7 @@ BEGIN {
     }
 }
 
-BEGIN { plan tests => 11 }
+BEGIN { plan tests => 24 }
 
 # write sample projects
 open(W1, ">/tmp/t1.pj1") or die $!;
@@ -58,22 +58,52 @@ ok(ref $clone, "Timex::Project");
 my $clone2 = $mpj->master_project->clone;
 ok(ref $clone2, "Timex::Project");
 
-$clone->save("/tmp/clone1.pj1");
-$clone2->save("/tmp/clone2.pj1");
+ok($clone->save("/tmp/clone1.pj1"), 1);
+ok($clone2->save("/tmp/clone2.pj1"), 1);
 ok(compare("/tmp/clone1.pj1","/tmp/clone2.pj1"), 0);
 
 # do manual merge of sample projects
 my $first = new Timex::Project;
-$first->load("/tmp/t1.pj1");
+ok($first->load("/tmp/t1.pj1"), 1);
 my $second = new Timex::Project;
-$second->load("/tmp/t2.pj1");
+ok($second->load("/tmp/t2.pj1"), 1);
 $first->merge($second);
-$first->save("/tmp/merged.pj1");
+ok($first->save("/tmp/merged.pj1"), 1);
 
 # save Multiproject and compare files
 $mpj->save("dummy");
 ok(compare("/tmp/t1.pj1","/tmp/t2.pj1"), 0);
 ok(compare("/tmp/t1.pj1", "/tmp/merged.pj1"), 0);
 ok(compare("/tmp/t1.pj1", "/tmp/clone1.pj1"), 0);
+
+my $mpj2 = new Timex::MultiProject;
+$mpj2->master("/nonexisting/bla.pj1");
+$mpj2->backups("/nonexisting/bla2.pj1");
+ok(!!$mpj2->isa("Timex::MultiProject"), 1);
+
+$mpj2->load;
+ok($mpj2->save, 0);
+
+my $mpj3 = new Timex::MultiProject;
+$mpj3->master("/nonexisting/bla.pj1");
+$mpj3->backups("/tmp/t1.pj1");
+ok(!!$mpj3->isa("Timex::MultiProject"), 1);
+
+ok($mpj3->load, 1);
+unlink "/tmp/t1.pj1";
+ok($mpj3->save, 1);
+ok(compare("/tmp/t1.pj1", "/tmp/t2.pj1"), 0);
+
+my $mpj4 = new Timex::MultiProject;
+$mpj4->set(-masterproject => $first,
+	   -master => "/nonexisting/bla.pj1",
+	   -backups => ["/nonexisting/bla2.pj1",
+			"/nonexisting/bla3.pj1"]);
+ok(1,1);
+
+eval {
+    $mpj4->set(-masterprojectXXX => $first);
+};
+ok($@ ne "", 1);
 
 __END__
