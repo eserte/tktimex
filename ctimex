@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: ctimex,v 1.4 1998/11/21 23:39:33 eserte Exp $
+# $Id: ctimex,v 1.5 1999/03/09 14:04:18 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -18,12 +18,24 @@ use Getopt::Long;
 $loadfile = "/home/e/eserte/private/log/mytimex.pj1";
 $savefile = "/home/e/eserte/private/log/mytimex-timex.pj1";
 
+$daily = 0;
+$debug = 0;
+
 GetOptions('f=s' => sub { my($n,$val) = @_;
-			  $loadfile = $savefile = $val;
-		      });
+			  set_file($val);
+		      },
+	   'daily!' => \$daily,
+	   'debug!' => \$debug,
+	  );
+
+if (@ARGV) {
+    set_file(shift @ARGV);
+}
+if (@ARGV) {
+    die "usage!";
+}
 
 $| = 1;
-$debug = 0;
 
 my $root = new Timex::Project;
 $root->load($loadfile);
@@ -99,11 +111,18 @@ sub output_projects {
     foreach $p (@list_of_projects) {
 	print STDERR (">" x $p->[1]->level), $p->[0], "\n";
 	if ($debug) {
-	    @times = @{$p->[1]->{'times'}};
+	    if ($daily) {
+		@times = $p->[1]->daily_times;
+	    } else {
+		@times = @{$p->[1]->{'times'}};
+	    }
 	    foreach $t (@times) {
 		print STDERR
 		  scalar localtime $t->[0], " - ",
-		  scalar localtime $t->[1], "\n";
+		  scalar localtime $t->[1];
+		printf STDERR " %d:%02d h", $t->[2]/3600, ($t->[2]%3600)/60
+		  if $daily;
+		print STDERR "\n";
 	    }
 	}
     }
@@ -136,3 +155,7 @@ sub push_warn {
     $project_label{$label} = $obj;
 }
 
+sub set_file {
+    my $file = shift;
+    $loadfile = $savefile = $file;
+}
