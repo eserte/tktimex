@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.9 2001/05/05 15:58:43 eserte Exp $
+# $Id: Rcs.pm,v 1.10 2001/11/21 20:36:08 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -24,6 +24,21 @@ sub new {
     my($pkg, %args) = @_;
     my $self = {%args};
     bless $self, $pkg;
+}
+
+# constructor for "current" pseudo version for file $file
+sub current {
+    my($pkg, $file) = @_;
+    my $date;
+    my(@s) = stat($file);
+    if (@s) {
+	my(@l) = localtime $s[9]; # mtime
+	$date = sprintf "%04d/%02d/%02d %02d:%02d:%02d",
+	                $l[5]+1900, $l[4]+1, @l[3,2,1,0];
+    }
+    $pkg->new(Revision => 'current',
+	      Date     => $date,
+	     );
 }
 
 sub revision { $_[0]->{Revision} }
