@@ -2,8 +2,11 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 3.2 1997/11/16 21:36:35 eserte Exp $
+# $Id: tktimex,v 3.3 1997/11/17 01:56:56 eserte Exp $
+#
 # Author: Slaven Rezic
+# Copyright: see in subroutine show_about
+#
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
 # Talk: <URL:telnet://ole.cs.tu-berlin.de:1211>
@@ -15,7 +18,7 @@ use Tk;
 use Tk::HList;
 #use Tk::Balloon;
 use FindBin;
-use lib ("$FindBin::Bin", qw(/home/e/eserte/devel /home/e/eserte/devel/adb));
+use lib "$FindBin::RealBin";
 use Tk::UnderlineAll;
 use Tk::Getopt 0.34;
 use Project;
@@ -169,11 +172,13 @@ my $status_text = $status_frame->Label(-text => $copyright);
 $status_text->pack(-side => 'left');
 
 #$b->attach($project_frame, -msg => $project_status);
-$project_frame->bind("<Enter>" =>
-		     sub { $status_text->configure(-text => $project_status);
- });
+# XXX verzögert zeigen, da evtl. wichtige Statusmeldungen dadurch
+# verdeckt werden
+$project_frame->bind("<Enter>" => sub {
+			 $status_text->configure(-text => $project_status);
+		     });
 $project_frame->bind("<Leave>" =>
-		     sub { $status_text->configure(-text => $copyright); });
+ 		     sub { $status_text->configure(-text => $copyright); });
 
 
 $menu_frame->UnderlineAll;
@@ -183,6 +188,21 @@ $opt->process_options;
 &set_time_update();
 
 $root->modified(0);
+if (!$options->{'file'}) {
+    require Tk::FileDialog;
+    my $d = $top->FileDialog(-title => 'Enter project file',
+			     -File => 'mytimex.pj1',
+			     -FPat => '*.pj1');
+    my $file = $d->Show;
+    if ($file) {
+	if ($file !~ /\.pj1$/) {
+	    $file = "$file.pj1";
+	}
+	$options->{'file'} = $file;
+    } else {
+	die "No project file specified";
+    }
+}
 &load_file;
 
 MainLoop;
@@ -346,12 +366,20 @@ sub set_timeout {
 
 sub today_time {
     my $sum = 0;
+    my $yesterday_time = $today_time - 86400;
+    my $yesterday_sum = 0;
     foreach ($root->subproject) {
-	$sum += $_->sum_time($today_time, 1);
+	my $project_today_time = $_->sum_time($today_time, 1);
+	$sum += $project_today_time;
+	$yesterday_sum
+	  += $_->sum_time($yesterday_time, 1) - $project_today_time;
     }
+
     require Tk::Dialog;
     $top->Dialog(-title => 'Today\'s time',
-		 -text  => "Today\'s working time: " . &sec2time($sum),
+		 -text  =>
+		 "Today\'s working time:     " . &sec2time($sum) . "\n" . 
+		 "Yesterday\'s working time: " . &sec2time($yesterday_sum),
 		 -popover => 'cursor',
 		)->Show;
 }
@@ -370,10 +398,10 @@ sub load_file {
     &stop_project;
     $root->delete_all;
     if (!$root->load($options->{'file'})) {
-	$status_text->configure(-text => "Can't load $options->{'file'}!");
+	$status_text->configure(-text => $@);
 	return;
     }
-    $status_text->configure(-text => "Loaded $options->{'file'}");
+    $status_text->configure(-text => "Loaded <$options->{'file'}>");
     &insert_all;
     &set_autosave;
     $root->modified(0);
@@ -402,17 +430,25 @@ sub insert_old_project {
 
 sub dump_data {
     print STDERR $root->dump_data();
-    open(OUT, ">/tmp/timex.data") || warn "Can't write timex.data";
+    if (!open(OUT, ">/tmp/timex.data")) {
+	$status_text->configure(-text => "Can't write to timex.data: $!");
+	return;
+    }
     print OUT $root->dump_data();
     close OUT;
 }
 
 sub old_save_file {
-    if (!open(OUT, ">$options->{'file'}.data")) {
-	$status_text->configure(-text => "Can't write to $options->{'file'}.data");
+    eval { require Data::Dumper };
+    if ($@) {
+	$status_text->configure(-text => $@);
 	return;
     }
-    require Data::Dumper;
+    if (!open(OUT, ">$options->{'file'}.data")) {
+	$status_text->configure
+	  (-text => "Can't write to <$options->{'file'}.data>: $!");
+	return;
+    }
     $Data::Dumper::Purity = 1;
     $Data::Dumper::Indent = 1;
     print OUT Data::Dumper->Dump([$root], ['root']), "\n";
@@ -434,9 +470,9 @@ sub save_file {
     rename $options->{'file'}, "$options->{'file'}.0";
 
     if (!$root->save("$options->{'file'}")) {
-	$status_text->configure(-text => "Can't write to $options->{'file'}");
+	$status_text->configure(-text => $@);
     } else {
-	$status_text->configure(-text => "Saved $options->{'file'}");
+	$status_text->configure(-text => "Saved <$options->{'file'}>");
     }
     &old_save_file;
 
@@ -576,14 +612,12 @@ sub show_attributes {
 	   &insert_all if $insert_all;
        }
       );
-    &set_text_or_image($ok,
-		       "/usr/www/bilder/icons/Misc2/answer_good.gif", "OK");
+    &set_text_or_image($ok, "yes.gif", "OK");
     $ok->pack(-side => 'left');
     my $cancel = $command_frame->Button
       (-command => sub { $attribute_top->destroy() }
       );
-    &set_text_or_image($cancel,
-		       "/usr/www/bilder/icons/Misc2/answer_bad.gif", "Cancel");
+    &set_text_or_image($cancel, "no.gif", "Cancel");
     $cancel->pack(-side => 'left');
     $attribute_top->Popup(-popover => 'cursor');
 }
@@ -607,7 +641,7 @@ sub set_text_or_image {
 sub make_path {
     my($p) = @_;
     return if !$p;
-    die if !$p->isa('Project');
+    die "wrong arg for make_path: <$p>" if !$p->isa('Project');
     my @path = $p->path;
     join($separator, @path[1 .. $#path]);
 }
@@ -692,8 +726,37 @@ EOF
     $dia->Popup(-popover => 'cursor');
 }
 
-=head1 TODO
+=head1 NAME
 
- - write POD
+tktimex - project time manager
+
+=head1 SYNOPSIS
+
+    tktimex [options]
+
+Possible options are:
+
+        --file
+        --[no]autosave   (default: 1) 
+        --update         (default: 600) 
+        --dateformat     (default: h) 
+        --[no]day8
+        --[no]archived
+        --[no]onlytop
+        --geometry       (default: 500x230) 
+
+=head1 DESCRIPTION
+
+B<tktimex> is a project time manager.
+
+XXX
+
+=head1 AUTHOR
+
+Slaven Rezic (eserte@cs.tu-berlin.de)
+
+Copyright (c) 1996, 1997 Slaven Rezic. All rights reserved.
+
+For a complete copyright see the Help/About menu entry.
 
 =cut
