@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.38 1999/06/08 20:29:42 eserte Exp $
+# $Id: tktimex,v 4.39 1999/06/08 20:30:57 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -80,10 +80,11 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.38 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.39 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
-my $can_lock = ($os eq 'unix'); # vielleicht geht's mit Win32+perl5.00555? XXX
+my $can_lock = 1; # gefährlich für win...
+my $lock_is_strict = ($os eq 'win');
 
 if ($Tk::VERSION <= 402.002) {
     Tk::HList->EnterMethods("Tk/HList.pm", qw(header));
@@ -1036,10 +1037,14 @@ sub load_file {
     }
 
     my $load_root = new Timex::Project;
+    unlock_file_temp() if $lock_is_strict;
+    my $ok = 1;
     if (!$load_root->load($file_to_load)) {
 	$status_text->configure(-text => $@);
-	return;
+	$ok = 0;
     }
+    return unless $ok;
+    lock_file($file_to_load) if $lock_is_strict;
 
     $root = $load_root;
     $options->{'file'} = $file_to_load;
@@ -1071,15 +1076,19 @@ sub load_file {
 
 sub lock_file {
     if (!$can_lock) {
-        return 1;
+	return 1;
     }
-
     my $file = shift;
-    my $lock_ok = 0;
-    if ($is_opened) {
+    if (!$is_opened) {
+	eval q{
+	    use Fcntl qw(:flock);
+	    flock CURRFILE, LOCK_UN;
+	};
+	warn $@ if $@;
 	close CURRFILE;
 	$is_opened = 0;
     }
+    my $lock_ok = 0;
     if (open(CURRFILE, $file)) {
 	$is_opened = 1;
 	eval q{
@@ -1100,8 +1109,20 @@ sub lock_file {
 		$lock_ok = 1;
 	    }
 	};
+	warn $@ if $@;
     }
     $lock_ok;
+}
+
+sub unlock_file_temp {
+    return if (!$can_lock);
+    eval q{
+	use Fcntl qw(:flock);
+	flock CURRFILE, LOCK_UN;
+    };
+    warn $@ if $@;
+    close CURRFILE;
+    $is_opened = 0;
 }
 
 sub insert_all {
@@ -1188,12 +1209,14 @@ sub save_file {
     }
     rename $options->{'file'}, "$options->{'file'}.0";
 
+    unlock_file_temp() if $lock_is_strict;
     if (!$root->save("$options->{'file'}")) {
 	$status_text->configure(-text => $@);
     } else {
 	$status_text->configure(-text => "Saved <$options->{'file'}>");
     }
     &old_save_file if $options->{'securesave'};
+    lock_file("$options->{'file'}") if $lock_is_strict;
 
     if (defined $current_project) {
 	$current_project->unend_time;
