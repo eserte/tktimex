@@ -217,4 +217,9 @@ Dies kann im Unternehmen-Abschnitt des Optionseditors gemacht werden.
 'one week before' => 'eine Woche früher',
 'seconds' => 'Sekunden',
 'tktimex: sos file' => 'tktimex: SOS-Datei',
+'Could not rename %s to %s: %s' => 'Kann %s nicht zu %s umbenennen: %s',
+"The directory %s is not writable for you" => 'Das Verzeichnis %s ist nicht schreibbar',
+"Problem while renaming backup files. Please contact your system administrator or check permissions.\nThe detailed error message is:\n" => "Problem beim Umbennen der Backup-Dateien. Bitte den Systemadministrator ansprechen oder die Dateirechte überprüfen.\nDie detaillierte(n) Fehlermeldung(en) sind/ist:\n",
+"Do you want to continue the save operation?" => 'Soll das Speichern fortgesetzt werden?',
+"Save problem" => 'Speichern - Problem',
 };
