@@ -10,7 +10,11 @@ Timex/Rcs.pm
 Timex/Server.pm
 Timex/Utmp.pm
 Timex/de_template.csv
-Timex/test.pl
+Timex/MultiProject.pm
+Timex/t/base.t
+Timex/t/multiproject.t
+Timex/t/testdata.xml
+Timex/t/testprojects.pl
 Tk/Autoscroll.pm	from Tk-SREZIC
 Tk/UnderlineAll.pm	from Tk-SREZIC
 Win32Util.pm		from Win32Util
