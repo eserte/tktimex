@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.39 2000/09/20 19:48:12 eserte Exp $
+# $Id: Project.pm,v 3.40 2000/09/26 08:50:19 eserte Exp $
 #
 
 =head1 NAME
@@ -140,6 +140,39 @@ sub concat {
 	}
     }
     $project;
+}
+
+=head2 shuffle
+
+    $new_project = $project->shuffle($in => $out);
+
+Shuffle the projects in level $in to level $out. The special level
+"leaf" can be used to shuffle to the leaf. Note: only $in == 1 is
+implemented yet. Top level is level == 1.
+
+=cut
+
+sub shuffle {
+    my($project, $in_level, $out_level) = @_;
+    my $class = ref $project;
+    my $new_project = $class->new;
+
+    my @sub = $project->all_subprojects;
+#XXXXXXXXXXXXX
+    my @tops;
+    foreach my $sp (@sub) {
+	if ($sp->level == $in_level) {
+	    push @tops, $sp;
+	}
+    }
+    foreach my $sp (@sub) {
+	my $level = $sp->level;
+	if ($level == $in_level) {
+#XXXXXXXXXXXXX
+	}
+    }
+
+    $new_project;
 }
 
 sub label {
@@ -1491,6 +1524,11 @@ sub merge {
 	my $other_sub_path = $other_sub->pathname;
 	if (exists $self_label{$other_sub->label}) {
 	    my $sub = $self_label{$other_sub->label};
+
+	    # otherwise bad inconsistencies can occur!
+	    $sub->sort_times;
+	    $other_sub->sort_times;
+
 	    my $self_i = 0;
 	    my $other_i = 0;
 	    while($self_i <= $#{$sub->{'times'}} &&
