@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.36 2000/09/02 17:12:16 eserte Exp $
+# $Id: Project.pm,v 3.37 2000/09/05 00:17:33 eserte Exp $
 #
 
 =head1 NAME
@@ -23,11 +23,12 @@ and tktimex. This module supports the following methods:
 
 package Timex::Project;
 use strict;
-use vars qw($magic $magic_template $emacsmode $pool);
+use vars qw($magic $magic_template $emacsmode $pool @project_attributes);
 
 $magic = '#PJ1';
 $magic_template = '#PJT';
 $emacsmode = '-*- project -*-';
+@project_attributes = qw/archived rate rcsfile domain/;
 
 =head2 new
 
@@ -1030,6 +1031,34 @@ Get or set the rate for this project.
 
 sub rate { shift->_get_from_upper("rate", @_) }
 
+=head2 domain
+
+Get the project domain. A domain is just a user-specified label, which
+can be used to separate private from corporate projects.
+
+=cut
+
+sub domain { shift->_get_from_upper("domain", @_) }
+
+=head2 get_all_domains
+
+Return a list of all domains.
+
+=cut
+
+sub get_all_domains {
+    my $self = shift;
+    my $list = {};
+    my $sub = sub {
+	my $self = shift;
+	if (defined $self->{'domain'} && $self->{'domain'} ne '') {
+	    $list->{$self->{'domain'}}++;
+	}
+    };
+    $self->traverse($sub);
+    keys %$list;
+}
+
 =head2 separator
 
     $separator = $project->separator
@@ -1107,7 +1136,7 @@ sub dump_data {
 	$res .= (">" x $indent) . "$self->{'label'}\n";
 
 	# normal attributes
-	foreach my $attr (qw/archived rate rcsfile/) {
+	foreach my $attr (@project_attributes) {
 	    $res .= "/$attr=$self->{$attr}\n"
 		if defined $self->{$attr} and $self->{$attr} ne "";
 	}
@@ -1258,7 +1287,7 @@ sub interpret_data_project {
 #		print STDERR (">" x $indent) . $label, "\n";
 		$self = new Timex::Project $label;
 		$self->{'times'} = \@times;
-		foreach my $attr (qw/archived rate rcsfile/) {
+		foreach my $attr (@project_attributes) {
 		    $self->{$attr} = delete $attributes{$attr};
 		}
 		if (defined $attributes{'note'}) {
