@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.1 2001/02/13 02:04:22 eserte Exp $
+# $Id: tktimex,v 6.2 2001/03/23 00:29:58 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -12,6 +12,7 @@
 # WWW:  http://user.cs.tu-berlin.de/~eserte/
 #
 
+#use blib qw(/home/e/eserte/src/CPAN/Tk-Date);#XXXXXXXXXXXXXXXX
 #use blib qw(/home/e/eserte/src/perl/Devel-SRT);
 #use Devel::SRT;
 
@@ -36,6 +37,7 @@ use Msg;
 ') {
 	warn $@ if $@;
 	eval 'sub M ($) { $_[0] }';
+	eval 'sub Mfmt { sprintf(shift, @_) }';
     }
 }
 
@@ -121,7 +123,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.2 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -370,7 +372,7 @@ $s_if = $options->{'interface'} eq 'small';
 use vars qw($top);
 $top = new MainWindow;
 Tk::App::Reloader::shortcut() if defined &Tk::App::Reloader::shortcut;
-$top->protocol('WM_DELETE_WINDOW', \&quit_program);
+$top->protocol('WM_DELETE_WINDOW', sub { quit_program() });
 $top->protocol('WM_SAVE_YOURSELF',
 	       sub { save_sos();
 		     # XXX andere Optionen mit speichern (?)
@@ -506,7 +508,7 @@ $mb_file->command(-label => M"Merge",
 $mb_file->command(-label => M"Update enterprise projects",
 		  -command => \&update_enterprise_projects);
 $mb_file->command(-label => M"Quit",
-		  -command => \&quit_program);
+		  -command => sub { quit_program() });
 $mb_file->separator;
 
 $mb_project = $menu_frame->Menubutton(-text => M"Project"
@@ -976,7 +978,8 @@ sub enter_label {
 	    require Tk::HistEntry;
 	    Tk::HistEntry->VERSION(0.33);
 	    $Entry = "SimpleHistEntry";
-	    @extra_args = (-match => 1, -dup => 0);
+	    # -case => 1 is ugly...
+	    @extra_args = (-match => 1, -dup => 0, -case => 0);
 	    $this_history_file = "$home/.tktimex_hist";
 	};
 	$entry = $status_frame->$Entry(-bg => $inner_bg,
@@ -3655,21 +3658,25 @@ sub entry_to_project {
 }
 
 sub quit_program {
-    require Tk::Dialog;
-    if ($root->modified || defined $current_project) {
-	if (!defined $quit_dialog) {
-	    $quit_dialog = $top->Dialog(-title => M"Quit Program",
-					-text  => M("Really quit?\n") .
-					($root->modified ?
-					 M("(modified data) ") : "") .
-					(defined $current_project ?
-					 M("(project running) ") : ""),
-					-default_button => M"No",
-					-buttons => [M"Yes", M"No"],
-					-popover => 'cursor',
-				       );
+    my $non_interactive = shift;
+    if (!$non_interactive) {
+	require Tk::Dialog;
+	if ($root->modified || defined $current_project) {
+	    if (!defined $quit_dialog) {
+		$quit_dialog = $top->Dialog
+		    (-title => M"Quit Program",
+		     -text  => M("Really quit?\n") .
+		     ($root->modified ?
+		      M("(modified data) ") : "") .
+		     (defined $current_project ?
+		      M("(project running) ") : ""),
+		     -default_button => M"No",
+		     -buttons => [M"Yes", M"No"],
+		     -popover => 'cursor',
+		    );
+	    }
+	    return 0 if $quit_dialog->Show ne M"Yes";
 	}
-	return 0 if $quit_dialog->Show ne M"Yes";
     }
     $top->destroy;
 }
