@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.42 1999/07/16 17:57:17 eserte Exp $
+# $Id: tktimex,v 4.43 1999/09/16 21:06:06 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -12,8 +12,16 @@
 # WWW:  http://user.cs.tu-berlin.de/~eserte/
 #
 
+#use blib qw(/home/e/eserte/src/perl/Devel-SRT);
+#use Devel::SRT;
+
+BEGIN { sub status_change { }
+ status_change("vor Tk"); }
 use Tk;
+BEGIN { status_change("nach Tk"); }
 use Tk::ErrorDialog;
+
+status_change("alle uses...");
 
 ######################################################################
 
@@ -61,7 +69,9 @@ sub Popup
  if ($Y + $mh > $sh) { $Y = $sh - $mh }
  if ($Y < 0)         { $Y = 0         }
 
+ $w->deiconify;
  $w->Post($X,$Y);
+ $w->waitVisibility;
 }
 
 ######################################################################
@@ -69,18 +79,25 @@ sub Popup
 package main;
 
 use Tk::HList;
+BEGIN { status_change("nach Tk::HList"); }
 use File::Basename;
 use FindBin;
 use lib ("$FindBin::RealBin");
 #use lib ("/home/e/eserte/lib/perl");
 #use lib ("/home/e/eserte/devel"); # XXX für ComboBox
 eval { require Tk::UnderlineAll };
+BEGIN { status_change("vor Timex::Project"); }
 use Timex::Project;
+BEGIN { status_change("nach Timex::Project"); }
 use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
+BEGIN { status_change("nach use locale"); }
+# enable DnD
+use Tk::DropSite;
+BEGIN { status_change("nach tk::dropsite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.42 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.43 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = 1; # gefährlich für win...
@@ -115,10 +132,13 @@ my $home = get_home_dir();
 my $inner_fg = "black";
 my $inner_bg = "white";
 
+status_change("getopt def");
+
 my $options = {};
 my @opttable =
   ('General',
    ['file|f',             '=s', undef, 'subtype' => 'file'],
+   ['lock',               '!',  1],
    ['autosave',           '!',  1,
     'callback' => \&toggle_autosave, 'alias' => ['as'] ],
    ['update',             '=i', 60*10],
@@ -147,14 +167,16 @@ my @opttable =
     'callback' => sub { update_costs_option(1) },
     ],
    ['currency',           '=s', "DEM",
-    'choices' => ['USD'],
+    'choices' => ['EUR', 'USD', 'HRD'],
     'callback' => sub { update_costs_option(1) },
     ],
   );
 my $opt;
 eval {
+    status_change("vor req Getopt");
     require Tk::Getopt;
     Tk::Getopt->VERSION(0.34);
+    status_change("nach req Getopt");
 };
 if ($@) {
     warn "No Tk::Getopt --- falling back to Getopt::Long\n";
@@ -169,16 +191,23 @@ if ($@) {
     }
     die "Usage?" if !Getopt::Long::GetOptions(@getopt);
 } else {
+    status_change("Getopt1");
     $opt = new Tk::Getopt(-opttable => \@opttable,
 			  -options  => $options,
 			  -filename => "$home/.tktimexrc");
+    status_change("Getopt2");
     $opt->set_defaults;
+    status_change("Getopt3");
     $opt->load_options;
+    require Getopt::Long; status_change("Getopt4");
     die $opt->usage if !$opt->get_options;
+    status_change("Getopt5");
 }
 if (@ARGV) {
     $options->{'file'} = shift @ARGV;
 }
+
+status_change("1");
 
 my $top = new MainWindow;
 $top->protocol('WM_DELETE_WINDOW', \&quit_program);
@@ -190,12 +219,12 @@ $top->protocol('WM_SAVE_YOURSELF',
 		 });
 $top->title($title);
 $top->geometry($options->{'geometry'}) if $options->{'geometry'};
-# XXX no effect with KDE?!
 eval {
     my $icon = $top->Pixmap(-file => Tk::findINC("mini-clock.xpm"));
     $top->Icon(-image => $icon);
 };
-# XXX but iconbitmap works with KDE...
+
+status_change("0");
 
 my($is_archiv, $east);
 my $balloon;
@@ -212,10 +241,13 @@ if ($Tk::VERSION >= 800.005) {
     $balloon = $top->Balloon;
 }
 
+status_change("menu begin");
+
 my $menu_frame = $top->Frame(-relief => 'raised',
 			     -borderwidth => 2);
 
 my $mb_file = $menu_frame->Menubutton(-text => 'File')->pack(-side => 'left');
+status_change("first menubutton loaded");
 $mb_file->command(-label => 'Load',
 		  -command => sub { load_file(1) });
 $mb_file->command(-label => 'Save',
@@ -327,6 +359,8 @@ $mb_help->command
        $status_text->configure(-text => substr($@, 0, 40) . "...") if $@;
    });
 
+status_change("menu done");
+
 my $save_check;
 my($mod_watch, $mod_sub);
 # Aus mir völlig unerklärlichen Gründen muß sich mod_sub außerhalb
@@ -394,8 +428,12 @@ my $busy_label = $menu_frame->Label(-textvariable => \$busy_string,
 
 $menu_frame->pack(-fill => 'x');
 
+status_change("menu 2 done");
+
 my($pf_cols, $has_costs);
 $pf_cols = 5; # cannot change -columns of hlists...
+
+status_change("x0");
 
 my $project_frame = $top->Scrolled
   ('HList', -scrollbars => 'osoe',
@@ -413,6 +451,7 @@ my $project_frame = $top->Scrolled
    -separator => $separator,
   )->pack(-expand => 1, -fill => 'both');
 
+status_change("x0.5");
 if ($options->{'autoscroll'} !~ /^(|none)$/) {
     require Tk::Autoscroll;
     Tk::Autoscroll::Init($project_frame, -speed => $options->{'autoscroll'});
@@ -423,6 +462,8 @@ $project_frame->header('create', $pf_time_index, -text => 'Session');
 $project_frame->header('create', $pf_time_index+1, -text => 'Today');
 $project_frame->header('create', $pf_time_index+2, -text => 'Total');
 update_costs_option(1);
+
+status_change("x1");
 
 my $orig_selectbg = $project_frame->cget(-selectbackground);
 
@@ -442,6 +483,16 @@ if (0 && $os eq 'win') {
 $project_frame->bind("<Button-3>" =>
 		     sub { show_attributes(get_entry(@_)) });
 
+status_change("x2");
+
+if ($project_frame->can('DropSite')) {
+    eval {
+	$project_frame->DropSite
+	  (-dropcommand => [\&accept_drop, $project_frame],
+	   -droptypes => ($os eq 'win' ? 'Win32' : ['KDE', 'XDND', 'Sun']));
+    };
+}
+
 my $status_frame = $top->Frame(-relief => 'ridge',
 			       -bd => 1);
 $status_frame->pack(-fill => 'x');
@@ -449,6 +500,8 @@ $status_frame->pack(-fill => 'x');
 $status_text = $status_frame->Label
   (-text => "Current file: " . ($options->{file} || ""));
 $status_text->pack(-side => 'left');
+
+status_change("x3");
 
 # verzögert zeigen, da evtl. wichtige Statusmeldungen dadurch
 # verdeckt werden ... aber nicht, wenn in der Statuszeile editiert wird!
@@ -481,9 +534,13 @@ $menu_frame->UnderlineAll if $menu_frame->can('UnderlineAll');
 
 $opt->process_options if defined $opt;
 
+status_change("x4");
+
 &set_time_update();
 
 $root->modified(0);
+
+status_change("x5");
 
 if ($options->{'file'}) {
     load_file(0);
@@ -495,6 +552,7 @@ $project_frame->focus;
 
 $top->repeat(5*60*1000, \&check_still_today);
 
+status_change("vor main loop");
 MainLoop;
 
 sub enter_label {
@@ -525,6 +583,8 @@ sub enter_label {
 	undef;
     }
 }
+
+BEGIN { status_change("parsing 25%"); }
 
 sub new_project {
     my $label = &enter_label;
@@ -1039,12 +1099,52 @@ sub show_one_day {
 				  sec2time($sum, undef, undef));
 		  });
 
+    if ($has_date) {
+	my $di = $f->Button
+	  (-text => "Daily intervals",
+	   -command => sub {
+	       my $begin_date = $dw->get("%s");
+	       $begin_date = Tk::Date::_begin_of_day($begin_date);
+	       daily_intervals($begin_date, $begin_date+86400);
+	   },
+	   -padx => 0, -pady => 0);
+	$di->place(-rely => 1, '-y' => -$di->reqheight,
+		   -relx => 1, '-x' => -$di->reqwidth); # XXX place!
+    }
     if ($options->{'oneday-immediately'}) { $btn->invoke }
     $f->Popup(-popover => 'cursor');
 }
 
+sub daily_intervals {
+    my($begin_date, $end_date) = @_;
+    require POSIX;
+    my $t = $top->Toplevel;
+    $t->title(POSIX::strftime("%Y-%m-%d", localtime $begin_date));
+    my $lb = $t->Scrolled('HList', -scrollbars => 'osoe',
+			  -columns => 3,
+			  -width => 60,
+			 )->pack(-expand => 1, -fill => 'both');
+    my @res_times = $root->restricted_times($begin_date, $end_date);
+    my $i = 0;
+    foreach (@res_times) {
+	my $name = $_->[0]->pathname;
+	if (length($name) > 40) {
+	    $name = "... " . substr($name, -36); #length($name)-36
+	}
+	$lb->add($i, -text => $name);
+	$lb->itemCreate($i, 1, 
+			-text => POSIX::strftime("%H:%M:%S", localtime $_->[1])
+		       );
+	$lb->itemCreate($i, 2, 
+			-text => POSIX::strftime("%H:%M:%S", localtime $_->[2])
+		       );
+	$i++;
+    }
+}
+
 sub load_file {
     my $interactive = shift;
+    my $file_to_load = shift;
 
     if ($root->modified || defined $current_project) {
 	require Tk::Dialog;
@@ -1056,9 +1156,11 @@ sub load_file {
 				 );
 	return if $dialog->Show eq 'No';
     }
-    &stop_project;
+    stop_project();
 
-    my $file_to_load = $options->{'file'};
+    if (!defined $file_to_load) {
+	$file_to_load = $options->{'file'};
+    }
 
     if ($interactive) {
 	my($file, $path) = fileparse($options->{'file'});
@@ -1076,6 +1178,10 @@ sub load_file {
 				     -FPat   => '*.pj1',
 				     -Create => 0);
 	return if !$file_to_load;
+    }
+
+    if ($is_opened and $lock_is_strict) {
+	unlock_file_temp();
     }
 
     $root->delete_all;
@@ -1134,12 +1240,21 @@ sub load_file {
     }
 }
 
+BEGIN { status_change("parsing 50%"); }
+
+sub load_file_noninteractive {
+    my $file = shift;
+    load_file(0, $file);
+}
+
 sub lock_file {
-    if (!$can_lock) {
+#warn "file=$_[0] lock:$can_lock";
+    if (!$can_lock || !$options->{'lock'}) {
 	return 1;
     }
     my $file = shift;
     if (!$is_opened) {
+#warn "not opened";
 	eval q{
 	    use Fcntl qw(:flock);
 	    flock CURRFILE, LOCK_UN;
@@ -1151,8 +1266,10 @@ sub lock_file {
     my $lock_ok = 0;
     if (open(CURRFILE, $file)) {
 	$is_opened = 1;
+#warn "opend";
 	eval q{
 	    use Fcntl qw(:flock);
+#warn "try flock";
 	    if (!flock CURRFILE, LOCK_EX|LOCK_NB) {
 		use Tk::Dialog;
 		$top->Dialog
@@ -1171,17 +1288,21 @@ sub lock_file {
 	};
 	warn $@ if $@;
     }
+#warn "lockok=$lock_ok";
     $lock_ok;
 }
 
 sub unlock_file_temp {
-    return if (!$can_lock);
+#warn "file=? unlock: can_lock=$can_lock";
+    return if (!$can_lock || !$options->{'lock'});
     eval q{
 	use Fcntl qw(:flock);
+#warn "try lock";
 	flock CURRFILE, LOCK_UN;
     };
     warn $@ if $@;
     close CURRFILE;
+#warn "cloce";
     $is_opened = 0;
 }
 
@@ -1412,13 +1533,18 @@ sub merge_file {
 			    -Create => 0);
     return unless $file;
 
+    merge_file_noninteractive($file);
+}
+
+sub merge_file_noninteractive {
+    my $file = shift;
     my $new_project = new Timex::Project;
     if (!$new_project->load($file)) {
 	$status_text->configure(-text => $@);
 	return;
     }
     my $diff = $root->merge($new_project);
-    &insert_all;
+    insert_all();
     $status_text->configure
       (-text => "Merge completed with $diff difference" .
        ($diff == 1 ? "" : "s"));
@@ -1721,6 +1847,8 @@ sub show_attributes {
     $cancel->pack(-side => 'left');
     $attribute_top->Popup(-popover => 'cursor');
 }
+
+BEGIN { status_change("parsing 73%"); }
 
 sub show_intervals {
     my($top, $project, %args) = @_;
@@ -2190,6 +2318,42 @@ sub minmaximze {
 	$top->geometry($save_geometry);
 	$top->raise;
     }
+}
+
+sub accept_drop {
+    my($c, $seln) = @_;
+    my $filename;
+    my $own =  $c->SelectionExists('-selection'=>$seln);
+    my @targ = $c->SelectionGet('-selection'=>$seln,'TARGETS');
+    foreach (@targ) {
+	if (/FILE_NAME/) {
+	    $filename = $c->SelectionGet('-selection'=>$seln,'FILE_NAME');
+	    last;
+	}
+	if ($os eq 'win' && /STRING/) {
+	    $filename = $c->SelectionGet('-selection'=>$seln,$_);
+	    last;
+	} 
+    }
+    if (defined $filename) {
+	$c->after(10, sub {load_merge_popup($filename)});
+    }
+}
+
+sub load_merge_popup {
+    my $filename = shift;
+    my $load_menu = $top->Menu(-tearoff => 0);
+    $load_menu->command(-label => "Merge",
+			-command => sub {
+			    merge_file_noninteractive($filename);
+			});
+    $load_menu->command(-label => "Load",
+			-command => sub {
+			    load_file_noninteractive($filename);
+			});
+    $load_menu->command(-label => "Cancel",
+			-command => sub { });
+    $load_menu->Popup(-popover => 'cursor');
 }
 
 sub get_home_dir {
