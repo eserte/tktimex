@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.43 2000/12/12 23:34:09 eserte Exp $
+# $Id: Project.pm,v 3.44 2001/03/23 00:29:42 eserte Exp $
 #
 
 =head1 NAME
@@ -384,8 +384,13 @@ sub interval_times {
 
     require Time::Local;
 
+    require Data::Dumper;
+    my $t;
+    my $tc = Data::Dumper->new([$times], ['t'])->Dump;
+    my(@times) = eval "$tc;" . '@$t';
+    die @$ if $@;
+
     my @res;
-    my @times = @$times; # see ref note below
     my($last_wday); # not really wday... for weeks this is the week number etc.
 
     for(my $i = 0; $i<=$#times; $i++) {
@@ -397,7 +402,7 @@ sub interval_times {
 	    # split into today and tomorrow
 	    my $old_end = $d[1];
 	    $d[1] = Time::Local::timelocal(59,59,23,$a1[3],$a1[4],$a1[5]);
-	    splice @$times, $i+1, 0, [$d[1]+1, $old_end];
+	    splice @times, $i+1, 0, [$d[1]+1, $old_end];
 	}
 	my $interval = $d[1] - $d[0];
 
