@@ -1,0 +1,25 @@
+tktimex
+-------
+
+Here's a list of scripts and programs:
+
+install.pl		- installer for Windows (and someday for Unix, too)
+
+tktimex			- the main Tk program
+
+ctimex			- the console program
+
+clear_times.pl		- clear all the times in a project file
+
+convert2xls.pl		- convert project file to excel using a template
+
+convert2xml.pl		- convert project file to an XML representation
+
+get_skeleton.pl		- save as skeleton file without times
+
+restrict_domain.pl	- TBD
+
+timexserver		- timex server 
+
+timexserver.cgi		- CGI for timex server
+
