@@ -167,6 +167,7 @@ sub archived {
 	 ($self->parent && $self->parent->archived)) ? 1 : 0;
     } else {
 	$self->{'archived'} = ($flag ? 1 : 0);
+	$self->modified(1);
     }
 }
 
@@ -177,7 +178,7 @@ sub archived {
 Returns true if the root project is modified, that is, one of root's #'
 subprojects are modified.
 
-    $project->archived($modified)
+    $project->modified($modified)
 
 Set the modified attribute (0 or 1) for the root project.
 
