@@ -1,0 +1,163 @@
+#!/usr/local/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: timexserver,v 1.1 1999/10/06 22:16:46 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 1999 Slaven Rezic. All rights reserved.
+# This program is free software; you can redistribute it and/or
+# modify it under the same terms as Perl itself.
+#
+# Mail: eserte@cs.tu-berlin.de
+# WWW:  http://user.cs.tu-berlin.de/~eserte/
+#
+
+# XXX -T fehlt
+
+use FindBin;
+use lib ("$FindBin::RealBin");
+
+use Getopt::Long;
+use Timex::Project;
+use IO::Socket;
+
+use strict;
+use vars qw($top $thisprog $homedir $assign_file %user_project);
+
+$homedir     = _untaint((getpwuid($>))[7]);
+$thisprog    = _untaint($0);
+$assign_file = "$homedir/.timex_assignment";
+
+my $first_user_id = 100;
+
+my(%user_assign);
+
+if (0 && $> != 0) {
+    die "The effective user id is not root.\n".
+	"Is the mode of $thisprog correctly set to setuid?\n";
+}
+
+my $use_gui = 1;
+
+GetOptions("gui!" => \$use_gui);
+
+if ($use_gui) {
+    gui();
+} else {
+    start_server();
+}
+
+sub gui {
+    require Tk;
+    require Tk::Dialog;
+    require Tk::HList;
+
+    $top = MainWindow->new;
+
+    my $hl = $top->Scrolled('HList',
+			    -scrollbars => "osoe",
+			    -columns => 2,
+			    )->pack(-expand => 1, -fill => "both");
+    fetch_all_users();
+    load_assign();
+    fill_assign($hl);
+
+    $top->Button(-text => "Start server",
+		 -command => \&start_server)->pack;
+
+    $top->protocol('WM_DELETE_WINDOW' => \&exit_app);
+
+    Tk::MainLoop();
+
+}
+
+sub fill_assign {
+    my $hl = shift;
+    my $i = 0;
+    foreach my $user (sort keys %user_assign) {
+	$hl->add($i, -text => $user);
+	my $user2 = $user;
+	my $b;
+	$b = $hl->Button(-text => $user_assign{$user},
+			 -command => sub {
+			     # XXX ist nicht taint-sicher
+			     my $f = $top->getOpenFile;
+			     if (defined $f) {
+				 $user_assign{$user2} = $f;
+				 $b->configure(-text => $f);
+			     }
+			 });
+	$hl->itemCreate($i, 1, -itemtype => "window", -window => $b);
+	$i++;
+    }
+}
+
+sub load_assign {
+    if (open(A, $assign_file)) {
+	%user_assign = ();
+	while(<A>) {
+	    chomp;
+	    my($k,$v) = split /\t/;
+	    $user_assign{$k} = $v;
+	}
+	close A;
+    }
+}
+
+sub fetch_all_users {
+    setpwent();
+    my(@data);
+    while(@data = getpwent()) {
+	$user_assign{$data[0]} = '' if ($data[2] >= $first_user_id and
+					$data[0] ne 'nobody');
+    }
+    endpwent();
+}
+
+sub save_assign {
+    if (open(A, ">$assign_file")) {
+	while(my($k,$v) = each %user_assign) {
+	    print A "$k\t$v\n";
+	}
+	close A;
+    }
+}
+
+sub _untaint {
+    my $s = shift;
+    $s =~ /^(.*)$/;
+    $1;
+}
+
+sub exit_app {
+    save_assign();
+    $top->destroy;
+}
+
+sub start_server {
+    for my $user (keys %user_assign) {
+	my $file = $user_assign{$user};
+	if ($file ne '' && -r $file) {
+	    $user_project{$user} = new Timex::Project;
+	    if (!$user_project{$user}->load($file)) {
+		warn "Can't load project file $file for user $user";
+	    }
+	}
+    }
+
+    my $s = new IO::Socket::INET
+	Proto     => "tcp",
+	LocalPort => 12345,
+	Listen    => 1,
+	Reuse     => 1;
+    my $client;
+    # XXX http-server emulieren
+    # XXX GET/POST
+    # XXX oder gleich CGI-Skripte verwenden????
+    while($client = $s->accept) {
+	
+    }
+}
+
+__END__
