@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.3 2001/04/04 22:38:52 eserte Exp $
+# $Id: tktimex,v 6.4 2001/04/05 22:25:18 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -101,11 +101,36 @@ sub Popup
 }
 
 ######################################################################
+package Tk::MyHList;
+use base qw(Tk::HList);
+Construct Tk::Widget 'MyHList';
+
+# Hack to prevent the selection to disappear if clicking on empty hlist space
+sub Button1 {
+    my $w = shift;
+    my($orig_sel) = $w->selectionGet;
+    my $r = $w->SUPER::Button1(@_);
+    if (!$w->selectionGet && $orig_sel) {
+	$w->selectionSet($orig_sel);
+    }
+    $r;
+}
+
+######################################################################
+package Tk::MyTree;
+use base qw(Tk::Tree);
+Construct Tk::Widget 'MyTree';
+
+sub Button1 {
+    shift->Tk::MyHList::Button1(@_);
+}
+
+######################################################################
 
 package main;
 
-use Tk::HList;
-use Tk::Tree;
+##use Tk::HList;
+##use Tk::Tree;
 BEGIN { state_change("after Tk::HList"); }
 use File::Basename;
 use FindBin;
@@ -123,7 +148,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.3 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.4 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -225,6 +250,7 @@ $options = {};
    ['oneday-immediately', '!',  1,
     'longhelp' => M"Daily details: immediate update if changing date"],
    ['geometry',           '=s', "500x230",
+    'subtype' => 'geometry',
     'longhelp' => M"Size of window on startup"], # XXX
    ['iconified',          '!', 0,
     'longhelp' => M"Open application iconfied"],
@@ -236,7 +262,7 @@ $options = {};
     'longhelp' => M"File with enterprise-wide list of projects"],
    ['enterprisedefaults', "=s", undef, 'subtype' => 'file',
     'longhelp' => M"File with enterprise-wide configuration settings"],
-   (map { ["enterprisefile$_", "=s", undef,   'subtype' => 'file',
+   (map { ["enterprisefile$_", "=s", undef, 'subtype' => 'file',
 	   'longhelp' => M"Default enterprise timex file"]
       } (1 .. $max_enterprise_file_list)),
 
@@ -262,7 +288,7 @@ $options = {};
     #'strict' => 1, # geht leider nicht...
     ],
    ['sort',               '=s', 'name',
-    'choices' => ['nothing', 'name', 'time'],
+    'choices' => ['', 'nothing', 'name', 'time'],
     'strict' => 1,
     'callback' => sub { insert_all() },
    ],
@@ -602,6 +628,7 @@ $mb_options->checkbutton(-label => M"Show only top",
 			 -variable => \$options->{'onlytop'},
 			)
     unless $s_if || $m_if;
+$options->{'tree'} = 0; # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 if ($options->{'tree'}) {
     $mb_options->separator
         unless $s_if || $m_if;
@@ -741,7 +768,7 @@ $pf_cols = 5; # cannot change -columns of hlists...
 
 state_change("checkpoint 3");
 $project_frame = $top->Scrolled
-  (($options->{'tree'} ? 'Tree' : 'HList'),
+  (($options->{'tree'} ? 'MyTree' : 'MyHList'),
    -scrollbars => "oso$sbside",
    -bg => $inner_bg,
    -fg => $inner_fg,
@@ -759,6 +786,17 @@ $real_project_frame = $project_frame->Subwidget("scrolled");
 $is_tree = ($project_frame->can('autosetmode') or
 	    ($real_project_frame and
 	     $real_project_frame->can('autosetmode')));
+#  if ($is_tree) {
+#      $real_project_frame->configure
+#  	(-ignoreinvoke => 1,
+#  	 -opencmd => sub {
+#  	     Carp::cluck;
+#  	     warn "@_";
+#  	 },
+#  	 -closecmd => sub {
+#  	     warn "@_";
+#  	 });
+#  }
 
 state_change("checkpoint 4");
 if ($options->{'autoscroll'} !~ /^(|none)$/) {
