@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.54 2000/08/01 18:43:27 eserte Exp $
+# $Id: tktimex,v 4.55 2000/08/01 19:35:22 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -15,13 +15,17 @@
 #use blib qw(/home/e/eserte/src/perl/Devel-SRT);
 #use Devel::SRT;
 
-BEGIN { sub status_change { }
- status_change("vor Tk"); }
+BEGIN {
+    sub state_change { }
+    state_change("before Tk");
+}
 use Tk;
-BEGIN { status_change("nach Tk"); }
+BEGIN {
+    state_change("after Tk");
+}
 use Tk::ErrorDialog;
 
-status_change("alle uses...");
+state_change("all use's processed...");
 
 ######################################################################
 
@@ -79,23 +83,23 @@ sub Popup
 package main;
 
 use Tk::HList;
-BEGIN { status_change("nach Tk::HList"); }
+BEGIN { state_change("after Tk::HList"); }
 use File::Basename;
 use FindBin;
 use lib ("$FindBin::RealBin");
 eval { require Tk::UnderlineAll };
-BEGIN { status_change("vor Timex::Project"); }
+BEGIN { state_change("before Timex::Project"); }
 use Timex::Project;
-BEGIN { status_change("nach Timex::Project"); }
+BEGIN { state_change("after Timex::Project"); }
 use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
-BEGIN { status_change("nach use locale"); }
+BEGIN { state_change("after use locale"); }
 # enable DnD
 use Tk::DropSite;
-BEGIN { status_change("nach tk::dropsite"); }
+BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.54 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.55 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
@@ -132,7 +136,7 @@ my $inner_fg = "black";
 my $inner_bg = "white";
 my %history;
 
-status_change("getopt def");
+state_change("before Getopt definition");
 
 my $options = {};
 my @opttable =
@@ -157,7 +161,7 @@ my @opttable =
 
    'Projects',
    ['dateformat',         '=s', 'h',
-    'choices' => ['d', 'h', 'hs'],
+    'choices' => ['d', 'h', 'hs', 'frac d', 'frac h'],
     'strict' => 1,
     'callback' => \&set_dateformat,
     'alias' => ['df'],
@@ -198,10 +202,10 @@ my @opttable =
   );
 my $opt;
 eval {
-    status_change("vor req Getopt");
+    state_change("before require Tk::Getopt");
     require Tk::Getopt;
     Tk::Getopt->VERSION(0.34);
-    status_change("nach req Getopt");
+    state_change("after require Tk::Getopt");
 };
 if ($@) {
     warn "No Tk::Getopt --- falling back to Getopt::Long\n";
@@ -216,23 +220,23 @@ if ($@) {
     }
     die "Usage?" if !Getopt::Long::GetOptions(@getopt);
 } else {
-    status_change("Getopt1");
+    state_change("Tk::Getopt checkpoint 1");
     $opt = new Tk::Getopt(-opttable => \@opttable,
 			  -options  => $options,
 			  -filename => "$home/.tktimexrc");
-    status_change("Getopt2");
+    state_change("Tk::Getopt checkpoint 2");
     $opt->set_defaults;
-    status_change("Getopt3");
+    state_change("Tk::Getopt checkpoint 3");
     $opt->load_options;
-    require Getopt::Long; status_change("Getopt4");
+    require Getopt::Long; state_change("Tk::Getopt checkpoint 4");
     die $opt->usage if !$opt->get_options;
-    status_change("Getopt5");
+    state_change("Tk::Getopt checkpoint 5");
 }
 if (@ARGV) {
     $options->{'file'} = shift @ARGV;
 }
 
-status_change("1");
+state_change("checkpoint 1");
 
 if ($options->{'one-instance'} and tktimex_running()) {
     require Tk::Dialog;
@@ -263,7 +267,7 @@ eval {
     $top->Icon(-image => $icon);
 };
 
-status_change("0");
+state_change("checkpoint 2");
 
 my($is_archiv, $east);
 my $balloon;
@@ -280,13 +284,13 @@ if ($Tk::VERSION >= 800.005) {
     $balloon = $top->Balloon;
 }
 
-status_change("menu begin");
+state_change("menu begin");
 
 my $menu_frame = $top->Frame(-relief => 'raised',
 			     -borderwidth => 2);
 
 my $mb_file = $menu_frame->Menubutton(-text => 'File')->pack(-side => 'left');
-status_change("first menubutton loaded");
+state_change("first menubutton loaded");
 $mb_file->command(-label => 'Load',
 		  -command => sub { load_file(1) });
 $mb_file->command(-label => 'Save',
@@ -306,7 +310,10 @@ $mb_export->command(-label => 'Save XML',
 $mb_export->command(-label => 'Save Excel',
 		    -command => sub {
 			require Timex::ExcelExport;
-		        Timex::ExcelExport::save_dialog($top, $root);
+		        Timex::ExcelExport::save_dialog
+				($top, $root,
+				 -hourlyrate => $options->{'hourlyrate'},
+				);
 		    });
 $mb_export->command(-label => 'Dump',
 		    -command => \&dump_data);
@@ -376,21 +383,18 @@ if (defined $opt) {
 			 -command => sub { $opt->option_editor($top) });
 }
 
-$dateformat_menu->radiobutton(-label => 'H:M:S',
-			      -command => \&set_dateformat,
-			      -value => 'hs',
-			      -variable => \$options->{'dateformat'},
-			     );
-$dateformat_menu->radiobutton(-label => 'H:M',
-			      -command => \&set_dateformat,
-			      -value => 'h',
-			      -variable => \$options->{'dateformat'},
-			     );
-$dateformat_menu->radiobutton(-label => 'd H:M',
-			      -command => \&set_dateformat,
-			      -value => 'd',
-			      -variable => \$options->{'dateformat'},
-			     );
+foreach my $def (['H:M:S'  => 'hs'],
+		 ['H:M'    => 'h'],
+		 ['d H:M'  => 'd'],
+		 ['Frac H' => 'frac h'],
+		 ['Frac d' => 'frac d'],
+		) {
+    $dateformat_menu->radiobutton(-label => $def->[0],
+				  -command => \&set_dateformat,
+				  -value => $def->[1],
+				  -variable => \$options->{'dateformat'},
+				 );
+}
 
 my $mb_help = $menu_frame->Menubutton(-text => 'Help'
 				     )->pack(-side => 'left');
@@ -409,7 +413,7 @@ $mb_help->command
        $status_text->configure(-text => substr($@, 0, 40) . "...") if $@;
    });
 
-status_change("menu done");
+state_change("menu done");
 
 my $save_check;
 my($mod_watch, $mod_sub);
@@ -483,12 +487,12 @@ my $busy_label = $menu_frame->Label(-textvariable => \$busy_string,
 
 $menu_frame->pack(-fill => 'x');
 
-status_change("menu 2 done");
+state_change("menu 2 done");
 
 my($pf_cols, $has_costs);
 $pf_cols = 5; # cannot change -columns of hlists...
 
-status_change("x0");
+state_change("checkpoint 3");
 
 my $project_frame = $top->Scrolled
   ('HList', -scrollbars => 'osoe',
@@ -506,7 +510,7 @@ my $project_frame = $top->Scrolled
    -separator => $separator,
   )->pack(-expand => 1, -fill => 'both');
 
-status_change("x0.5");
+state_change("checkpoint 4");
 if ($options->{'autoscroll'} !~ /^(|none)$/) {
     require Tk::Autoscroll;
     Tk::Autoscroll::Init($project_frame, -speed => $options->{'autoscroll'});
@@ -518,7 +522,7 @@ $project_frame->header('create', $pf_time_index+1, -text => 'Today');
 $project_frame->header('create', $pf_time_index+2, -text => 'Total');
 update_costs_option(1);
 
-status_change("x1");
+state_change("checkpoint 5");
 
 my $orig_selectbg = $project_frame->cget(-selectbackground);
 
@@ -541,7 +545,7 @@ if (0 && $os eq 'win') {
 $project_frame->bind("<Button-3>" =>
                      sub { show_attributes(get_entry(@_)) });
 
-status_change("x2");
+state_change("checkpoint 6");
 
 if ($project_frame->can('DropSite')) {
     eval {
@@ -559,7 +563,7 @@ $status_text = $status_frame->Label
   (-text => "Current file: " . ($options->{file} || ""));
 $status_text->pack(-side => 'left');
 
-status_change("x3");
+state_change("checkpoint 7");
 
 # verzögert zeigen, da evtl. wichtige Statusmeldungen dadurch
 # verdeckt werden ... aber nicht, wenn in der Statuszeile editiert wird!
@@ -592,13 +596,13 @@ $menu_frame->UnderlineAll if $menu_frame->can('UnderlineAll');
 
 $opt->process_options if defined $opt;
 
-status_change("x4");
+state_change("checkpoint 8");
 
 set_time_update();
 
 $root->modified(0);
 
-status_change("x5");
+state_change("checkpoint 9");
 
 if ($options->{'file'}) {
     load_file(0);
@@ -610,7 +614,7 @@ $project_frame->focus;
 
 $top->repeat(5*60*1000, \&check_still_today);
 
-status_change("vor main loop");
+state_change("before MainLoop");
 MainLoop;
 
 sub enter_label {
@@ -665,7 +669,7 @@ sub enter_label {
     }
 }
 
-BEGIN { status_change("parsing 25%"); }
+BEGIN { state_change("parsed 26%"); }
 
 sub exists_project {
     my $path = shift;
@@ -1128,9 +1132,11 @@ sub show_one_day {
 	}
     }
     my $f = $top->Toplevel(-title => 'Show daily details');
+    $f->{WindowType} = "Daily details";
     my $btn;
     my @p; # project array for one day
     my($dw, $dw_to);
+    my $no_interval_cb;
     if ($has_date) {
 	my $df = $f->Frame->pack;
 	# from:
@@ -1176,7 +1182,11 @@ sub show_one_day {
 	    )->grid(-row => 0, -column => 1, -rowspan => 2);
 	$c->createLine(5,5, 10,5, 15,10, 15,30, 10,35, 5,35, # XXX verwendung von reqheight etc.
 		       -width => 5, -smooth => 1);
-	# XXX weiter implementieren
+	# XXX schöner machen
+	my $orig_bg = $c->cget(-bg);
+	$c->Tk::bind('<Enter>' => sub { $c->configure(-bg => 'grey80') }); # XXX
+	$c->Tk::bind('<Leave>' => sub { $c->configure(-bg => $orig_bg) });
+	$c->Tk::bind('<1>' => sub { $no_interval_cb->toggle });
     } else {
 	if ($has_date_entry) {
 	    $dw = $f->DateEntry
@@ -1201,6 +1211,7 @@ sub show_one_day {
     }
     my $ff = $f->Frame->pack;
     $btn = $ff->Button(-text => 'Show')->pack(-side => 'left');
+    $f->{InvokeButton} = $btn;
     my $clb = $ff->Button(-text => 'Close',
 			  -command => sub { $f->destroy },
 			 )->pack(-side => 'left');
@@ -1213,14 +1224,15 @@ sub show_one_day {
 		     ($has_date_entry ? (-state => 'disabled') : ()),
 		    )->pack(-side => 'left');
     my $one_day_only = 1;
-    $ff->Checkbutton(-text => 'no interval',
-		     -variable => \$one_day_only,
-		     -command => sub {
-			  if ($options->{'oneday-immediately'}) {
-			      $btn->invoke;
-			  }
-		      },
-		    )->pack(-side => 'left');
+    $no_interval_cb = 
+	$ff->Checkbutton(-text => 'no interval',
+			 -variable => \$one_day_only,
+			 -command => sub {
+			     if ($options->{'oneday-immediately'}) {
+				 $btn->invoke;
+			     }
+			 },
+			)->pack(-side => 'left');
     my $act_from_date; # current from date
     my $lb = $f->Scrolled('HList',
 			  -bg => $inner_bg,
@@ -1428,7 +1440,7 @@ sub load_file {
     }
 }
 
-BEGIN { status_change("parsing 50%"); }
+BEGIN { state_change("parsed 54%"); }
 
 sub load_file_noninteractive {
     my $file = shift;
@@ -1855,6 +1867,12 @@ sub set_dateformat {
     if (set_time_update()) {
 	set_timeout();
     }
+    foreach my $w ($top->Descendants("Toplevel")) {
+	if ($w->{WindowType} and $w->{WindowType} eq 'Daily details' and
+	    $w->{InvokeButton}) {
+	    $w->{InvokeButton}->invoke;
+	}
+    }
 }
 
 sub not_running {
@@ -2066,7 +2084,7 @@ sub show_attributes {
     $attribute_top->Popup(-popover => 'cursor');
 }
 
-BEGIN { status_change("parsing 73%"); }
+BEGIN { state_change("parsed 74%"); }
 
 sub show_intervals {
     my($top, $project, %args) = @_;
@@ -2328,7 +2346,7 @@ sub show_intervals {
 		    -command => sub { $update->() },
 		   )->pack(-side => 'left');
     $f->Label(-text => '  ')->pack(-side => 'left');
-    $f->Checkbutton(-text => 'Daily',
+    $f->Checkbutton(-text => 'Group daily',
 		    -variable => \$daily,
 		    -command => sub { $update->() },
 		   )->pack(-side => 'left');
@@ -2442,16 +2460,26 @@ sub sec2time {
     if ($dateformat =~ /^d/) {
 	$day = int($sec / ($day8 ? 28800 : 86400));
 	$sec = $sec % ($day8 ? 28800 : 86400);
+    } elsif ($dateformat eq 'frac d') {
+	$day = $sec / ($day8 ? 28800 : 86400);
     }
-    $hour = int($sec / 3600);
-    $sec  = $sec % 3600;
-    $min  = int($sec / 60);
+    if ($dateformat eq 'frac h') {
+	$hour = $sec / 3600;
+    } else {
+	$hour = int($sec / 3600);
+	$sec  = $sec % 3600;
+	$min  = int($sec / 60);
+    }
     if ($dateformat eq 'd') {
 	sprintf("%3dd %02d:%02d", $day, $hour, $min);
     } elsif ($dateformat eq 'h') {
 	sprintf("%3d:%02d", $hour, $min);
     } elsif ($dateformat eq 'dd') { # round working days
 	sprintf("%3dd", $day + ($hour >= ($day8 ? 4 : 12) ? 1 : 0));
+    } elsif ($dateformat eq 'frac d') {
+	sprintf("%.2fd", $day);
+    } elsif ($dateformat eq 'frac h') {
+	sprintf("%.2fh", $hour);
     } else {
 	sprintf("%02d:%02d:%02d", $hour, $min, $sec % 60);
     }
