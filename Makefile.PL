@@ -17,10 +17,11 @@ WriteMakefile(
      'Timex/Rcs.pm'	       => '$(INST_LIBDIR)/Timex/Rcs.pm',
      'Timex/Server.pm'	       => '$(INST_LIBDIR)/Timex/Server.pm',
      'Timex/Utmp.pm'	       => '$(INST_LIBDIR)/Timex/Utmp.pm',
+     'Timex/MultiProject.pm'   => '$(INST_LIBDIR)/Timex/MultiProject.pm',
 
-     'Tk/Autoscroll.pm'	       => '$(INST_LIBDIR)/Tk/Autoscroll.pm',
-     'Tk/UnderlineAll.pm'      => '$(INST_LIBDIR)/Tk/UnderlineAll.pm',
-     'Win32Util.pm'            => '$(INST_LIBDIR)/Win32Util.pm',
+     'Tk/Autoscroll.pm'	       => '$(INST_LIBDIR)/Timex/Tk/Autoscroll.pm',
+     'Tk/UnderlineAll.pm'      => '$(INST_LIBDIR)/Timex/Tk/UnderlineAll.pm',
+     'Win32Util.pm'            => '$(INST_LIBDIR)/Timex/Win32Util.pm',
 
      'plain.up.gif'            => '$(INST_LIBDIR)/plain.up.gif',
      'plain.down.gif'          => '$(INST_LIBDIR)/plain.down.gif',
