@@ -337,12 +337,13 @@ sub sum_time {
     if ($args{'-usecache'} && !defined $until &&
 	exists $self->{'cached_time'}{$since}) {
  	$sum += $self->{'cached_time'}{$since};
- 	my $last_times = $self->{'times'}[$#{$self->{'times'}}];
+	my $last_times = $self->{'times'}[$#{$self->{'times'}}];
  	if (!defined $last_times->[1] && defined $last_times->[0]) {
  	    $sum += time - $last_times->[0]; # XXX was wenn undefined?
  	}
     } else {
 	my $this_sum = 0;
+	my $dont_cache = 0;
 	my @times = @{$self->{'times'}};
 	my $i = -1;
 	foreach (@times) {
@@ -354,6 +355,7 @@ sub sum_time {
 			warn "No end time in $self";
 			next;
 		    } else {
+			$dont_cache++; # implizites Setzen, daher nicht cachen
 			$to = time;
 		    }
 		}
@@ -372,7 +374,8 @@ sub sum_time {
 	$sum += $this_sum;
 
 	if ($args{'-usecache'} && !defined $until &&
-	    !exists $self->{'cached_time'}{$since}) {
+	    !exists $self->{'cached_time'}{$since} &&
+	    !$dont_cache) {
 	    $self->{'cached_time'}{$since} = $this_sum;
 	}
     }
@@ -385,14 +388,19 @@ sub sum_time {
     $project->update_cached_time
 
 STUB: Update the cached_time field of the project object.
+NOW: Invalidate the cached_time field, so it may be racalculated by
+sum_time.
 
 =cut
 
 sub update_cached_time {
     my $self = shift;
     while(my($from, $k) = each %{ $self->{'cached_time'} }) {
-	$self->{'cached_time'}{$from} = $self->sum_time($from, undef);
+	delete $self->{'cached_time'}{$from};
+warn "delete $from";
+#	$self->{'cached_time'}{$from} = $self->sum_time($from, undef);
     }
+warn scalar keys %{ $self->{'cached_time'} };
 }
 
 =head2 archived
