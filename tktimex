@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.47 1999/10/26 00:28:39 eserte Exp $
+# $Id: tktimex,v 4.48 1999/11/08 21:33:13 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -97,7 +97,7 @@ BEGIN { status_change("nach use locale"); }
 use Tk::DropSite;
 BEGIN { status_change("nach tk::dropsite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.47 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.48 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = 1; # gefährlich für win...
@@ -138,21 +138,34 @@ status_change("getopt def");
 my $options = {};
 my @opttable =
   ('General',
-   ['file|f',             '=s', undef, 'subtype' => 'file'],
+   ['file|f',             '=s', undef, 'subtype' => 'file',
+    'longhelp' => "Default project file to load on startup"],
    ['lock',               '!',  1,
     'longhelp' => "Set to false if you don't want file locking."],
+   ['one-instance',     '!',  0,
+    'longhelp' => "Exit application if there is already another instance running"],
    ['autosave',           '!',  1,
     'callback' => \&toggle_autosave, 'alias' => ['as'],
     'longhelp' => "Autosave is recommended!"],
    ['update',             '=i', 60*10,
     'longhelp' => "Autosave interval in seconds."],
-   ['dateformat',         '=s', 'd',
+   ['oneday-immediately', '!',  1,
+    'longhelp' => "Daily details: immediate update if changing date"],
+   ['geometry',           '=s', "500x230",
+    'longhelp' => "Size of window on startup"], # XXX
+   ['securesave',         '!', 0,
+    'longhelp' => "Saving data also in a Data::Dumper format. Not really necessary anymore."],
+
+   'Projects',
+   ['dateformat',         '=s', 'h',
     'choices' => ['d', 'h', 'hs'],
     'strict' => 1,
     'callback' => \&set_dateformat,
-    'alias' => ['df']],
+    'alias' => ['df'],
+    'longhelp' => "Format of time display",
+    ],
    ['day8',               '!',  0, 'callback' => \&toggle_time_arbeitstag,
-    "longhelp" => "A day should be treated as 8 hours."],
+    "longhelp" => "If set: a day should be treated as 8 hours."],
    ['archived',           '!',  0, 'callback' => \&toggle_show_archived,
     "longhelp" => "Show archived projects too.",
     ],
@@ -164,23 +177,24 @@ my @opttable =
     'strict' => 1,
     'callback' => \&insert_all,
    ],
-   ['oneday-immediately', '!',  1],
-   ['geometry',           '=s', "500x230"], # XXX
-   ['securesave',         '!', 0],
+
    'Appearance',
-   ['busyind',            '!', 0],
+   ['busyind',            '!', 0,
+    'longhelp' => 'Show a busy indicator if a project is running'],
    ['autoscroll',         '=s', 'none',
     'choices' => ['slow', 'normal', 'fast'],
     'strict' => 1,
     'longhelp' => "Autoscrolling is not available on all systems.\n" .
-    "Changes are efficive on new start."
+    "Changes are effective on restart."
     ],
    ['hourlyrate',         '=f', 0,
     'callback' => sub { update_costs_option(1) },
+    'longhelp' => "Hourly rate for work.",
     ],
    ['currency',           '=s', "DEM",
     'choices' => ['EUR', 'USD', 'HRD'],
     'callback' => sub { update_costs_option(1) },
+    'longhelp' => "Currency for hourlyrate option.",
     ],
   );
 my $opt;
@@ -220,6 +234,18 @@ if (@ARGV) {
 }
 
 status_change("1");
+
+if ($options->{'one-instance'} and tktimex_running()) {
+    require Tk::Dialog;
+    my $top = tkinit;
+    $top->withdraw;
+    $top->Dialog(-title => 'Error',
+		 -text => "Another tktimex instance is already running.\n" .
+		 "Start tktimex with the option -noone-instance, if you\n" .
+		 "want really two instances of this program running.\n",
+		 -popover => 'cursor')->Show;
+    exit;
+}
 
 my $top = new MainWindow;
 $top->protocol('WM_DELETE_WINDOW', \&quit_program);
@@ -1057,8 +1083,15 @@ sub show_one_day {
 	}
     };
     my $has_date = !$@;
+    my $has_date_entry;
     if (!$has_date) {
-	require Time::Local;
+	eval {
+	    require Tk::DateEntry;
+	};
+	$has_date_entry = !$@;
+	if (!$has_date_entry) {
+	    require Time::Local;
+	}
     }
     my $f = $top->Toplevel(-title => 'Show one day');
     my $btn;
@@ -1082,16 +1115,26 @@ sub show_one_day {
 	   }
 	  )->pack;
     } else {
-	$dw = $f->Entry(-bg => $inner_bg,
-			-fg => $inner_fg,
-		       )->pack;
+	if ($has_date_entry) {
+	    $dw = $f->DateEntry
+	      (-dateformat => 2,
+	       -background => $inner_bg,
+	       -foreground => $inner_fg,
+	       -daynames => [qw/So Mo Di Mi Do Fr Sa/],
+	       -weekstart => 1,
+	      )->pack;
+	} else {
+	    $dw = $f->Entry(-bg => $inner_bg,
+			    -fg => $inner_fg,
+			   )->pack;
+	    $dw->bind('<Return>' => sub {
+			  if ($options->{'oneday-immediately'}) {
+			      $btn->invoke;
+			  }
+		      });
+	}
 	my(@l) = localtime;
-	$dw->insert(0, "$l[3]." . ($l[4]+1) . "." . ($l[5]+1900));
-	$dw->bind('<Return>' => sub {
-		      if ($options->{'oneday-immediately'}) {
-			  $btn->invoke;
-		      }
-		  });
+	$dw->insert(0, sprintf("%04d/%02d/%02d", $l[5]+1900, $l[4]+1, $l[3]));
     }
     my $ff = $f->Frame->pack;
     $btn = $ff->Button(-text => 'Show')->pack(-side => 'left');
@@ -1104,6 +1147,7 @@ sub show_one_day {
 		     -command => sub {
 			 $btn->invoke;
 		     },
+		     ($has_date_entry ? (-state => 'disabled') : ()),
 		    )->pack(-side => 'left');
     my $until_now = 0;
     $ff->Checkbutton(-text => 'till today',
@@ -1133,7 +1177,7 @@ sub show_one_day {
 			  $s_from = Tk::Date::_begin_of_day($s_from);
 		      } else {
 			  my $s = $dw->get;
-			  my($d,$m,$y) = split(/\D/, $s);
+			  my($y,$m,$d) = split(/\D/, $s);
 			  return if !($d >= 1 && $d <= 31 &&
 				      $m >= 1 && $m <= 12 &&
 				      defined $y);
@@ -1635,7 +1679,7 @@ sub merge_file_noninteractive {
 	return;
     }
     my $diff = $root->merge($new_project);
-    insert_all();
+    insert_all() if $diff;
     $status_text->configure
       (-text => "Merge completed with $diff difference" .
        ($diff == 1 ? "" : "s"));
@@ -2479,6 +2523,22 @@ sub get_home_dir {
     $home;
 }
 
+# This is a hack using xwininfo to report if another tktimex window
+# is already running. This must be called before $top is created...
+sub tktimex_running {
+    return 0 if ($os eq 'win');
+    open(WININFO, "xwininfo -tree -root |");
+    my $r = 0;
+    while (<WININFO>) {
+	if (/^\s*0x[0-9a-fA-F]+\s+"tktimex.*":\s+\("tktimex"\s+"Tktimex"\)/) {
+	    $r = 1;
+	    last;
+	}
+    }
+    close WININFO;
+    return $r;
+}
+
 sub show_about {
     my $dia = $top->Toplevel(-title => 'Copyright');
     $dia->Label(-text  => <<'EOF',
@@ -2558,27 +2618,47 @@ the command line:
 If Tk::Getopt is installed on your system, you can set the default
 project list file in the B<Option editor> (menu B<Options>).
 
-=head1 OPTIONS
+=head1 COMMAND LINE OPTIONS
 
 Possible options are:
 
-        --file
-        --[no]autosave   (default: 1)
-        --update         (default: 600)
-        --dateformat     (default: h)
-        --[no]day8
-        --[no]archived
-        --[no]onlytop
-        --sort
-        --[no]oneday-immediately         (default: 1)
-        --geometry       (default: 500x230)
+	--file
+	--[no]lock       (default: 1)
+  	--[no]one-instance
+  	--[no]as, --[no]autosave         (default: 1)
+  	--update         (default: 600)
+  	--[no]oneday-immediately         (default: 1)
+  	--geometry       (default: 500x230)
+  	--[no]securesave
+  	--df, --dateformat       (default: h)
+  	--[no]day8
+  	--[no]archived
+  	--[no]onlytop
+  	--sort
+  	--[no]busyind
+  	--autoscroll     (default: none)
+  	--hourlyrate
+  	--currency       (default: DEM)
 
 =head1 TODO
 
   - better Pod
   - View by day, by project, by interval, by month, by special attrib
-  - auswE<auml>hlen aus last-accessed-files sollte die aktivitE<auml>t
-    nicht automatisch starten
+
+=head1 BUGS
+
+If tktimex crashes (it should only due to perl/Tk or OS problems!),
+then it is possible that the project file gets corrupted. To prevent
+loss of data, there are always some backup files with the suffixes .1,
+.2 etc.
+
+The -oneday-immediately option is not supported with Tk::DateEntry.
+
+The tktimex process is very memory-consuming. Expect that 10 MB of the
+virtual memory will be eaten.
+
+Setting dateformat to "hs" (show hours, minutes and seconds) is not
+recommended due to cpu waste. Better leave the option at "d" or "h".
 
 =head1 FILES
 
@@ -2588,7 +2668,7 @@ Possible options are:
 
 =head1 SEE ALSO
 
-perl(1), Tk(3), rcsintro(1)
+perl(1), Tk(3), rcsintro(1), Timex::Project(3)
 
 =head1 AUTHOR
 
