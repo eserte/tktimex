@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.10 2001/11/21 20:36:08 eserte Exp $
+# $Id: Rcs.pm,v 1.11 2002/03/15 19:08:47 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -45,7 +45,11 @@ sub revision { $_[0]->{Revision} }
 sub version  { $_[0]->revision } # VCS.pm compatibility
 sub date     { $_[0]->{Date} }
 sub unixtime {
-    my $date = $_[0]->date;
+    rcsdate2unixtime($_[0]->date);
+}
+# static method
+sub rcsdate2unixtime {
+    my $date = shift;
     if ($date =~ m|^(\d+)/(\d+)/(\d+)\s+(\d+):(\d+):(\d+)$|) {
 	my $ret;
 	if (eval {
