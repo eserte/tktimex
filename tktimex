@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 2.4 1996/12/19 16:25:33 eserte Exp $
+# $Id: tktimex,v 2.5 1997/04/24 13:35:15 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -475,8 +475,10 @@ sub show_attributes {
     my $project = $projects_in_text[$project_index];
 
     my $attribute_top = $top->Toplevel(-title => "Attributes");
-    $attribute_top->Label(-text => 'Name: ' . $project->label
-			 )->pack(-anchor => 'w');
+    my $f = $attribute_top->Frame->pack;
+    $f->Label(-text => 'Name: ')->pack(-side => 'left');
+    my $label = $project->label;
+    $f->Entry(-textvariable => \$label)->pack(-side => 'left');
     if ($project->parent) {
 	$attribute_top->Label(-text => 'Parent: ' .
 			      ($project->parent eq $root ?
@@ -491,8 +493,12 @@ sub show_attributes {
     my $command_frame = $attribute_top->Frame->pack(-side => 'bottom');
     my $ok = $command_frame->Button
       (-command => sub {
-	   my $insert_all = 
-	     ($archived && !$project->{'archived'});
+	   my $insert_all;
+	   if ($label && $label ne $project->label) {
+	       $project->label($label);
+	       $insert_all++;
+	   }
+	   $insert_all++ if ($archived && !$project->{'archived'});
 	   $project->archived($archived);
 	   $attribute_top->destroy();
 	   &insert_all if $insert_all;
