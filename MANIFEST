@@ -3,15 +3,15 @@ MANIFEST
 Makefile.PL
 README
 Timex/ExcelExport.pm
+Timex/MultiProject.pm
 Timex/Project.pm
 Timex/Project/Export.pm
 Timex/Project/XML.pm
 Timex/Rcs.pm
-Timex/Svn.pm
 Timex/Server.pm
+Timex/Svn.pm
 Timex/Utmp.pm
 Timex/de_template.csv
-Timex/MultiProject.pm
 Timex/t/base.t
 Timex/t/multiproject.t
 Timex/t/testdata.xml
@@ -26,15 +26,17 @@ get_skeleton.pl
 install.pl		from bbbike
 install.pl.config
 kde/Timex.kdelnk
-mini-clock.xpm
 mini-clock.ico
+mini-clock.xpm
+msg/tktimex/de
 plain.down.gif
 plain.up.gif
 project2xls.pl
 project2xml.pl
 restrict_domain.pl
+t/50base.t		simple test script
+t/test.pj1		test project file
 templates/oo.pjt
 timexserver
 timexserver.cgi
-tktimex
-msg/tktimex/de
+tktimex			main program
