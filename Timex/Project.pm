@@ -40,6 +40,7 @@ sub new {
     $self->{'label'} = $label;
     $self->{'subprojects'} = [];
     $self->{'archived'} = 0;
+    $self->{'cached_time'} = {};
     $self->{'times'} = [];
     $self->{'parent'} = undef;
     $self->{'modified'} = 1;
@@ -151,7 +152,8 @@ sub sorted_subprojects {
     } elsif ($sorted_by =~ /^name$/i) {
 	sort { lc($a->label) cmp lc($b->label) } $self->subproject;
     } elsif ($sorted_by =~ /^time$/i) {
-	sort { $b->sum_time(0, undef, 1) <=> $a->sum_time(0, undef, 1) }
+	sort { $b->sum_time(0, undef, -recursive => 1) <=> 
+		 $a->sum_time(0, undef, -recursive => 1) }
 	       $self->subproject;
     } else {
 	die "Unknown sort type: <$sorted_by>";
@@ -256,22 +258,25 @@ sub all_pathnames {
 sub start_time {
     my($self, $time) = @_;
     $time = time unless $time;
-    push(@{$self->{'times'}}, [$time]);
+    push @{$self->{'times'}}, [$time];
+    $self->update_cached_time;
     $self->modified(1);
 }
 
 sub end_time {
     my($self, $time) = @_;
     $time = time unless $time;
-    my @times = @{$self->{'times'}};
-    $times[$#times]->[1] = $time;
+    my @times = @{ $self->{'times'} };
+    $times[$#times][1] = $time;
+    $self->update_cached_time;
     $self->modified(1);
 }
 
 sub unend_time {
     my $self = shift;
-    my @times = @{$self->{'times'}};
-    pop(@{$times[$#times]});
+    my @times = @{ $self->{'times'} };
+    pop @{ $times[$#times] };
+    $self->update_cached_time;
     $self->modified(1);
 }
 
@@ -283,19 +288,22 @@ sub set_times {
     if (defined $end) {
 	$self->{'times'}[$i][1] = $end;
     }
+    $self->update_cached_time;
     $self->modified(1);
 }
 
 sub delete_times {
     my($self, $i) = @_;
-    splice @{$self->{'times'}}, $i, 1;
+    splice @{ $self->{'times'} }, $i, 1;
+    $self->update_cached_time;
     $self->modified(1);
 }
 
 # XXX nicht ausgetestet
 sub insert_times_after {
     my($self, $i, $start, $end) = @_;
-    splice @{$self->{'times'}}, $i+1, 0, [$start, $end];
+    splice @{ $self->{'times'} }, $i+1, 0, [$start, $end];
+    $self->update_cached_time;
     $self->modified(1);
 }
 
@@ -310,49 +318,81 @@ sub _min {
 
 =head2 sum_time
 
-    $time = $project->sum_time($since, $until, $recursive)
+    $time = $project->sum_time($since, $until, %args)
 
 Returns the time the given project accumulated since $since until $until.
-If $until is undefined, returns the time until now. If $recursive
-is true, recurse into subprojects of $project.
+If $until is undefined, returns the time until now. If -recursive is set in
+the %args hash to a true value, recurse into subprojects of $project.
 
 =cut
 
 sub sum_time {
-    my($self, $since, $until, $recursive) = @_;
+    my($self, $since, $until, %args) = @_;
     my $sum = 0;
-    if ($recursive) {
+    if ($args{'-recursive'}) {
 	foreach (@{$self->subproject}) {
-	    $sum += $_->sum_time($since, $until, $recursive);
+	    $sum += $_->sum_time($since, $until, %args);
 	}
     }
-    my @times = @{$self->{'times'}};
-    my $i = -1;
-    foreach (@times) {
-	my($from, $to) = ($_->[0], $_->[1]);
-	$i++;
-	if (defined $from) {
-	    if (!defined $to) {
-		if ($i != $#times) {
-		    warn "No end time in $self";
-		    next;
-		} else {
-		    $to = time;
+    if ($args{'-usecache'} && !defined $until &&
+	exists $self->{'cached_time'}{$since}) {
+ 	$sum += $self->{'cached_time'}{$since};
+ 	my $last_times = $self->{'times'}[$#{$self->{'times'}}];
+ 	if (!defined $last_times->[1] && defined $last_times->[0]) {
+ 	    $sum += time - $last_times->[0]; # XXX was wenn undefined?
+ 	}
+    } else {
+	my $this_sum = 0;
+	my @times = @{$self->{'times'}};
+	my $i = -1;
+	foreach (@times) {
+	    my($from, $to) = ($_->[0], $_->[1]);
+	    $i++;
+	    if (defined $from) {
+		if (!defined $to) {
+		    if ($i != $#times) {
+			warn "No end time in $self";
+			next;
+		    } else {
+			$to = time;
+		    }
 		}
-	    }
-	    my $to = _min($to, $until);
-	    if ($since =~ /^\d+$/ && $to >= $since && $to >= $from) {
-		if ($from >= $since) {
-		    $sum += $to - $from;
-		} else {
-		    $sum += $to - $since;
+		my $to = _min($to, $until);
+		if ($since =~ /^\d+$/ && $to >= $since && $to >= $from) {
+		    if ($from >= $since) {
+			$this_sum += $to - $from;
+		    } else {
+			$this_sum += $to - $since;
+		    }
 		}
+	    } else {
+		warn "No start time in $self";
 	    }
-	} else {
-	    warn "No start time in $self";
+	}
+	$sum += $this_sum;
+
+	if ($args{'-usecache'} && !defined $until &&
+	    !exists $self->{'cached_time'}{$since}) {
+	    $self->{'cached_time'}{$since} = $this_sum;
 	}
     }
+
     $sum;
+}
+
+=head2 update_cached_time
+
+    $project->update_cached_time
+
+STUB: Update the cached_time field of the project object.
+
+=cut
+
+sub update_cached_time {
+    my $self = shift;
+    while(my($from, $k) = each %{ $self->{'cached_time'} }) {
+	$self->{'cached_time'}{$from} = $self->sum_time($from, undef);
+    }
 }
 
 =head2 archived
@@ -534,6 +574,7 @@ sub interpret_data_project {
 		warn "Unknown attributes: " . join(" ", %attributes)
 		  if %attributes;
 		$parent->subproject($self);
+                $self->update_cached_time;
 	    }
 	}
     }
