@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.7 2001/04/26 21:34:30 eserte Exp $
+# $Id: Rcs.pm,v 1.8 2001/05/05 15:18:34 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -32,6 +32,15 @@ sub date     { $_[0]->{Date} }
 sub unixtime {
     my $date = $_[0]->date;
     if ($date =~ m|^(\d+)/(\d+)/(\d+)\s+(\d+):(\d+):(\d+)$|) {
+	my $ret;
+	if (eval {
+	    require Time::Local;
+	    $ret = Time::Local::timelocal($6, $5, $4, $3, $2-1, $1-1900);
+	    1;
+	}) {
+	    return $ret;
+	}
+
 	require POSIX;
 	# XXX unterschiedliche Sommerzeit????
 	my $time = POSIX::mktime($6, $5, $4, $3, $2-1, $1-1900);
