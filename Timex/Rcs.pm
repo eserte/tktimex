@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.11 2002/03/15 19:08:47 eserte Exp $
+# $Id: Rcs.pm,v 1.12 2003/01/10 20:21:04 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -232,6 +232,10 @@ sub _get_vcs_type {
 
     if (-d "$dir/CVS" and !-d "$dir/RCS") {
 	$self->{VCS_Type} = "CVS";
+    } elsif (-d "$dir/.svn") {
+	require Timex::Svn;
+	$self->{VCS_Type} = "SVN";
+	bless $self, 'Timex::Svn::File'; # re-bless hack
     } else {
 	$self->{VCS_Type} = "RCS";
     }
@@ -299,6 +303,10 @@ sub new {
     $self->_get_vcs_type;
     if ($self->{VCS_Type} eq 'CVS') {
 	find($wanted_cvs, $self->{Dirname});
+    } elsif ($self->{VCS_Type} eq 'SVN') {
+	require Timex::Svn;
+	$self->{Files} = [$self->{Dirname}];
+	bless $self, 'Timex::Svn::File'; # re-bless hack
     } else {
 	find($wanted_rcs, $self->{Dirname});
     }
@@ -356,7 +364,10 @@ return 1 if caller();
 
 package main;
 
-my $f = shift or die;
+require FindBin;
+push @INC, "$FindBin::RealBin/..";
+
+my $f = shift or die "Please supply RCS or CVS file";
 my $o = new Timex::Rcs $f;
 foreach my $rev ($o->revisions) {
     print $rev->revision.": ".localtime($rev->unixtime)."\n";
