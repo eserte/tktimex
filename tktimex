@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.6 2001/06/06 06:06:49 eserte Exp $
+# $Id: tktimex,v 6.7 2001/06/14 22:01:42 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -162,7 +162,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.6 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.7 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -2583,12 +2583,53 @@ sub save_file {
 	$current_project->end_time;
     }
 
+    my @collect_warnings;
+    my $dir_check_done;
+
+    my $rename_op = sub {
+	my $inx = shift;
+
+	my $from = (defined $inx ? "$options->{'file'}.$inx" : $options->{'file'});
+	my $to   = "$options->{'file'}." . ($inx+1);
+
+	if (-e $from) {
+	    if (!rename $from, $to) {
+		push @collect_warnings, Mfmt("Could not rename %s to %s: %s", $from, $to, $!);
+		if (!$dir_check_done) {
+		    $dir_check_done++;
+		    my $dir = dirname($to);
+		    if (!-w $dir) {
+			push @collect_warnings, Mfmt("The directory %s is not writable for you", $dir);
+		    }
+		}
+	    }
+	}
+    };
+
     if (!$autosave) {
 	foreach (reverse(0 .. 8)) {
-	    rename "$options->{'file'}.$_", "$options->{'file'}." . ($_+1);
+	    $rename_op->($_);
 	}
     }
-    rename $options->{'file'}, "$options->{'file'}.0";
+    $rename_op->(undef);
+
+    if (@collect_warnings) {
+	if ($top && Tk::Exists($top) && $top->can('messageBox')) {
+	    my $yesno =
+		$top->messageBox(-message => M("Problem while renaming backup files. Please contact your system administrator or check permissions.\nThe detailed error message is:\n") .
+				 join("\n", @collect_warnings) . "\n\n" .
+				 M("Do you want to continue the save operation?"),
+				 -icon => 'error',
+				 -title => M"Save problem",
+				 -type => 'YesNo',
+				);
+	    if ($yesno !~ /yes/i) {
+		return 0;
+	    }
+	} else {
+	    warn join("\n", @collect_warnings);
+	}
+    }
 
     unlock_file_temp() if $lock_is_strict;
 
