@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.5 1998/01/30 15:04:34 eserte Exp $
+# $Id: tktimex,v 4.6 1998/02/01 23:35:46 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -64,6 +64,7 @@ sub Popup
 package main;
 
 use Tk::HList;
+use File::Basename;
 use FindBin;
 use lib ("$FindBin::RealBin", "/home/e/eserte/lib/perl");
 use Tk::Balloon; # XXX gepatchtes Tk::Balloon notwendig
@@ -74,7 +75,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.5 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.6 $ =~ /(\d+)\.(\d+)/);
 
 my $root = new Timex::Project;
 
@@ -317,6 +318,7 @@ sub enter_label {
     $entry->grabRelease;
     $entry->destroy;
     $status_text->configure(-text => "Current file: $options->{file}");
+    $res =~ s/$separator//g; # sicherheitshalber ...
     $action eq 'yes' ? $res : undef;
 }
 
@@ -570,7 +572,9 @@ sub show_one_day {
     $f->bind('<Escape>' => sub { $clb->invoke });
     $ff->Checkbutton(-text => 'immediately',
 		     -variable => \$options->{'oneday-immediately'},
-		     -command => sub { $b->invoke },
+		     -command => sub { 
+			 $b->invoke;
+		     },
 		    )->pack(-side => 'left');
     my $until_now = 0;
     $ff->Checkbutton(-text => 'till today',
@@ -633,8 +637,7 @@ sub load_file {
     my $file_to_load = $options->{'file'};
 
     if ($interactive) {
-	require File::Basename;
-	my($file, $path) = File::Basename::fileparse($options->{'file'});
+	my($file, $path) = fileparse($options->{'file'});
 
 	$file_to_load = get_filename($top,
 				     -Title  => 'Enter project file',
@@ -756,8 +759,7 @@ sub save_file {
 sub save_as_file {
     my $autosave = shift;
 
-    require File::Basename;
-    my($file, $path) = File::Basename::fileparse($options->{'file'});
+    my($file, $path) = fileparse($options->{'file'});
     $file = get_filename($top,
 			 -Title => 'Enter project file',
 			 -File => $file,
@@ -865,24 +867,32 @@ sub show_attributes {
     return if !defined $project;
 
     my $attribute_top = $top->Toplevel(-title => "Attributes");
-    my $f = $attribute_top->Frame->pack;
-    $f->Label(-text => 'Name: ')->pack(-side => 'left');
+    my $f = $attribute_top->Frame->pack(-fill => 'both', -expand => 1);
+    my $row = 0;
+    $f->Label(-text => 'Name: ')->grid(-row => $row, -column => 0,
+				       -sticky => 'w');
     my $label = $project->label;
     my $name_entry = $f->Entry(-textvariable => \$label
-			      )->pack(-side => 'left');
+			      )->grid(-row => $row, -column => 1,
+				      -sticky => 'w');
     if ($readonly) { $name_entry->configure(-state => 'disabled') }
-
+    
     if ($project->parent) {
-	$attribute_top->Label(-text => 'Parent: ' .
-			      ($project->parent eq $root ?
-			       '(Root)' : $project->parent->label)
-			     )->pack(-anchor => 'w');
+	$row++;
+	$f->Label(-text => 'Parent:')->grid(-row => $row,
+					    -column => 0,
+					    -sticky => 'w');
+	$f->Label(-text => ($project->parent eq $root ?
+			    '(Root)' : $project->parent->label)
+		 )->grid(-row => $row, -column => 1,
+			 -sticky => 'w');
     }
 
     my $new_parent;
     require Tk::BrowseEntry;
-    my $browse = $attribute_top->BrowseEntry(-label => "New Parent",
-					     -variable => \$new_parent);
+    $row++;
+    my $browse = $f->BrowseEntry(-label => "New Parent",
+				 -variable => \$new_parent);
     if ($readonly) {
 	$browse->configure(-state => 'disabled')
     }
@@ -891,22 +901,50 @@ sub show_attributes {
 	$_ = '(Root)' if !defined $_ || $_ eq '';
 	$browse->insert("end", $_);
     }
-    $browse->pack;
-
+    $browse->grid(-row => $row, -column => 0,
+		  -columnspan => 3, -sticky => 'w');
+    
     my $archived = $project->{'archived'};
-    my $arch_check = $attribute_top->Checkbutton(-text => 'Archived',
-						 -variable => \$archived
-						)->pack(-anchor => 'w');
+    $row++;
+    my $arch_check = $f->Checkbutton
+      (-text => 'Archived',
+       -variable => \$archived
+      )->grid(-row => $row, -column => 0, -sticky => 'w');
     if ($readonly) { $arch_check->configure(-state => 'disabled') }
 
-    $attribute_top->Button(-text => 'Show intervals',
-			   -command => sub {
-			       show_intervals($attribute_top,
-					      $project,
-					      $readonly);
-			   })->pack(-anchor => 'w');
+    my $rcsfile = $project->rcsfile;
+    $row++;
+    $f->Label(-text => 'RCS file:'
+	     )->grid(-row => $row, -column => 0, -sticky => 'w');
+    $f->Entry(-textvariable => \$rcsfile
+	     )->grid(-row => $row, -column => 1, -sticky => 'w');
+    $f->Button
+      (-text => 'Browse...',
+       -command => sub {
+	   my($file, $path) = fileparse($rcsfile) if $rcsfile;
+	   my $newfile = get_filename($attribute_top,
+				      -Title  => 'RCS file',
+				      ($rcsfile ? (-File   => $file,
+						   -Path   => $path) : ()),
+				      -Create => 0,
+				     );
+	   if ($newfile) {
+	       $rcsfile = $newfile;
+	       
+	   }
+       })->grid(-row => $row, -column => 2, -sticky => 'w');
 
-    my $command_frame = $attribute_top->Frame->pack(-side => 'bottom');
+    $row++;
+    $f->Button(-text => 'Show intervals',
+	       -command => sub {
+		   show_intervals($f,
+				  $project,
+				  $readonly);
+	       })->grid(-row => $row, -column => 0,
+			-columnspan => 3, -sticky => 'w');
+
+    my $command_frame = $attribute_top->Frame->pack(-fill => 'x',
+						    -expand => 1);
     my $ok = $command_frame->Button
       (-command => sub {
 	   my $insert_all;
@@ -938,6 +976,7 @@ sub show_attributes {
 	   }
 	   $insert_all++ if ($archived && !$project->{'archived'});
 	   $project->archived($archived);
+	   $project->rcsfile($rcsfile);
 	   $attribute_top->destroy();
 	   &insert_all if $insert_all;
        }
@@ -961,10 +1000,25 @@ sub show_intervals {
 	return if !defined $project;
     }
 
+    my @rev;
+    if ($project->rcsfile) {
+	require Timex::Rcs;
+	my $rcs = new Timex::Rcs $project->rcsfile;
+	if ($rcs) {
+	    foreach my $rev ($rcs->revisions) {
+		push(@rev, [$rev->revision,
+			    $rev->unixtime,
+			    $rcs->symbolic_name($rev)]);
+	    }
+	} else {
+	    warn "Can't create rcs object";
+	}
+    }
+
     my $w = $top->Toplevel(-title => "Intervals for " . $project->pathname);
-    my $lb = $w->Scrolled('HList', -scrollbars => 'oe',
-			  -columns => 5,
-			  -width => 70,
+    my $lb = $w->Scrolled('HList', -scrollbars => 'osoe',
+			  -columns => 6,
+			  -width => 80,
 			  -header => 1,
 			 )->pack(-fill => 'both', -expand => 1);
     $lb->header('create', 0, -text => 'From');
@@ -972,6 +1026,7 @@ sub show_intervals {
     $lb->header('create', 2, -text => 'To');
     $lb->header('create', 3, -text => 'seconds');
     $lb->header('create', 4, -text => 'Time');
+    $lb->header('create', 5, -text => 'RCS') if @rev;
     my $i = 0;
     foreach (@{$project->{'times'}}) {
 	my($from, $to) = @$_;
@@ -993,6 +1048,15 @@ sub show_intervals {
 	    $lb->itemCreate($i, 2, -text => $todate);
 	    $lb->itemCreate($i, 3, -text => $to);
 	    $lb->itemCreate($i, 4, -text => sec2time($to-$from, 'h', 0));
+	    my @t;
+	    foreach my $rev (@rev) {
+		if ($rev->[1] >= $from and $rev->[1] <= $to) {
+		    my $t = $rev->[0];
+		    if ($rev->[2]) { $t .= " (" . $rev->[2] . ")" }
+		    push(@t, $t);
+		}
+	    }
+	    if (@t) { $lb->itemCreate($i, 5, -text => join(", ", @t)) }
 	} else {
 	    $lb->itemCreate($i, 2, -text => 'Running');
 	}
@@ -1094,7 +1158,7 @@ sub sec2time {
 sub check_still_today {
     my @new_nowtime = localtime;
     my $new_today_time = 
-      time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
+      time - $new_nowtime[0] - $new_nowtime[1]*60 - $new_nowtime[2]*60*60;
     if ($new_today_time != $today_time) {
 	$today_time = $new_today_time;
 	@nowtime = @new_nowtime;
