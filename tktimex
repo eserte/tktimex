@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 1.9 1996/12/12 19:30:16 eserte Exp $
+# $Id: tktimex,v 2.1 1996/12/12 20:16:55 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -15,12 +15,16 @@ use Tk;
 use Tk::ROText;
 use Data::Dumper;
 BEGIN { $0 =~ m|^(.*)/.*$|; push(@INC, $1); }
+#use Project;
 use Project;
+use strict;
+
+my $root = new Project;
 
 my $quit_dialog;
 my $copyright = 'tktimex © 1996 Slaven Rezic';
-my $datafile = '/home/e/eserte/private/log/mytimex.data';
-#my $datafile = "/tmp/mytimex.data";
+my $datafile = '/home/e/eserte/private/log/mytimex.pj1';
+#my $datafile = "/tmp/timex.pj1";
 my $current_project_index = undef;
 my $start_session_time = time;
 my $time_after;
@@ -36,11 +40,12 @@ my $project_status = "Left: Start/Stop | Right: Create Subproject";
 
 my $xgeometry;
 
+my $i;
 for ($i = 0; $i <= $#ARGV; ++$i) {
     $_ = $ARGV[$i];
   ARGL: {
 	/^-geometry$/ && do { $xgeometry 
-				= &get_arg(*i, *ARGV, "-geometry", "$_");
+				= &get_arg(\$i, \@ARGV, "-geometry", "$_");
 			      last ARGL; };
 	/^-file$/ && do { $datafile 
 			    = &get_arg(*i, *ARGV, "-file", "$_");
@@ -154,7 +159,7 @@ sub new_project {
     my $label = &enter_label;
     if ($label) {
 	my $p = new Project($label);
-	&insert_project($p, 0);
+	&insert_project($p);
     }
 }
 
@@ -167,15 +172,14 @@ sub new_sub_project {
 	my $p = $projects_in_text[$project_index];
 	my $sub_p = $p->subproject($label);
 	&insert_project($sub_p,
-			$sub_p->level,
 			"project-$project_index.last");
     }
 }
 
 sub insert_project {
-    my($p, $indent, $after) = @_;
+    my($p, $after) = @_;
     my $label = $p->label;
-    $indent = 0 unless $indent;
+    my $indent = $p->level-1;
     $after = 'end' unless $after;
     push(@projects_in_text, $p);
     my $index = $#projects_in_text;
@@ -183,7 +187,7 @@ sub insert_project {
     $projects_text->insert
       ($after, 
        (">" x $indent),
-       [$project-$index],
+       ["project-$index"],
        $label,
        ["label-$index", "project-$index", 'project'],
        "\t" . &sec2time($p->sum_time($start_session_time, 1)) .
@@ -249,8 +253,8 @@ sub stop_project {
 
 sub act_time {
     my $index = shift;
-    my $project_index = $index || $current_project_index;
-    return if !$project_index;
+    my $project_index = (defined $index ? $index : $current_project_index);
+    return if !defined $project_index;
     my $project = $projects_in_text[$project_index];
     while ($project) {
 	$projects_text->delete("time-$project_index.first",
@@ -261,7 +265,7 @@ sub act_time {
 	   "\t" . &sec2time($project->sum_time($today_time, 1)) .
 	   "\t" . &sec2time($project->sum_time(0, 1)) . "\n",
 	   ["time-$project_index", "project-$project_index"]);
-	$project = ($project->isa("Subproject") ? $project->parent : undef);
+	$project = ($project->level > 1 ? $project->parent : undef);
 	$project_index = $projects_in_text{$project} if $project;
     }
     &set_time_update();
@@ -277,40 +281,42 @@ sub set_time_update {
 
 sub load_file {
     &stop_project;
-#    my $pool;
-    # XXX warum dieser Workaround und kein 'do $datafile' ?
-    if (!open(D, $datafile)) {
-	$status_text->configure(-text => "No $datafile!");
+    if (!$root->load($datafile)) {
+	$status_text->configure(-text => "Can't load $datafile!");
 	return;
     }
-    local($/) = undef;
-    my $data = <D>;
-    close D;
-    eval $data;
-    print $@, "\n" if $@;
-    Project->pool($pool);
     $projects_text->delete('1.0', 'end');
     @projects_in_text = ();
     %projects_in_text = ();
-    foreach (@{$pool}) {
+    foreach (@{$root->subproject}) {
 	&insert_old_project($_, 0);
     }
-
     &set_autosave;
 }
 
 sub insert_old_project {
     my($p, $indent) = @_;
-    &insert_project($p, $indent);
+    &insert_project($p);
     foreach (@{$p->subproject}) {
 	&insert_old_project($_, $indent+1);
     }
 }
 
 sub dump_data {
-    print STDERR Project::dump_data();
+    print STDERR $root->dump_data();
     open(OUT, ">/tmp/timex.data") || warn "Can't write timex.data";
-    print OUT Project::dump_data();
+    print OUT $root->dump_data();
+    close OUT;
+}
+
+sub old_save_file {
+    if (!open(OUT, ">$datafile.data")) {
+	$status_text->configure(-text => "Can't write to $datafile.data");
+	return;
+    }
+    $Data::Dumper::Purity = 1;
+    $Data::Dumper::Indent = 1;
+    print OUT Data::Dumper->Dump([$root], ['root']), "\n";
     close OUT;
 }
 
@@ -321,21 +327,18 @@ sub save_file {
 	$projects_in_text[$current_project_index]->end_time;
     }
 
-    if (!autosave) {
+    if (!$autosave) {
 	foreach (reverse(0 .. 8)) {
 	    rename "$datafile.$_", "$datafile." . ($_+1);
 	}
     }
     rename $datafile, "$datafile.0";
 
-    if (!open(OUT, ">$datafile")) {
+    if (!$root->save("$datafile")) {
 	$status_text->configure(-text => "Can't write to $datafile");
 	return;
     }
-    $Data::Dumper::Purity = 1;
-    $Data::Dumper::Indent = 1;
-    print OUT Data::Dumper->Dump([Project->pool], ['pool']), "\n";
-    close OUT;
+    &old_save_file;
     $status_text->configure(-text => "Saved $datafile");
 
     if (defined $current_project_index) {
@@ -393,11 +396,11 @@ sub usage {
 # Get the argument, which may be directly after this switch, or the
 # next word entirely.  This works like getopts, in a way.
 sub get_arg {
-    local(*index, *array, $prefix, $arg) = @_; # kein my!!!
+    my($index, $array, $prefix, $arg) = @_;
     if ($arg =~ m/^$prefix$/) {
-	++$index;
-	die "Too few args - last arg was $arg\n" if ($index > $#array);
-	return "$array[$index]";
+	++$$index;
+	die "Too few args - last arg was $arg\n" if ($$index > $#{$array});
+	return $array->[$$index];
     } else {
 	$arg =~ s/^$prefix//; return "$arg";
     }
