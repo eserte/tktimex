@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 2.2 1996/12/12 21:45:11 eserte Exp $
+# $Id: tktimex,v 2.3 1996/12/19 12:36:27 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -15,8 +15,6 @@ use Tk;
 use Tk::ROText;
 use FindBin;
 use lib "$FindBin::Bin";
-#BEGIN { $0 =~ m|^(.*)/.*$|; push(@INC, $1); }
-#use Project;
 use Project;
 use strict;
 
@@ -25,7 +23,7 @@ my $root = new Project;
 my $quit_dialog;
 my $copyright = 'tktimex © 1996 Slaven Rezic';
 my $datafile = '/home/e/eserte/private/log/mytimex.pj1';
-#my $datafile = "/tmp/timex.pj1";
+#my $datafile = "/tmp/mytimex.pj1"; # XXX
 my $current_project_index = undef;
 my $start_session_time = time;
 my $time_after;
@@ -39,7 +37,8 @@ my @nowtime = localtime;
 my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
 my @projects_in_text;
 my %projects_in_text;
-my $project_status = "Left: Start/Stop | Right: Create Subproject";
+my $project_status = "Left: Start/Stop | Middle: Attributes | Right: Create Subproject";
+my $show_archived = 0;
 
 my $xgeometry;
 
@@ -93,6 +92,14 @@ $mb_options->checkbutton(-label => 'Dateformat H:M:S',
 			 -onvalue => 'd',
 			 -offvalue => 'h',
 			 -variable => \$dateformat);
+$mb_options->checkbutton(-label => 'Show archived',
+			 -command => \&toggle_show_archived,
+			 -variable => \$show_archived);
+
+# XXX RO machen!
+$menu_frame->Checkbutton(-text => '*',
+			 -variable => \$root->{'modified'}
+			)->pack(-side => 'right');
 
 $menu_frame->Button(-text => 'Pause',
 		    -command => \&pause)->pack(-side => 'right');
@@ -136,6 +143,9 @@ $projects_text->tagBind('project',
 			"<Button-1>" =>
 			sub { &start_stop($projects_text->index('current')) });
 $projects_text->tagBind('project',
+			"<Button-2>" =>
+			sub { &show_attributes($projects_text->index('current')) });
+$projects_text->tagBind('project',
 			"<Button-3>" =>
 			sub { &new_sub_project($projects_text->index('current')) });
 
@@ -177,7 +187,7 @@ sub enter_label {
 sub new_project {
     my $label = &enter_label;
     if ($label) {
-	my $p = new Project($label);
+	my $p = $root->subproject($label);
 	&insert_project($p);
     }
 }
@@ -197,6 +207,7 @@ sub new_sub_project {
 
 sub insert_project {
     my($p, $after) = @_;
+    return if $p->archived && !$show_archived;
     my $label = $p->label;
     my $indent = $p->level-1;
     $after = 'end' unless $after;
@@ -318,6 +329,7 @@ sub load_file {
     }
     &insert_all;
     &set_autosave;
+    $root->modified(0);
 }
 
 sub insert_all {
@@ -372,14 +384,19 @@ sub save_file {
 
     if (!$root->save("$datafile")) {
 	$status_text->configure(-text => "Can't write to $datafile");
-	return;
+    } else {
+	$status_text->configure(-text => "Saved $datafile");
     }
     &old_save_file;
-    $status_text->configure(-text => "Saved $datafile");
 
     if (defined $current_project_index) {
 	$projects_in_text[$current_project_index]->unend_time;
     }
+
+    if (!$autosave) {
+	$root->modified(0);
+    }
+
     &set_autosave;
 }
 
@@ -408,21 +425,95 @@ sub toggle_dateformat {
     }
 }
 
+sub toggle_show_archived {
+    if (defined $current_project_index) {
+	require Tk::Dialog;
+	$top->Dialog(-title => 'Warning',
+		     -text  => "Can't toggle archived while project running"
+		     )->Show;
+	# alte Einstellung wiederherstellen
+	$show_archived = ($show_archived ? 0 : 1);
+	return;
+    }
+    &insert_all;
+}
+
+sub show_attributes {
+    my $index = shift;
+
+    if (defined $current_project_index) {
+	require Tk::Dialog;
+	$top->Dialog(-title => 'Warning',
+		     -text  => "Can't show attributes while project running"
+		     )->Show;
+	return;
+    }
+
+    my $project_index = &get_project_index($index);
+    return if !defined $project_index;
+    my $project = $projects_in_text[$project_index];
+
+    my $attribute_top = $top->Toplevel(-title => "Attributes");
+    $attribute_top->Label(-text => 'Name: ' . $project->label
+			 )->pack(-anchor => 'w');
+    if ($project->parent) {
+	$attribute_top->Label(-text => 'Parent: ' . $project->parent->label
+			     )->pack(-anchor => 'w');
+    }
+    my $archived = $project->{'archived'};
+    $attribute_top->Checkbutton(-text => 'Archived',
+				-variable => \$archived
+			       )->pack(-anchor => 'w');
+    
+    my $command_frame = $attribute_top->Frame->pack(-side => 'bottom');
+    my $ok = $command_frame->Button
+      (  # XXX Werte sichern
+       -command => sub {
+	   my $insert_all = 
+	     ($archived && !$project->{'archived'});
+	   $project->archived($archived);
+	   $attribute_top->destroy();
+	   &insert_all if $insert_all;
+       }
+      );
+    &set_text_or_image($ok,
+		       "/usr/www/bilder/icons/Misc2/answer_good.gif", "OK");
+    $ok->pack(-side => 'left');
+    my $cancel = $command_frame->Button
+      (-command => sub { $attribute_top->destroy() }
+      );
+    &set_text_or_image($cancel,
+		       "/usr/www/bilder/icons/Misc2/answer_bad.gif", "Cancel");
+    $cancel->pack(-side => 'left');
+}
+
 sub set_time_update {
     my $old_time_update = $time_update;
     $time_update = ($dateformat eq 'd' ? 60 : 1);
     $time_update < $old_time_update;
 }
 
+sub set_text_or_image {
+    my($widget, $image, $text) = @_;
+    # use image if available, else text
+    if (-r $image) {
+	$widget->configure(-image => $widget->Photo(-file => $image));
+    } else {
+	$widget->configure(-text => $text);
+    }
+}
+
 sub quit_program {
     require Tk::Dialog;
-    if (!defined $quit_dialog) {
-	$quit_dialog = $top->Dialog(-title => 'Quit Program',
-				    -text  => "Really quit?",
-				    -default_button => 'No',
-				    -buttons => ['Yes', 'No']);
+    if ($root->modified || defined $current_project_index) {
+	if (!defined $quit_dialog) {
+	    $quit_dialog = $top->Dialog(-title => 'Quit Program',
+					-text  => "Really quit?",
+					-default_button => 'No',
+					-buttons => ['Yes', 'No']);
+	}
+	return 0 if $quit_dialog->Show ne 'Yes';
     }
-    return 0 if $quit_dialog->Show ne 'Yes';
     $top->destroy;
 }
 
@@ -470,7 +561,6 @@ sub get_arg {
 =head1 TODO
 
  - rename
- - Kommandozeilenversion
  - show/hide old
  - reparent objects
 
