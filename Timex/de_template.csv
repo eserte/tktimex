@@ -1,6 +1,6 @@
 Abrechnungsbogen;;;
 
-Name:%%NAME%%;;;
+Name:;%%NAME%%;;;
 
 Woche (KW):;%%WEEK%%;;
 
@@ -9,4 +9,4 @@ Projekt;Dauer;Entgelt;Summe
 ;[Stunden];[DM/h];[DM]
 %%PROJECTNAME%%;%%HOURS%%;%%RATE%%;%%PROJECTSUM%%
 ;;;
-Gesamt:;;;%%SUM%%
+Gesamt:;%%SUMHOURS%%;;%%SUM%%
