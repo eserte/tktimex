@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: base.t,v 1.1 1998/09/21 13:56:20 eserte Exp $
+# $Id: base.t,v 1.2 1999/02/05 21:21:57 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -144,6 +144,8 @@ $second_project_text = <<'EOF';
 /archived=0
 |034567878-1345545445
 |234567878-4345545445
+|534567878-6345545445
+|734567878-8345545445
 EOF
 
 my $p1 = new Timex::Project;
@@ -157,4 +159,28 @@ $p2->interpret_data(\@data2);
 
 warn "Merge yields: " . $p1->merge($p2);
 
-print $p1->dump_data;
+#print $p1->dump_data;
+
+# print map { $_->pathname } $p2->find_by_pathname("main project")->subproject;
+# print  "\n";
+
+# print join($p2->separator,
+# 	   "main project", "sub of main project"
+# 	  ), "\n";
+# print map {join("-", @$_)} @{$p2->find_by_pathname(join($p2->separator,
+# 				 "main project", "sub of main project"
+# 				)
+# 			   )->{'times'}}, "\n";;
+# print $p2->find_by_pathname("main project");
+
+
+$sp = $p2->find_by_pathname(join($p2->separator,
+				 "main project", "sub of main project"
+				));
+print $sp->parent->dump_data;
+$sp->delete_times(1,3);
+print $sp->parent->dump_data;
+$sp->move_times_after(1, -1);
+print $sp->parent->dump_data;
+$sp->sort_times;
+print $sp->parent->dump_data;
