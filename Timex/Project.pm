@@ -6,15 +6,15 @@ Project - manage a list of projects
 
 =head1 SYNOPSIS
 
-    use Project;
-    $root = new Project;
+    use Timex::Project;
+    $root = new Timex::Project;
     $helloproject = $root->project('hello');
     $helloproject->start_time;
     $helloproject->end_time;
 
 =cut
 
-package Project;
+package Timex::Project;
 use strict;
 use vars qw($magic $emacsmode $pool);
 
@@ -105,8 +105,8 @@ sub subproject {
     my($self, $label) = @_;
     if (defined $label) {
 	my $sub;
-	if (ref $label ne 'Project') {
-	    $sub = Project->new($label);
+	if (ref $label ne 'Timex::Project') {
+	    $sub = Timex::Project->new($label);
 	} else {
 	    $sub = $label;
 	}
@@ -431,7 +431,7 @@ sub interpret_data_project {
 		    $i++;
 		}
 #		print STDERR (">" x $indent) . $label, "\n";
-		$self = new Project($label);
+		$self = new Timex::Project $label;
 		$self->{'times'} = \@times;
 		$self->{'archived'} = $attributes{'archived'};
 		$parent->subproject($self);
@@ -470,7 +470,7 @@ sub load {
 
 =head2 is_project_file
 
-    $r = Project->is_project_file($filename);
+    $r = Timex::Project->is_project_file($filename);
 
 Returns TRUE if $filename is a project file.
 
@@ -498,7 +498,7 @@ sub load_old {
     do $file;
     warn "Can't read $file: $@" if $@;
     foreach (@$pool) {
-	if (ref $_ eq 'Project') {
+	if (ref $_ eq 'Timex::Project') {
 	    $self->subproject($_);
 	    $_->rebless_subprojects;
 	} else {
@@ -510,7 +510,7 @@ sub load_old {
 sub rebless_subprojects {
     my $self = shift;
     foreach (@{$self->subproject}) {
-	bless $_, 'Project';
+	bless $_, 'Timex::Project';
 	$_->rebless_subprojects;
     }
 }
