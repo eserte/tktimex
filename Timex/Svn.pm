@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Svn.pm,v 1.3 2003/01/21 23:57:43 eserte Exp $
+# $Id: Svn.pm,v 1.4 2003/01/22 00:34:48 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2003 Slaven Rezic. All rights reserved.
@@ -16,7 +16,7 @@ package Timex::Svn;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 package Timex::Svn::File;
 use vars qw(@ISA);
@@ -90,14 +90,64 @@ sub _open_log {
 #  	           . "'";
 #      }
 
+    my $file = $self->_get_file;
+    my $cmd = "svn log $extra_args $file|";
+    open(RLOG, $cmd) or die "$cmd: $!";
+    if (eof(RLOG)) {
+	$self->_log_hack or die;
+    }
+}
+
+sub _log_hack {
+    my $self = shift;
+    if (!eval { require XML::Simple }) {
+	warn "_log_hack requires XML::Simple";
+	return;
+    }
+    if ($self->{Files} && @{$self->{Files}} > 1) {
+	warn "_log_hack works only with one file, not with @{$self->{Files}}";
+	return;
+    }
+    require File::Basename;
+    my $file = $self->_get_file;
+    my $dir = File::Basename::dirname($file);
+    my $base = File::Basename::basename($file);
+    my $cmd = "svn --verbose --xml log $dir|";
+    open(XMLLOG, "$cmd") or die "$cmd: $!";
+    local $/ = undef;
+    my $buf = <XMLLOG>;
+    close XMLLOG;
+    my $xs = XML::Simple->new(forcearray => 1);
+    my $ref = $xs->XMLin($buf);
+    my $end_rev;
+    foreach my $logentry (@{ $ref->{logentry} }) {
+	foreach my $path (@{ $logentry->{paths}->[0]->{path} }) {
+  	    if ($path->{content} =~ m|/\Q$base\E$| && # XXX only approx!
+  		$path->{action} eq 'D') {
+		$end_rev = $logentry->{revision};
+		last;
+  	    }
+	}
+    }
+    if (defined $end_rev) {
+	my $cmd = "svn log -r 1:" . ($end_rev-1) . " $file|";
+	open(RLOG, $cmd) or die "$cmd: $!";
+	1;
+    } else {
+	warn "Can't found D entry for $file";
+	0;
+    }
+}
+
+sub _get_file {
+    my $self = shift;
     my $file;
     if (exists $self->{Files}) {
 	$file = join(" ", @{ $self->{Files} });
     } else {
 	$file = $self->{File};
     }
-    my $cmd = "svn log $extra_args $file|";
-    open(RLOG, $cmd) or die "$cmd: $!";
+    $file;
 }
 
 sub create_pseudo_revisions {
