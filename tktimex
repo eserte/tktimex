@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.11 1998/05/24 21:44:35 eserte Exp $
+# $Id: tktimex,v 4.12 1998/05/25 12:27:29 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -66,8 +66,8 @@ package main;
 use Tk::HList;
 use File::Basename;
 use FindBin;
-use lib ("$FindBin::RealBin", "/home/e/eserte/lib/perl");
-use Tk::Balloon; # XXX gepatchtes Tk::Balloon notwendig
+use lib ("$FindBin::RealBin");
+#use lib ("/home/e/eserte/lib/perl");
 eval { require Tk::UnderlineAll };
 use Tk::Getopt 0.34;
 use Timex::Project;
@@ -75,7 +75,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.11 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.12 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -127,15 +127,15 @@ $top->protocol('WM_DELETE_WINDOW', \&quit_program);
 $top->title($title);
 $top->geometry($options->{'geometry'}) if $options->{'geometry'};
 
-# altes Balloon und HList vertragen sich nicht miteinander
-my $b = $top->Balloon if $Tk::VERSION >= 800.005;
-
 my $is_archiv;
+my $b;
 if ($Tk::VERSION >= 800.005) {
-    require Tk::ItemStyle;
-    $is_archiv = $top->ItemStyle('text',
-				 -foreground => 'red',
-				 -anchor => 'c');
+    require Tk::ItemStyle; # erst ab 800.005
+    $is_archiv = $top->ItemStyle('text', -foreground => 'red');
+
+    # altes Balloon und HList vertragen sich nicht miteinander
+    require Tk::Balloon;
+    $b = $top->Balloon;
 }
 
 my $menu_frame = $top->Frame(-relief => 'raised',
@@ -246,7 +246,7 @@ $menu_frame->Button(-text => 'Save',
 $menu_frame->pack(-fill => 'x');
 
 my $project_frame = $top->Scrolled('HList', -scrollbars => 'osoe',
-				   -columns => 5,
+				   -columns => 4,
 				   -height => 1,
 				   -drawbranch => 1,
 				   -header => 1,
@@ -255,8 +255,7 @@ my $project_frame = $top->Scrolled('HList', -scrollbars => 'osoe',
 				   -separator => $separator,
 				  )->pack(-expand => 1, -fill => 'both');
 $project_frame->header('create', 0, -text => 'Projects:');
-$project_frame->header('create', 1, -text => '');
-my $pf_time_index = 2;
+my $pf_time_index = 1;
 $project_frame->header('create', $pf_time_index, -text => 'Session');
 $project_frame->header('create', $pf_time_index+1, -text => 'Today');
 $project_frame->header('create', $pf_time_index+2, -text => 'Total');
@@ -386,11 +385,8 @@ sub insert_project {
 			-text => $p->label,
 			-itemtype => 'text',
 			-data => $p);
-    if ($options->{'archived'} && $p->archived) {
-	$project_frame->itemCreate
-	  ($path, 1, -itemtype => 'text', -text => '*',
-	   ($is_archiv ? (-style => $is_archiv) : ()),
-	  );
+    if ($p->archived && $is_archiv) {
+	$project_frame->itemConfigure($path, 0, -style => $is_archiv);
     }
     $project_frame->itemCreate
       ($path, $pf_time_index, -itemtype => 'text',
@@ -715,6 +711,7 @@ sub load_file {
 }
 
 sub insert_all {
+    $top->Busy;
     $project_frame->delete('all');
     foreach ($root->sorted_subprojects($options->{'sort'})) {
 	&insert_old_project($_);
@@ -722,6 +719,7 @@ sub insert_all {
     if (defined $current_project) {
 	$project_frame->selectionSet(make_path($current_project));
     }
+    $top->Unbusy;
 }
 
 sub insert_old_project {
@@ -911,12 +909,6 @@ sub not_running {
 
 sub toggle_show_archived {
     if (&not_running(\$options->{'archived'})) {
-	$project_frame->header('configure', 1,
-			       -text => ($options->{'archived'}
-					 ? 'Archiv'
-					 : ''
-					),
-			      );
 	&insert_all;
     }
 }
