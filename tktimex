@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.13 2002/06/30 19:06:19 eserte Exp $
+# $Id: tktimex,v 6.14 2002/08/02 12:43:22 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -168,7 +168,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.13 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.14 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -2047,6 +2047,7 @@ sub daily_intervals {
 	    $name = "... " . substr($name, -36); #length($name)-36
 	}
 	$lb->add($i, -text => $name,
+		 -itemtype => $p_itemtype,
 		 ($hl_entry{$fill_color}
 		  ? (-style => $hl_entry{$fill_color}) : ()));
 
@@ -2054,9 +2055,11 @@ sub daily_intervals {
 	my $end_time   = $str_time->($_->[2]);
 
 	$lb->itemCreate($i, 1, -text => $begin_time,
+			-itemtype => $p_itemtype,
 			($hl_entry{$fill_color}
 			 ? (-style => $hl_entry{$fill_color}) : ()));
 	$lb->itemCreate($i, 2, -text => $end_time,
+			-itemtype => $p_itemtype,
 			($hl_entry{$fill_color}
 			 ? (-style => $hl_entry{$fill_color}) : ()));
 
