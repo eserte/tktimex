@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.13 2003/01/10 20:34:57 eserte Exp $
+# $Id: Rcs.pm,v 1.14 2003/01/22 21:17:23 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -230,17 +230,23 @@ sub _get_vcs_type {
     my $self = shift;
     my $dir = $self->{Dirname};
 
-    if (-d "$dir/CVS" and !-d "$dir/RCS") {
-	$self->{VCS_Type} = "CVS";
-    } elsif (-d "$dir/.svn") {
-	require Timex::Svn;
+    my $rcs_file = $self->{Basename} . ",v";
+    if (-f "$dir/RCS/$rcs_file" ||
+	-f "$dir/$rcs_file") {
+	return $self->{VCS_Type} = "RCS";
+    }
+    if (-d "$dir/CVS") {
+	return $self->{VCS_Type} = "CVS";
+    }
+    if (-d "$dir/.svn") {
 	$self->{VCS_Type} = "SVN";
+	require Timex::Svn;
 	bless $self, 'Timex::Svn::File'; # re-bless hack
-    } else {
-	$self->{VCS_Type} = "RCS";
+	return $self->{VCS_Type};
     }
 
-    $self->{VCS_Type};
+    # fallback
+    $self->{VCS_Type} = "RCS";
 }
 
 ######################################################################
