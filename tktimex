@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.39 1999/06/08 20:30:57 eserte Exp $
+# $Id: tktimex,v 4.40 1999/06/26 00:49:26 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -80,7 +80,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.39 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.40 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = 1; # gefährlich für win...
@@ -115,7 +115,8 @@ my $home = get_home_dir();
 
 my $options = {};
 my @opttable =
-  (['file|f',             '=s', undef, 'subtype' => 'file'],
+  ('General',
+   ['file|f',             '=s', undef, 'subtype' => 'file'],
    ['autosave',           '!',  1,
     'callback' => \&toggle_autosave, 'alias' => ['as'] ],
    ['update',             '=i', 60*10],
@@ -135,7 +136,11 @@ my @opttable =
    ['oneday-immediately', '!',  1],
    ['geometry',           '=s', "500x230"], # XXX
    ['securesave',         '!', 0],
+   'Appearance',
    ['busyind',            '!', 0],
+   ['autoscroll',         '=s', 'none',
+    'choices' => ['slow', 'normal', 'fast'],
+    'strict' => 1],
   );
 my $opt;
 eval {
@@ -387,6 +392,11 @@ my $project_frame = $top->Scrolled
    },
    -separator => $separator,
   )->pack(-expand => 1, -fill => 'both');
+
+if ($options->{'autoscroll'} !~ /^(|none)$/) {
+    require Tk::Autoscroll;
+    Tk::Autoscroll::Init($project_frame, -speed => $options->{'autoscroll'});
+}
 $project_frame->header('create', 0, -text => 'Projects:');
 my $pf_time_index = 1;
 $project_frame->header('create', $pf_time_index, -text => 'Session');
@@ -397,8 +407,10 @@ my $orig_selectbg = $project_frame->cget(-selectbackground);
 
 $project_frame->bind("<Double-ButtonRelease-1>" =>
 		     sub { start_stop(shift->info('selection')) });
-$project_frame->bind("<Button-2>" =>
-		     sub { new_sub_project(get_entry(@_)) });
+if ($options->{'autoscroll'} =~ /^(|none)$/) {
+    $project_frame->bind("<Button-2>" =>
+			 sub { new_sub_project(get_entry(@_)) });
+}
 #XXX evtl. für Win32 aktivieren (häufig Button2 = Doppelklick)
 #Problem: Single-Button-1 wird auch ausgeführt :-(
 # und weitere Probleme...
@@ -1008,6 +1020,12 @@ sub load_file {
 
     if ($interactive) {
 	my($file, $path) = fileparse($options->{'file'});
+	if ($path =~ m|^\.|) {
+	    require Cwd;
+	    $path = Cwd::abs_path($path);
+#	    my $cwd = Cwd::cwd();
+#	    $path =~ s|^\.|$cwd|;
+	}
 
 	$file_to_load = get_filename($top,
 				     -Title  => 'Enter project file',
