@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Utmp.pm,v 1.3 2000/10/02 22:30:20 eserte Exp $
+# $Id: Utmp.pm,v 1.4 2001/02/07 23:25:22 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2000 Slaven Rezic. All rights reserved.
@@ -45,7 +45,12 @@ sub init {
     my @lines;
     my $this_year = (localtime)[5]+1900;
     my $cmd = "last " . ($has_s ? "-s " : "");
+
+    my $last_mon;
+    my $mon;
+
     open(LAST, "$cmd|");
+
     while(<LAST>) {
 	next if (/^(reboot|shutdown)\b/);
 	next if (/^(\s*$|wtmp begins)/);
@@ -59,7 +64,13 @@ sub init {
 	    my $day = $2;
 	    my $h = $3;
 	    my $m = $4;
-	    my $mon = _monthabbrev_number($mon_abbrev);
+	    $mon = _monthabbrev_number($mon_abbrev);
+
+	    if (defined $last_mon && $last_mon < $mon) {
+		# wrap year
+		$this_year--;
+	    }
+
 	    require Time::Local;
 	    $begin = Time::Local::timelocal(0, $m, $h,
 					    $day, $mon-1, $this_year-1900);
@@ -78,7 +89,13 @@ sub init {
 	    $end = $begin + $duration;
 	}
 	push @lines, {User => $user, Begin => $begin, End => $end};
+
+    } continue {
+
+	$last_mon = $mon if defined $mon;
+
     }
+
     close LAST;
 
     $self->{Timestamp} = time;
