@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.21 2005/03/05 23:32:18 eserte Exp $
+# $Id: tktimex,v 6.22 2005/04/05 21:07:33 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -163,7 +163,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.21 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.22 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -187,7 +187,7 @@ use vars qw($utmp
 	    $status_text $project_frame $status_edit
 	    $separator $undo_register
 	    $last_projects $max_last_projects
-	    $username $home
+	    $username $realname $home
 	    $inner_fg $inner_bg
 	    $status_browse_entry
 	    %history %rcs_cache @rcs_cache
@@ -214,14 +214,13 @@ if ($Tk::VERSION >= 803) {
 
 $status_edit = 0;
 $max_last_projects = 4;
-$username = get_user_name();
-$home     = get_home_dir();
 $inner_fg = "black";
 $inner_bg = "white";
 $ctrl_s = ($os eq 'win' ? 'Ctrl-' : 'C-');
 $sbside = ($os eq 'win' ? 'e' : 'w');
 $use_enterprise = 0;
 $p_itemtype = 'imagetext';
+$home     = get_home_dir();
 
 eval {
     require Timex::Utmp;
@@ -249,7 +248,8 @@ $max_enterprise_file_list = 4;
 $options = {};
 @opttable =
   (M"General",
-   ['file|f',             '=s', undef, 'subtype' => 'file',
+   ['file|f',             '=s', get_home_dir() . "/.timex.pj1",
+    'subtype' => 'file',
     'longhelp' => M"Default project file to load on startup",
     'callback-interactive' => sub { load_file(0) },
    ],
@@ -277,6 +277,14 @@ $options = {};
     'longhelp' => M"Saving data also in a Data::Dumper format. Not really necessary anymore."],
    ['plugins',            '=s', undef,
     'longhelp' => M"A comma-separated list of initial plugins to load."],
+   ($^O eq 'MSWin32' ?
+    (['username', '=s', $ENV{USERNAME},
+      'longhelp' => M"A unix-like short username"],
+     ['realname', '=s', undef,
+      'longhelp' => M"The user's real name"],
+    ) :
+    ()
+   ),
 
    M"Enterprise",
    ['enterpriseprojects', "=s", undef, 'subtype' => 'file',
@@ -334,7 +342,7 @@ Medium: only limited project manipulation possible"],
     'callback' => sub { update_costs_option(1) },
     'longhelp' => M"Hourly rate for work.",
     ],
-   ['currency',           '=s', "DEM",
+   ['currency',           '=s', "EUR",
     'choices' => ['EUR', 'USD', 'HRD'],
     'callback' => sub { update_costs_option(1) },
     'longhelp' => M"Currency for hourlyrate option.",
@@ -411,6 +419,9 @@ Please install this module from CPAN.\n"));
 if (@ARGV) {
     $options->{'file'} = shift @ARGV;
 }
+
+$username = get_user_name();
+$realname = get_real_name();
 
 if ($use_enterprise) {
     $options->{'file'} =~ s/\@USER\@/$username/g;
@@ -2481,8 +2492,8 @@ sub lock_file {
 		$top->Dialog
 		  (-title => M"File locked",
 		   -text  => Mfmt
-		   ("<%s> is already locked.\n" .
-		    "Please check that there is no other tktimex process\n" .
+		   ("<%s> is already locked.\n\n" .
+		    "Please check that there is no other tktimex process " .
 		    "using this file and try again.\n", $file),
 		   -default_button => M"OK",
 		   -buttons => [M"OK"],
@@ -3989,6 +4000,7 @@ sub show_intervals {
 		 my $be = _all_projects_browseentry
 		     ($f0, -variable => \$new_project, -excluderoot => 1,
 		      -exportselection => 0);
+		 eval { $be->updateListWidth() }; warn $@ if $@;
 		 $be->pack(-side => "left", -fill => "x", -expand => 1);
 		 my $f = $t2->Frame->pack(-fill => 'x', -expand => 1);
 		 my $ok = $f->Button
@@ -4446,6 +4458,16 @@ sub get_user_name {
 	}
     }
     $username;
+}
+
+sub get_real_name {
+    if (!defined $realname) {
+	$realname = eval { local $SIG{__DIE__};
+			   ((getpwuid($<))[6]);
+		       };
+	$realname =~ s/,.*//;
+    }
+    $realname;
 }
 
 # This is a hack using xwininfo to report if another tktimex window
