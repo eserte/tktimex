@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.35 1999/04/17 20:39:51 eserte Exp $
+# $Id: tktimex,v 4.36 1999/05/14 21:27:05 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -80,7 +80,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.35 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.36 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 my $can_lock = ($os eq 'unix'); # vielleicht geht's mit Win32+perl5.00555? XXX
@@ -340,9 +340,11 @@ $balloon->attach($save_check, -msg => 'File saved indicator') if $balloon;
 
 my $pause_cont_button = $menu_frame->Button
   (-text => 'Pause',
+   -fg => 'red',
    -command => \&pause_or_cont)->pack(-side => 'right');
 
 my $save_button = $menu_frame->Button(-text => 'Save',
+				      -fg => 'yellow4',
 				      -command => \&save_file
 				     )->pack(-side => 'right');
 $balloon->attach($save_button, -msg => 'Save project data') if $balloon;
@@ -650,7 +652,8 @@ sub update_pause_cont_balloon {
 
 sub gui_set_pause_or_cont {
     my $txt = shift;
-    $pause_cont_button->configure(-text => $txt);
+    $pause_cont_button->configure(-text => $txt,
+				  -fg => ($txt eq 'Cont' ? 'green4' : 'red'));
     my $search_txt = ($txt eq 'Cont' ? 'Pause' : 'Cont');
     update_pause_cont_balloon();
     my $i;
