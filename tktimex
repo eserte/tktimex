@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 5.8 2001/02/02 01:27:10 eserte Exp $
+# $Id: tktimex,v 5.9 2001/02/07 23:25:33 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -27,6 +27,12 @@ BEGIN {
     state_change("after Tk");
 }
 use Tk::ErrorDialog;
+
+eval '
+use lib "/home/e/eserte/lib/perl";
+use Tk::App::Reloader;
+$Tk::App::Reloader::VERBOSE = 1;
+'; warn $@ if $@;
 
 state_change("all use's processed...");
 
@@ -104,48 +110,52 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 5.8 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 5.9 $ =~ /(\d+)\.(\d+)/);
 
-my $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
-my $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
-my $lock_is_strict = ($os eq 'win');
-my $file_writeable;
+use vars qw($os);
+$os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
+
+use vars qw($can_lock $lock_is_strict $file_writeable);
+$can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
+$lock_is_strict = ($os eq 'win');
 
 if ($Tk::VERSION <= 402.002) {
     Tk::HList->EnterMethods("Tk/HList.pm", qw(header));
 }
 
-use vars qw($root $utmp);
-
+use vars qw($root $templates_root);
 $root = new Timex::Project;
-my $templates_root;
 
-my $quit_dialog;
-my $title = "tktimex $VERSION";
-my $current_project = undef;
-my $is_opened;
-my $start_session_time = time;
-my $time_after;
-my $time_update = 0;
-my $autosave_after;
-my @nowtime = localtime;
-my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
-my $status_text;
-my $project_frame;
+use vars qw($utmp
+	    $quit_dialog $title
+	    $current_project $is_opened
+	    $start_session_time $time_after $time_update
+	    $autosave_after @nowtime $today_time
+	    $status_text $project_frame $status_edit
+	    $separator $undo_register
+	    $last_projects $max_last_projects
+	    $username $home
+	    $inner_fg $inner_bg
+	    $status_browse_entry
+	    %history %rcs_cache @rcs_cache
+	    $ctrl_s $sbside $use_enterprise
+	   );
+
+$title = "tktimex $VERSION";
+$current_project = undef;
+$start_session_time = time;
+$time_update = 0;
+@nowtime = localtime;
+$today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
 # there are two forms of separators: for intern store in HList
 # use $separator, for human-readable output use "/"
 my $separator = '¦';
-my $undo_register;
 my $status_edit = 0;
-my $last_projects;
 my $max_last_projects = 4;
 my $username = get_user_name();
 my $home     = get_home_dir();
 my $inner_fg = "black";
 my $inner_bg = "white";
-my $status_browse_entry;
-my %history;
-my(%rcs_cache, @rcs_cache);
 my $ctrl_s = ($os eq 'win' ? 'Ctrl-' : 'C-');
 my $sbside = ($os eq 'win' ? 'e' : 'w');
 my $use_enterprise = 0;
@@ -156,7 +166,8 @@ eval {
     $utmp->init;
 }; warn $@ if $@;
 
-my $date_require = <<'EOF';
+use vars qw($date_require);
+$date_require = <<'EOF';
 	require Tk::Date;
 	Tk::Date->VERSION(0.27);
 	if ($Tk::Date::VERSION >= 0.30) {
@@ -170,10 +181,10 @@ EOF
 
 state_change("before Getopt definition");
 
-my $max_enterprise_file_list = 4;
-my @all_domains;
-my $options = {};
-my @opttable =
+use vars qw($max_enterprise_file_list @all_domains $options @opttable);
+$max_enterprise_file_list = 4;
+$options = {};
+@opttable =
   ('General',
    ['file|f',             '=s', undef, 'subtype' => 'file',
     'longhelp' => "Default project file to load on startup"],
@@ -260,7 +271,8 @@ Medium: only limited project manipulation possible"],
    ['tree',               '!', 1,
     'longhelp' => 'Use tree representation'],
   );
-my $opt;
+
+use vars qw($opt);
 eval {
     state_change("before require Tk::Getopt");
     require Tk::Getopt;
@@ -321,10 +333,13 @@ if ($options->{'one-instance'} and tktimex_running()) {
     exit;
 }
 
-my $m_if = $options->{'interface'} eq 'medium';
-my $s_if = $options->{'interface'} eq 'small';
+use vars qw($m_if $s_if);
+$m_if = $options->{'interface'} eq 'medium';
+$s_if = $options->{'interface'} eq 'small';
 
-my $top = new MainWindow;
+use vars qw($top);
+$top = new MainWindow;
+Tk::App::Reloader::shortcut() if defined &Tk::App::Reloader::shortcut;
 $top->protocol('WM_DELETE_WINDOW', \&quit_program);
 $top->protocol('WM_SAVE_YOURSELF',
 	       sub { save_sos();
@@ -363,8 +378,8 @@ $top->bind("<Pause>" => sub {
 
 state_change("checkpoint 2");
 
-my($is_archiv, $east, %hl_entry, $new_in_merge, $changed_in_merge);
-my $balloon;
+use vars qw($is_archiv $east %hl_entry $new_in_merge $changed_in_merge);
+use vars qw($balloon);
 if ($Tk::VERSION >= 800.005) {
     require Tk::ItemStyle; # erst ab 800.005
     $is_archiv = $top->ItemStyle('text', -foreground => 'red',
@@ -388,10 +403,13 @@ if ($Tk::VERSION >= 800.005) {
 
 state_change("menu begin");
 
-my $menu_frame = $top->Frame(-relief => 'raised',
-			     -borderwidth => 2);
+use vars qw($menu_frame $mb_file $mb_file_menu $mb_export $mb_project
+	    $mb_project_menu $mb_options $mb_options_menu
+	    $dateformat_menu $mb_help);
+$menu_frame = $top->Frame(-relief => 'raised',
+			  -borderwidth => 2);
 
-my $mb_file = $menu_frame->Menubutton(-text => 'File')->pack(-side => 'left');
+$mb_file = $menu_frame->Menubutton(-text => 'File')->pack(-side => 'left');
 state_change("first menubutton loaded");
 $mb_file->command(-label => 'Load',
 		  -command => sub { load_file(1) })
@@ -430,8 +448,8 @@ if (!$s_if) {
 $mb_file->command(-label => 'Save',
 		  -command => \&save_file);
 $mb_file->cascade(-label => 'Export');
-my $mb_file_menu = $mb_file->cget(-menu);
-my $mb_export = $mb_file_menu->Menu;
+$mb_file_menu = $mb_file->cget(-menu);
+$mb_export = $mb_file_menu->Menu;
 $mb_file->entryconfigure('last', -menu => $mb_export);
 $mb_file->entryconfigure('last', -state => 'disabled') if $s_if || $m_if;
 $mb_export->command(-label => 'Save as ...',
@@ -460,7 +478,7 @@ $mb_file->command(-label => 'Quit',
 		  -command => \&quit_program);
 $mb_file->separator;
 
-my $mb_project = $menu_frame->Menubutton(-text => 'Project'
+$mb_project = $menu_frame->Menubutton(-text => 'Project'
 					)->pack(-side => 'left');
 $mb_project->command(-label => 'New',
 		     -command => \&new_project)
@@ -509,9 +527,9 @@ $mb_project->command(-label => 'Daily details',
 $top->bind('<Control-d>' => \&show_one_day)
     unless $s_if;
 
-my $mb_project_menu = $mb_project->cget(-menu);
+$mb_project_menu = $mb_project->cget(-menu);
 
-my $mb_options = $menu_frame->Menubutton(-text => 'Options'
+$mb_options = $menu_frame->Menubutton(-text => 'Options'
 					)->pack(-side => 'left');
 $mb_options->checkbutton(-label => 'Autosave',
 			 -command => \&toggle_autosave,
@@ -519,8 +537,8 @@ $mb_options->checkbutton(-label => 'Autosave',
 			)
     unless $s_if || $m_if;
 $mb_options->cascade(-label => 'Dateformat');
-my $mb_options_menu = $mb_options->cget(-menu);
-my $dateformat_menu = $mb_options_menu->Menu;
+$mb_options_menu = $mb_options->cget(-menu);
+$dateformat_menu = $mb_options_menu->Menu;
 $mb_options->entryconfigure('Dateformat', -menu => $dateformat_menu);
 $mb_options->entryconfigure('Dateformat', -state => 'disabled')
     if $s_if || $m_if;
@@ -577,7 +595,7 @@ foreach my $def (['H:M:S'  => 'hs'],
 				 );
 }
 
-my $mb_help = $menu_frame->Menubutton(-text => 'Help'
+$mb_help = $menu_frame->Menubutton(-text => 'Help'
 				     )->pack(-side => 'left');
 $mb_help->command(-label => 'About',
 		  -command => \&show_about);
@@ -596,8 +614,7 @@ $mb_help->command
 
 state_change("menu done");
 
-my $save_check;
-my($mod_watch, $mod_sub);
+use vars qw($save_check $mod_watch $mod_sub);
 # Aus mir völlig unerklärlichen Gründen muß sich mod_sub außerhalb
 # des evals befinden (perl5.00404)
 $mod_sub = sub {
@@ -635,44 +652,46 @@ $save_check->pack(-side => 'right');
 $balloon->attach($save_check, -msg => 'Timex data modified indicator')
   if $balloon;
 
-my $pause_cont_button = $menu_frame->Button
+use vars qw($pause_cont_button $save_button);
+$pause_cont_button = $menu_frame->Button
   (-text => 'Pause',
    -fg => 'red',
    -width => 5,
    -command => \&pause_or_cont)->pack(-side => 'right');
 
-my $save_button = $menu_frame->Button(-text => 'Save',
-				      -fg => 'yellow4',
-				      -command => \&save_file
-				     )->pack(-side => 'right');
+$save_button = $menu_frame->Button(-text => 'Save',
+				   -fg => 'yellow4',
+				   -command => \&save_file
+				  )->pack(-side => 'right');
 $balloon->attach($save_button, -msg => 'Save project data') if $balloon;
 
-my $minimized = 0;
-my $save_geometry;
-my($up_photo, $down_photo);
+use vars qw($minimized $save_geometry $up_photo $down_photo $min_button);
+$minimized = 0;
 eval {
     $up_photo   = $top->Photo(-file => Tk::findINC("plain.up.gif"));
     $down_photo = $top->Photo(-file => Tk::findINC("plain.down.gif"));
 };
 warn $@ if $@;
-my $min_button = $menu_frame->Button(-image => $up_photo,
-				     -command => \&minmaximze,
-				     -relief => 'flat',
-				    )->pack(-side => 'right');
+$min_button = $menu_frame->Button(-image => $up_photo,
+				  -command => \&minmaximze,
+				  -relief => 'flat',
+				 )->pack(-side => 'right');
 $balloon->attach($min_button, -msg => 'Minimize') if $balloon;
-my $busy_timer;
-my @busy_bar = ('|', '/', '-', '\\');
-my $busy_index = 0;
-my $busy_string = " ";
-my $busy_update = 200;
-my $busy_label = $menu_frame->Label(-textvariable => \$busy_string,
-                                    -width => 1)->pack(-side => 'right');
+
+use vars qw($busy_timer @busy_bar $busy_index $busy_string
+	    $busy_update $busy_label);
+@busy_bar = ('|', '/', '-', '\\');
+$busy_index = 0;
+$busy_string = " ";
+$busy_update = 200;
+$busy_label = $menu_frame->Label(-textvariable => \$busy_string,
+				 -width => 1)->pack(-side => 'right');
 
 $menu_frame->pack(-fill => 'x');
 
 state_change("menu 2 done");
 
-my($pf_cols, $has_costs);
+use vars qw($pf_cols $has_costs);
 $pf_cols = 5; # cannot change -columns of hlists...
 
 state_change("checkpoint 3");
@@ -690,10 +709,11 @@ $project_frame = $top->Scrolled
    -browsecmd => sub { },
    -separator => $separator,
   )->pack(-expand => 1, -fill => 'both');
-my $real_project_frame = $project_frame->Subwidget("scrolled");
-my $is_tree = ($project_frame->can('autosetmode') or
-	       ($real_project_frame and
-		$real_project_frame->can('autosetmode')));
+use vars qw($real_project_frame $is_tree);
+$real_project_frame = $project_frame->Subwidget("scrolled");
+$is_tree = ($project_frame->can('autosetmode') or
+	    ($real_project_frame and
+	     $real_project_frame->can('autosetmode')));
 
 state_change("checkpoint 4");
 if ($options->{'autoscroll'} !~ /^(|none)$/) {
@@ -701,7 +721,8 @@ if ($options->{'autoscroll'} !~ /^(|none)$/) {
     Tk::Autoscroll::Init($project_frame, -speed => $options->{'autoscroll'});
 }
 $project_frame->header('create', 0, -text => 'Projects:');
-my $pf_time_index = 1;
+use vars qw($pf_time_index);
+$pf_time_index = 1;
 $project_frame->header('create', $pf_time_index, -text => 'Session');
 $project_frame->header('create', $pf_time_index+1, -text => 'Today');
 $project_frame->header('create', $pf_time_index+2, -text => 'Total');
@@ -709,7 +730,8 @@ update_costs_option(1);
 
 state_change("checkpoint 5");
 
-my $orig_selectbg = $project_frame->cget(-selectbackground);
+use vars qw($orig_selectbg);
+$orig_selectbg = $project_frame->cget(-selectbackground);
 
 $real_project_frame->bindtags([$real_project_frame, ref $real_project_frame,
 			       '.', 'all']);
@@ -725,10 +747,9 @@ if ($options->{'autoscroll'} =~ /^(|none)$/) {
 			      sub { new_sub_project(get_entry(@_)) });
 }
 
-my $popup_entry;
-my $popup_project;
-my $popup_menu = $real_project_frame->Menu(-tearoff => 0,
-					   -disabledforeground => "darkblue");
+use vars qw($popup_entry $popup_project $popup_menu);
+$popup_menu = $real_project_frame->Menu(-tearoff => 0,
+					-disabledforeground => "darkblue");
 $popup_menu->command(-label => "Project:",
 		     -state => "disabled");
 $popup_menu->command(-label => "New subproject",
@@ -810,8 +831,9 @@ if ($project_frame->can('DropSite')) {
     };
 }
 
-my $status_frame = $top->Frame(-relief => 'ridge',
-			       -bd => 1);
+use vars qw($status_frame);
+$status_frame = $top->Frame(-relief => 'ridge',
+			    -bd => 1);
 $status_frame->pack(-fill => 'x');
 
 $status_text = $status_frame->Label
@@ -822,7 +844,7 @@ state_change("checkpoint 7");
 
 # verzögert zeigen, da evtl. wichtige Statusmeldungen dadurch
 # verdeckt werden ... aber nicht, wenn in der Statuszeile editiert wird!
-my $status_timer;
+use vars qw($status_timer);
 $project_frame->bind
   ("<Enter>" => sub {
        if ($status_timer) {
@@ -874,8 +896,12 @@ $project_frame->focus;
 
 $top->repeat(5*60*1000, \&check_still_today);
 
+Tk::App::Reloader::check_loop() if defined &Tk::App::Reloader::check_loop;
+
 state_change("before MainLoop");
 MainLoop;
+
+### RELOADER_START #########################################################
 
 sub enter_label {
     my $label = shift;
