@@ -4,16 +4,17 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     'NAME'	=> 'Timex',
     'VERSION_FROM' => 'tktimex', # finds $VERSION
-    'EXE_FILES'  => ['tktimex'],
+    'ABSTRACT_FROM' => 'tktimex', # finds $VERSION
+    'EXE_FILES'  => [qw/tktimex ctimex/],
     'dist'      => {'COMPRESS'=>'gzip -9f', 'SUFFIX' => '.gz',
                     'POSTOP'=>'-$(CHMOD) 644 $(DISTVNAME).tar$(SUFFIX)'},
     'PM' => {'Timex/Project.pm'   => '$(INST_LIBDIR)/Timex/Project.pm',
 	     'Tk/UnderlineAll.pm' => '$(INST_LIBDIR)/Tk/UnderlineAll.pm',
 	    },
-    'PREREQ_PM' => {'Tk' => 402.003,
-		    'Tk::Getopt' => 0.34,
-		    'Tk::FileDialog' => 0,
-		    'Tk::Date' => 0.21,
+    'PREREQ_PM' => {'Tk'           => 402.003,
+		    'Tk::Getopt'   => 0.34,
+		    'Tk::Date'     => 0.21,
 		    'Data::Dumper' => 0,
 		   },
+    'AUTHOR' => 'Slaven Rezic (eserte@cs.tu-berlin.de)',
 );
