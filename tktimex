@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 1.4 1996/10/28 12:25:24 eserte Exp $
+# $Id: tktimex,v 1.5 1996/10/29 09:02:27 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -11,13 +11,11 @@
 
 package main;
 
-use Project;
 use Tk;
 use Tk::ROText;
 use Data::Dumper;
-
-my $top = new MainWindow;
-$top->protocol('WM_DELETE_WINDOW', \&quit_program);
+BEGIN { $0 =~ m|^(.*)/.*$|; push(@INC, $1); }
+use Project;
 
 my $quit_dialog;
 my $copyright = 'tktimex © 1996 Slaven Rezic';
@@ -35,6 +33,27 @@ my $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
 my @projects_in_text;
 my %projects_in_text;
 my $project_status = "Left: Start/Stop | Right: Create Subproject";
+
+my $xgeometry;
+
+for ($i = 0; $i <= $#ARGV; ++$i) {
+    $_ = $ARGV[$i];
+  ARGL: {
+	/^-geometry$/ && do { $xgeometry 
+				= &get_arg(*i, *ARGV, "-geometry", "$_");
+			      last ARGL; };
+	/^-file$/ && do { $datafile 
+			    = &get_arg(*i, *ARGV, "-file", "$_");
+			  last ARGL; };
+#	/^-switch$/ && do { $switch = 0; last ARGL; };
+	/^-/ && do { &usage("bad argument: $_"); last ARGL; };
+    }
+}
+
+my $top = new MainWindow;
+$top->protocol('WM_DELETE_WINDOW', \&quit_program);
+
+$top->geometry($xgeometry) if $xgeometry;
 
 #my $menu_frame = $top->Frame;
 #$menu_frame->pack(-expand => 1, -fill => 'x');
@@ -64,7 +83,7 @@ my $header_text = $project_frame->Text(-tabs => ['4c', '6.5c', '9c'],
 				       -cursor => 'left_ptr',
 				       -relief => 'ridge');
 $header_text->pack(-expand => 1, -fill => 'x');
-$header_text->insert('1.0', "\t\tTime\nProjects:\tSession\tToday\tAll");
+$header_text->insert('1.0', "\t\t  Time\nProjects:\t  Session\t  Today\t  All");
 $header_text->bindtags(qw(dummy));
 
 my $projects_scrollbar = $project_frame->Scrollbar(-orient => 'vertical');
@@ -106,6 +125,8 @@ $projects_text->tagBind('project',
 $projects_text->tagBind('project',
 			"<Leave>" =>
 			sub { $status_text->configure(-text => $copyright); });
+
+&load_file;
 
 MainLoop;
 
@@ -159,7 +180,7 @@ sub insert_project {
     $projects_in_text{$p} = $index;
     $projects_text->insert
       ($after, 
-       ("-" x ($indent-1)) . ($indent ? "> " : ""),
+       (">" x $indent),
        [$project-$index],
        $label,
        ["label-$index", "project-$index", 'project'],
@@ -202,8 +223,7 @@ sub start_project {
 			   "label-$project_index.first",
 			   "label-$project_index.last");
     $projects_in_text[$current_project_index]->start_time;
-    $time_after = $projects_text->after
-      ($time_update*1000, sub { &act_time($project_index); } );
+    &set_time_update($project_index);
 }
 
 sub pause {
@@ -239,6 +259,15 @@ sub act_time {
 	   ["time-$project_index", "project-$project_index"]);
 	$project = ($project->isa("Subproject") ? $project->parent : undef);
 	$project_index = $projects_in_text{$project} if $project;
+    }
+    &set_time_update($curr_project_index);
+    $projects_text->update; # XXX??? nötig?
+}
+
+sub set_time_update {
+    my $curr_project_index = shift;
+    if (defined $time_after) {
+	$time_after->cancel;
     }
     $time_after = $projects_text->after
       ($time_update*1000, sub { &act_time($curr_project_index); } );
@@ -336,3 +365,37 @@ sub sec2time {
 #    sprintf("%02d:%02d:%02d", $hour, $min, $sec % 60); # XXX Test
 }
 
+# print out how to use this program.
+# the string argument passed to it is printed at the end, with a nl.
+sub usage {
+    my($problem) = @_;
+    require File::Basename;
+    die "usage: ",
+    &File::Basename::basename($0),
+    " []
+\n"
+    . "$problem\n";
+}
+
+# Get the argument, which may be directly after this switch, or the
+# next word entirely.  This works like getopts, in a way.
+sub get_arg {
+    local(*index, *array, $prefix, $arg) = @_; # kein my!!!
+    if ($arg =~ m/^$prefix$/) {
+	++$index;
+	die "Too few args - last arg was $arg\n" if ($index > $#array);
+	return "$array[$index]";
+    } else {
+	$arg =~ s/^$prefix//; return "$arg";
+    }
+}
+
+
+=head1 TODO
+
+ - rename
+ - Kommandozeilenversion
+ - show/hide old
+ - reparent objects
+
+=cut
