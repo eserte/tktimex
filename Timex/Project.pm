@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.44 2001/03/23 00:29:42 eserte Exp $
+# $Id: Project.pm,v 3.45 2001/04/04 22:39:24 eserte Exp $
 #
 
 =head1 NAME
@@ -29,6 +29,8 @@ $magic = '#PJ1';
 $magic_template = '#PJT';
 $emacsmode = '-*- project -*-';
 @project_attributes = qw/archived rate rcsfile domain id notimes/;
+
+sub Timex_Project_API { 1 }
 
 =head2 new
 
@@ -1270,6 +1272,8 @@ sub dump_data {
 
 Save the project to file $file. If the optional argument -skeleton is set
 to true, do not save times.
+
+Return 1 if the saving was successful, otherwise C<undef> or 0.
 
 =cut
 
