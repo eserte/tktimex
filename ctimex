@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: ctimex,v 1.1 1996/12/12 21:49:51 eserte Exp $
+# $Id: ctimex,v 1.2 1996/12/19 16:28:18 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -11,38 +11,86 @@
 
 
 use Term::Complete;
-use Data::Dumper;
 use Project;
 
-do $ARGV[0] || "/home/e/eserte/private/log/mytimex.data";
-Project->pool($pool);
-my $p;
-foreach $p (@$pool) {
-    push_warn(\@list_of_projects, $p);
-    @sub_projects = &get_subprojects($p);
-    if (@sub_projects != ()) {
-	push(@list_of_projects, @sub_projects);
+$loadfile = "/home/e/eserte/private/log/mytimex.pj1";
+$savefile = "/home/e/eserte/private/log/mytimex-timex.pj1";
+
+$| = 1;
+$debug = 1;
+
+my $root = new Project;
+$root->load($loadfile);
+
+@list_of_projects = &get_subprojects($root);
+
+&output_projects;
+
+while (1) {
+    $input = Complete("project: ", map { $_->[0] } @list_of_projects);
+    
+    if ($input eq '') {
+	print STDERR "Datei ($savefile) sichern? (j/n) ";
+	$_ = <STDIN>;
+	chomp;
+	if ($_ =~ /^j$/i) {
+	    my $res = $root->save($savefile);
+	    if ($res) {
+		print STDERR "Datei erfolgreich gesichert!";
+		exit 0;
+	    }
+	} elsif ($_ =~ /^n$/i) {
+	    exit 0;
+	} else {
+	    &output_projects;
+	}
+	next;
+    }    
+
+    if (!exists $project_label{$input}) {
+	warn "$input existiert nicht!";
+	next;
     }
+
+    $project = $project_label{$input};
+
+    $timeout = 1;
+
+    $project->start_time;
+    while (1) {
+	print STDERR $project->label, ": ";
+	$t = $project->sum_time(0, 1);
+	printf STDERR ("Zeit: %02d:%02d:%02d\r",
+		       $t/3600, ($t%3600)/60, (($t%3600)%60));
+
+	$rin = $win = $ein = '';
+	vec($rin,fileno(STDIN),1) = 1;
+	$ein = $rin | $win;
+	($gotit, $newtimeout) = select($rin, $win, $ein, $timeout);
+	if ($gotit) {
+	    $project->end_time;
+	    print STDERR "\n";
+	    last;
+	}
+    }
+
 }
 
-use POSIX;
-foreach $p (@list_of_projects) {
-    print "Project: ", $p->[0], "\n";
-    @times = @{$p->[1]->{'times'}};
-    foreach $t (@times) {
-	print strftime("%c", localtime $t->[0]), " - ",
-		strftime("%c", localtime $t->[1]), "\n";
+sub output_projects {
+    print STDERR "\nList of projects:\n-----------------\n";
+    my $p;
+    foreach $p (@list_of_projects) {
+	print STDERR (">" x $p->[1]->level), $p->[0], "\n";
+	if ($debug) {
+	    @times = @{$p->[1]->{'times'}};
+	    foreach $t (@times) {
+		print STDERR
+		  scalar localtime $t->[0], " - ",
+		  scalar localtime $t->[1], "\n";
+	    }
+	}
     }
-}
-exit;
-
-$input = Complete("project: ", map { $_->[0] } @list_of_projects);
-foreach (@$pool) {
-    if ($input eq $_->label) {
-	print $_->label, ": ";
-	$t = $_->sum_time(0, 1);
-	printf("%02d:%02d:%02d\n", $t/3600, ($t%3600)/60, (($t%3600)%60));
-    }
+    print STDERR "\n";
 }
 
 sub get_subprojects {
@@ -68,10 +116,6 @@ sub push_warn {
     }
     push(@$arrref, [$label, $obj]);
     $labels{$label}++;
+    $project_label{$label} = $obj;
 }
 
-=head1 TODO
-
- - actually implement it!
-
-=cut
