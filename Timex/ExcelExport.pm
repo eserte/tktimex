@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: ExcelExport.pm,v 1.5 2000/11/24 21:21:37 eserte Exp $
+# $Id: ExcelExport.pm,v 1.6 2000/11/24 23:02:19 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2000 Slaven Rezic. All rights reserved.
@@ -24,6 +24,8 @@ use vars qw($excel_separator $is_german_excel $decimalsep);
 $excel_separator = ";" unless defined $excel_separator;
 $is_german_excel = 1   unless defined $is_german_excel;
 $decimalsep      = "," unless defined $decimalsep;
+
+my $can_formulas = 0;
 
 sub save_dialog {
     my($top, $root_project, %args) = @_;
@@ -103,7 +105,7 @@ sub save_dialog {
 }
 
 sub can_xls {
-    eval {
+    eval q{
 	use Win32::OLE;
 	use Win32::OLE::NLS qw(:LOCALE GetUserDefaultLCID GetLocaleInfo);
 	$decimalsep = GetLocaleInfo(GetUserDefaultLCID(), LOCALE_SDECIMAL);
@@ -111,7 +113,14 @@ sub can_xls {
 	unless (defined $excel) {
 	    $excel = Win32::OLE->new('Excel.Application', sub { $_[0]->Quit });
 	}
+	$can_formulas++ if $excel;
     };
+    if (!$excel) {
+	eval q{
+	    use Spreadsheet::WriteExcel;
+	    $excel = "Spreadsheet::WriteExcel";
+	};
+    }
     defined $excel;
 }
 
@@ -132,9 +141,17 @@ sub _excel_print_row {
 	@s = split($excel_separator, $s);
     }
     return if !@s;
-#    my $range = "A$row:" . chr(ord("A")-1+scalar @s).$row;
-    my $range = _excel_coord(1,$row) . ":" . _excel_coord(scalar @s, $row);
-    $sheet->Range($range)->{Value} = [\@s];
+
+    if ($sheet->isa('Spreadsheet::Worksheet')) {
+	my $col = 0;
+	foreach my $s (@s) {
+	    $sheet->write($row-1, $col, $s);
+	    $col++;
+	}
+    } else {
+	my $range = _excel_coord(1,$row) . ":" . _excel_coord(scalar @s, $row);
+	$sheet->Range($range)->{Value} = [\@s];
+    }
 }
 
 sub save {
@@ -172,19 +189,28 @@ sub save {
 
     if ($do_excel) {
 
-	# write .xls file
-	if (0 && -f $file) { # XXX
-	    $book = $excel->Workbooks->Open($file);
+	if ($excel eq 'Spreadsheet::WriteExcel') {
+	    $book = Spreadsheet::WriteExcel->new($file);
 	    if (!$book) {
-		die "Can't open Workbook $file: " . Win32::OLE::LastError();
+		die "Can't open Workbook $file";
 	    }
+	    $sheet = $book->addworksheet;
+	    $is_german_excel = 0; # XXX ja?
 	} else {
-	    $book = $excel->Workbooks->Add;
-	    if (!$book) {
-		die "Can't create Workbook: " . Win32::OLE::LastError();
+	    # write .xls file
+	    if (0 && -f $file) { # XXX
+		$book = $excel->Workbooks->Open($file);
+		if (!$book) {
+		    die "Can't open Workbook $file: " . Win32::OLE::LastError();
+		}
+	    } else {
+		$book = $excel->Workbooks->Add;
+		if (!$book) {
+		    die "Can't create Workbook: " . Win32::OLE::LastError();
+		}
 	    }
+	    $sheet = $book->Worksheets(1);
 	}
-	$sheet = $book->Worksheets(1);
 
     } else {
 
@@ -245,7 +271,8 @@ sub save {
 		    foreach (@cols) {
 			if (/%%PROJECTSUM%%/) {
 			    $projectsum_col = $col;
-			    if (defined $hours_col && defined $rate_col) {
+			    if (defined $hours_col && defined $rate_col &&
+				$can_formulas) {
 				$_ = "=" . _excel_coord($hours_col, $row) .
 				     "*" . _excel_coord($rate_col, $row);
 			    } else {
@@ -282,11 +309,15 @@ sub save {
 			$or_empty++;
 		    }
 		    if (defined $this_col) {
-			$c = "=SUMME(" .
-			    _excel_coord($this_col, $first_project_row).
-			    ":".
-			    _excel_coord($this_col, $last_project_row).
-			    ")";
+			if ($can_formulas) {
+			    $c = "=SUMME(" .
+				_excel_coord($this_col, $first_project_row).
+				":".
+			        _excel_coord($this_col, $last_project_row).
+				")";
+			} else {
+			    $c = "";
+			}
 		    } elsif ($or_empty) {
 			$c = "";
 		    }
@@ -301,8 +332,12 @@ sub save {
     close T;
 
     if ($do_excel) {
-	$book->SaveAs($file);
-	$book->Close;
+	if ($book->isa('Spreadsheet::Workbook')) {
+	    $book->close;
+	} else {
+	    $book->SaveAs($file);
+	    $book->Close;
+	}
 	undef $sheet;
 	undef $book;
 	undef $excel;
