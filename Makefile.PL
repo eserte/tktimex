@@ -38,7 +38,7 @@ WriteMakefile(
 		    'XML::Parser'  => 0,
 		    'Mail::Send'   => 0,
 		   },
-    'AUTHOR' => 'Slaven Rezic (eserte@cs.tu-berlin.de)',
+    'AUTHOR' => 'Slaven Rezic (slaven.rezic@berlin.de)',
 );
 
 #sub MY::top_targets {
