@@ -14,6 +14,7 @@ Timex/Project/Export.pm
 Timex/Project/XML.pm
 Timex/Rcs.pm
 Timex/Server.pm
+Timex/Utmp.pm
 Timex/test.pl
 Tk/Autoscroll.pm
 Tk/UnderlineAll.pm
