@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 4.27 1999/03/07 00:17:10 eserte Exp $
+# $Id: tktimex,v 4.28 1999/03/09 14:04:48 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -80,7 +80,7 @@ use strict;
 use vars qw($VERSION);
 use locale; # for sort, broken in older FreeBSD
 
-$VERSION = sprintf("%d.%02d", q$Revision: 4.27 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 4.28 $ =~ /(\d+)\.(\d+)/);
 
 my $os = ($^O =~ /win/i ? 'win' : 'unix');
 
@@ -1470,9 +1470,9 @@ sub show_intervals {
 
     my $readonly      = $args{-readonly};
     my $show_seconds  = $args{-show_seconds};
+    my $daily         = $args{-daily};
     my $geometry      = $args{-geometry};
     my $modified      = $args{-modified};
-
     if (!defined $project) {
 	$project = entry_to_project(get_sel_entry());
 	return if !defined $project;
@@ -1506,8 +1506,9 @@ sub show_intervals {
 	show_intervals($top, $project,
 		       -readonly     => $readonly,
 		       -show_seconds => $show_seconds,
+		       -daily        => $daily,
 		       -modified     => $modified,
-		       # XXX geht nicht? -geometry     => $geometry,
+		       -geometry     => $geometry,
 		      );
     };
 
@@ -1516,9 +1517,6 @@ sub show_intervals {
 	return if $readonly;
 	require Tk::Date;
 	my $t = $w->Toplevel(-title => "Edit line $i");
-	if ($geometry) {
-	    $t->geometry($geometry);
-	}
 	my($from, $to) = @{$project->{'times'}[$i]};
 	$t->Label(-text => 'From:')->grid(-row => 0, -column => 0);
 	my $from_date = $t->Date(-variable => \$from,
@@ -1556,9 +1554,11 @@ sub show_intervals {
     };
 
     $w = $top->Toplevel(-title => "Intervals for " . $project->pathname);
-    my $no_cols = 3;
+    my $no_cols = 2;
     my $rev_lifetime_col;
-    $no_cols += 2 if $show_seconds;
+    $no_cols ++   if !$daily; # zusätzliche To-Spalte
+    $no_cols ++   if $show_seconds; # für From/Date-Spalte
+    $no_cols ++   if $show_seconds and !$daily; # für To-Spalte
     $no_cols += 2 if @rev;
     $lb = $w->Scrolled('HList', -scrollbars => 'osoe',
 		       -columns => $no_cols,
@@ -1568,12 +1568,18 @@ sub show_intervals {
 		      )->pack(-fill => 'both', -expand => 1);
     {
 	my $col = 0;
-	$lb->header('create', $col++, -text => 'From');
+	if ($daily) {
+	    $lb->header('create', $col++, -text => 'Day');
+	} else {
+	    $lb->header('create', $col++, -text => 'From');
+	}
 	$lb->header('create', $col++, -text => 'seconds')
 	  if $show_seconds;
-	$lb->header('create', $col++, -text => 'To');
-	$lb->header('create', $col++, -text => 'seconds')
-	  if $show_seconds;
+	if (!$daily) {
+	    $lb->header('create', $col++, -text => 'To');
+	    $lb->header('create', $col++, -text => 'seconds')
+	      if $show_seconds;
+	}
 	$lb->header('create', $col++, -text => 'Time');
 	if (@rev) {
 	    $lb->header('create', $col++, -text => 'RCS');
@@ -1584,13 +1590,18 @@ sub show_intervals {
     }
     my $last_rev_def;
     my $i = 0;
-    foreach (@{$project->{'times'}}) {
-	my($from, $to) = @$_;
+    my @times = ($daily
+		 ? $project->daily_times
+		 : @{$project->{'times'}}
+		);
+    foreach (@times) {
+	my($from, $to, $interval) = @$_;
 	my(@fromdate) = localtime($from);
 	$fromdate[4]++;
 	$fromdate[5]+=1900;
 	my $fromdate = sprintf
-	  "%02d.%02d.%04d %02d:%02d:%02d", @fromdate[3,4,5,2,1,0];
+	  "%02d.%02d.%04d" . (!$daily ? " %02d:%02d:%02d" : ""),
+	  @fromdate[3,4,5,2,1,0];
 	$lb->add($i, -text => $fromdate);
 	my $col = 1;
 	$lb->itemCreate($i, $col++, -text => $from)
@@ -1603,10 +1614,13 @@ sub show_intervals {
 	    $todate[5]+=1900;
 	    $todate = sprintf
 	      "%02d.%02d.%04d %02d:%02d:%02d", @todate[3,4,5,2,1,0];
-	    $lb->itemCreate($i, $col++, -text => $todate);
-	    $lb->itemCreate($i, $col++, -text => $to)
-	      if $show_seconds;
-	    $lb->itemCreate($i, $col++, -text => sec2time($to-$from, 'h', 0));
+	    if (!$daily) {
+		$lb->itemCreate($i, $col++, -text => $todate);
+		$lb->itemCreate($i, $col++, -text => $to)
+		  if $show_seconds;
+	    }
+	    $interval = $to-$from if !$daily;
+	    $lb->itemCreate($i, $col++, -text => sec2time($interval, 'h', 0));
 	    my @t;
 	    foreach my $rev (@rev) {
 		if ($rev->[1] >= $from and $rev->[1] <= $to) {
@@ -1679,10 +1693,20 @@ sub show_intervals {
 		    -variable => \$show_seconds,
 		    -command => sub { $update->() },
 		   )->pack(-side => 'left');
+    $f->Label(-text => '  ')->pack(-side => 'left');
+    $f->Checkbutton(-text => 'Daily',
+		    -variable => \$daily,
+		    -command => sub { $update->() },
+		   )->pack(-side => 'left');
     $clb->focus;
     $w->bind('<Escape>' => sub { $clb->invoke });
-    $w->Popup(-popover => 'cursor')
-      unless $geometry;
+
+    my @popup_args;
+    push @popup_args, (-popover => 'cursor') unless $geometry;
+    $w->Popup;
+    if ($geometry) {
+	$w->geometry($geometry);
+    }
 }
 
 sub show_note {
