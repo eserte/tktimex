@@ -5,7 +5,9 @@ tktimex
 ctimex
 clear_times.pl
 get_skeleton.pl
+convert2xml.pl
 Timex/Project.pm
+Timex/Project/XML.pm
 Timex/Rcs.pm
 Timex/test.pl
 Tk/Autoscroll.pm
