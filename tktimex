@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 2.6 1997/04/24 14:25:58 eserte Exp $
+# $Id: tktimex,v 2.7 1997/11/15 22:11:01 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -24,6 +24,7 @@ my $root = new Project;
 my $quit_dialog;
 my $copyright = 'tktimex © 1996 Slaven Rezic';
 my $datafile = '/home/e/eserte/private/log/mytimex.pj1';
+my $title = 'tktimex';
 #my $datafile = "/tmp/mytimex.pj1"; # XXX
 my $current_project_index = undef;
 my $start_session_time = time;
@@ -62,7 +63,7 @@ for ($i = 0; $i <= $#ARGV; ++$i) {
 
 my $top = new MainWindow;
 $top->protocol('WM_DELETE_WINDOW', \&quit_program);
-$top->title('tktimex');
+$top->title($title);
 $top->geometry($xgeometry) if $xgeometry;
 
 my $menu_frame = $top->Frame(-relief => 'raised',
@@ -107,7 +108,8 @@ $mb_options->checkbutton(-label => 'Show only top',
 
 # XXX RO machen!
 $menu_frame->Checkbutton(-text => '*',
-			 -variable => \$root->{'modified'}
+			 -variable => \$root->{'modified'},
+			 -state => 'disabled',
 			)->pack(-side => 'right');
 
 $menu_frame->Button(-text => 'Pause',
@@ -267,6 +269,8 @@ sub start_project {
     $projects_text->tagAdd('running',
 			   "label-$project_index.first",
 			   "label-$project_index.last");
+    $top->title($title .
+		" (" . $projects_in_text[$current_project_index]->label . ")");
     $projects_in_text[$current_project_index]->start_time;
     &set_timeout();
 }
@@ -287,6 +291,7 @@ sub stop_project {
 	&act_time;
 	undef $current_project_index;
 	$projects_text->tagRemove('running', '1.0', 'end');
+	$top->title($title);
     }
 }
 
@@ -336,6 +341,7 @@ sub load_file {
 	$status_text->configure(-text => "Can't load $datafile!");
 	return;
     }
+    $status_text->configure(-text => "Loaded $datafile");
     &insert_all;
     &set_autosave;
     $root->modified(0);
@@ -442,7 +448,8 @@ sub not_running {
 	require Tk::Dialog;
 	$top->Dialog(-title => 'Warning',
 		     -text  => 
-		     "Can't perform this action while project running"
+		     "Can't perform this action while project running",
+		     -popover => 'cursor',
 		     )->Show;
 	if (defined $var) {
 	    # alte Einstellung wiederherstellen
@@ -527,7 +534,8 @@ sub show_attributes {
 			 (-title => 'Warning',
 			  -text  => 
 			  "Can't reparent " . $project->label . " to " .
-			  $new_parent_p->label
+			  $new_parent_p->label,
+			  -popover => 'cursor',
 			 )->Show;
 		   }
 	       }
@@ -607,7 +615,9 @@ sub quit_program {
 	    $quit_dialog = $top->Dialog(-title => 'Quit Program',
 					-text  => "Really quit?",
 					-default_button => 'No',
-					-buttons => ['Yes', 'No']);
+					-buttons => ['Yes', 'No'],
+					-popover => 'cursor',
+				       );
 	}
 	return 0 if $quit_dialog->Show ne 'Yes';
     }
