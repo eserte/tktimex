@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 5.10 2001/02/07 23:45:36 eserte Exp $
+# $Id: tktimex,v 5.11 2001/02/08 00:57:10 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_about or the Help/About menu entry
@@ -110,7 +110,7 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 
-$VERSION = sprintf("%d.%02d", q$Revision: 5.10 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 5.11 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -147,9 +147,15 @@ $start_session_time = time;
 $time_update = 0;
 @nowtime = localtime;
 $today_time = time - $nowtime[0] - $nowtime[1]*60 - $nowtime[2]*60*60;
-# there are two forms of separators: for intern store in HList
-# use $separator, for human-readable output use "/"
+
+# There are two forms of separators: for intern store in HList
+# use $separator, for human-readable output use "/".
 $separator = '¦';
+# XXX iso8859-1 support with newest Tk's is buggy
+if ($Tk::VERSION >= 803) {
+    $separator = '|';
+}
+
 $status_edit = 0;
 $max_last_projects = 4;
 $username = get_user_name();
@@ -187,7 +193,9 @@ $options = {};
 @opttable =
   ('General',
    ['file|f',             '=s', undef, 'subtype' => 'file',
-    'longhelp' => "Default project file to load on startup"],
+    'longhelp' => "Default project file to load on startup",
+    'callback-interactive' => sub { load_file(0) },
+   ],
    ['mergedir',           '=s', undef, 'subtype' => 'file', 'nogui' => 1],
    ['lock',               '!',  1,
     'longhelp' => "Set to false if you don't want file locking."],
@@ -290,7 +298,17 @@ if ($@) {
 	    push @getopt, $_->[0] . $_->[1];
 	}
     }
+
     die "Usage?" if !Getopt::Long::GetOptions(@getopt);
+
+    if ($options->{'enterprisedefaults'} and
+	-r $options->{'enterprisedefaults'}) {
+	standalone_message_box
+	    (-message => "The option -enterprisedefaults does not work\n" .
+	                 "without the perl module Tk::Getopt.\n" .
+	                 "Please install this module from CPAN.\n");
+    }
+
 } else {
     state_change("Tk::Getopt checkpoint 1");
     $opt = new Tk::Getopt(-opttable => \@opttable,
@@ -403,7 +421,8 @@ if ($Tk::VERSION >= 800.005) {
 
 state_change("menu begin");
 
-use vars qw($menu_frame $mb_file $mb_file_menu $mb_export $mb_project
+use vars qw($menu_frame $mb_file $mb_file_menu $mb_export
+	    $mb_project $mb_show_curr_project_index
 	    $mb_project_menu $mb_options $mb_options_menu
 	    $dateformat_menu $mb_help);
 $menu_frame = $top->Frame(-relief => 'raised',
@@ -479,10 +498,13 @@ $mb_file->command(-label => 'Quit',
 $mb_file->separator;
 
 $mb_project = $menu_frame->Menubutton(-text => 'Project'
-					)->pack(-side => 'left');
+				     )->pack(-side => 'left');
 $mb_project->command(-label => 'New',
 		     -command => \&new_project)
     unless $s_if || $m_if;
+# strange: -menu is only active if there is already a menu item
+$mb_project_menu = $mb_project->cget(-menu);
+
 $mb_project->command(-label => 'New from template',
 		     -command => \&new_project_from_template)
     unless $s_if || $m_if;
@@ -501,6 +523,14 @@ $mb_project->command(-label => 'Search',
 		     -command => \&search_project,
 		     -accelerator => $ctrl_s . 's');
 $top->bind('<Control-s>' => \&search_project);
+$mb_project->command(-label => 'Show current',
+		     -state => "disabled",
+		     -command => sub {
+			 if ($current_project) {
+			     $project_frame->see(make_path($current_project));
+			 }
+		     });
+$mb_show_curr_project_index = $mb_project_menu->index("last");
 $mb_project->command(-label => 'Continue last',
 		     -command => \&cont_last);
 $mb_project->command(-label => 'Attributes',
@@ -526,8 +556,6 @@ $mb_project->command(-label => 'Daily details',
     unless $s_if;
 $top->bind('<Control-d>' => \&show_one_day)
     unless $s_if;
-
-$mb_project_menu = $mb_project->cget(-menu);
 
 $mb_options = $menu_frame->Menubutton(-text => 'Options'
 					)->pack(-side => 'left');
@@ -1133,8 +1161,7 @@ sub insert_project {
     # check existence of parent and create dummy entry, if appropriate
     my $check_parent;
     $check_parent = sub {
-	my($p, $path) = @_;;
-
+	my($p, $path) = @_;
 	my $parent_path = get_parent_path($path);
 	return if $parent_path eq "";
 
@@ -1232,6 +1259,11 @@ sub common_start_project {
 
     $top->title($title . " (" . $p->pathname . ")");
     add_last_projects($current_project);
+
+    if (defined $mb_show_curr_project_index) {
+	$mb_project_menu->entryconfigure($mb_show_curr_project_index,
+					 -state => "normal");
+    }
 
     if (defined $busy_timer) {
 	$busy_timer->cancel;
@@ -1368,6 +1400,12 @@ sub stop_project {
 	$project_frame->selectionClear;
 	$top->title($title);
 	create_menu_last_projects();
+
+	if (defined $mb_show_curr_project_index) {
+	    $mb_project_menu->entryconfigure($mb_show_curr_project_index,
+					     -state => "disabled");
+	}
+
     }
 }
 
@@ -2063,6 +2101,32 @@ sub canvas_copy_item {
 }
 # REPO END
 
+# REPO BEGIN
+# REPO NAME standalone_message_box /home/e/eserte/src/repository 
+# REPO MD5 c4592f93ed4afa4f6a93d9ff38d2e905
+
+sub standalone_message_box {
+    my %args = @_;
+    require Tk;
+    my $mw_created;
+    my(@mw) = Tk::MainWindow::Existing();
+    if (!@mw) {
+	push @mw, MainWindow->new();
+	$mw[0]->withdraw;
+	$mw_created++;
+    }
+    $args{-icon}  = 'error' unless exists $args{-icon};
+    $args{-title} = 'Error' unless exists $args{-error};
+    $args{-type}  = 'OK'    unless exists $args{-type};
+    my $answer = $mw[0]->messageBox(%args);
+    if ($mw_created) {
+	$mw[0]->destroy;
+    }
+    $answer;
+}
+
+# REPO END
+
 sub load_file {
     my $interactive = shift;
     my $file_to_load = shift;
@@ -2095,6 +2159,7 @@ sub load_file {
 				     -File   => $file,
 				     -Path   => $path,
 				     -FPat   => '*.pj1',
+				     -filetypes => [qw/pj1 xml all/],
 				     -Create => 0);
 	return if !$file_to_load;
     }
@@ -2440,6 +2505,7 @@ sub save_as_file {
 			 -File => $file,
 			 -Path => $path,
 			 -FPat => '*.pj1',
+			 -filetypes => [qw/pj1 all/],
 			 -Create => 1);
     return unless $file;
 
@@ -2512,6 +2578,7 @@ sub save_skeleton {
 			 -Title => 'Enter skeleton project file',
 			 -Path => $path,
 			 -FPat => '*.pj1',
+			 -filetypes => [qw/pjt pj1 all/],
 			 -Create => 1);
     return unless $file;
     $file = adjust_filename($file);
@@ -2531,6 +2598,7 @@ sub save_subproject {
 			 -Title => 'Enter project file',
 			 -Path => $path,
 			 -FPat => '*.pj1',
+			 -filetypes => [qw/pj1 all/],
 			 -Create => 1);
     return unless $file;
     $file = adjust_filename($file);
@@ -2549,6 +2617,7 @@ sub save_xml {
 			 -File => $file,
 			 -Path => $path,
 			 -FPat => '*.xml',
+			 -filetypes => [qw/xml all/],
 			 -Create => 1);
     return unless $file;
 
@@ -2568,6 +2637,7 @@ sub merge_file {
 			    -Title => 'Enter project file for merge',
 			    -Path => $path,
 			    -FPat => '*.pj1',
+			    -filetypes => [qw/pj1 pjt all/],
 			    -Create => 0);
     return unless $file;
 
@@ -2632,16 +2702,28 @@ sub get_filename {
 	}
     }
 
+    my $types = [];
+    if ($args{-filetypes}) {
+	foreach my $type (@{ $args{-filetypes} }) {
+	    if ($type eq 'pj1') {
+		push @$types, ['Timex files', '.pj1'];
+	    } elsif ($type eq 'all') {
+		push @$types, ['All files', '*'];
+	    } elsif ($type eq 'xml') {
+		push @$types, ['Timex XML files', '.xml'];
+	    } elsif ($type eq 'pjt') {
+		push @$types, ['Timex Template files', '.pjt'];
+	    }
+	}
+    }
+
     if ($args{-Create} && $top->can('getSaveFile')) {
 	my $file = $top->getSaveFile
 	  (-initialdir => $args{-Path},
 	   -initialfile => $args{'File'},
 	   -defaultextension => $defaultextension,
 	   -title => $args{-Title},
-	   ($Tk::VERSION >= 800.012 && $args{'-FPat'} =~ /pj1/ ?
-	    (-filetypes => [['Timex files', '.pj1'],
-			    ['All files',  '*']])
-	    : ()),
+	   ($Tk::VERSION >= 800.012 ? (-filetypes => $types) : ()),
 	  );
 	return $file;
     } elsif (!$args{-Create} && $top->can('getOpenFile')) {
@@ -2649,12 +2731,7 @@ sub get_filename {
 	  (-initialdir => $args{-Path},
 	   -defaultextension => $defaultextension,
 	   -title => $args{-Title},
-	   ($Tk::VERSION >= 800.012 && $args{'-FPat'} =~ /pj1/ ?
-	    (-filetypes => [['Timex files', '.pj1'],
-			    ['Timex XML files', '.xml'], # XXX well...
-			    ['All files',  '*']])
-	    : ()
-	   ),
+	   ($Tk::VERSION >= 800.012 ? (-filetypes => $types) : ()),
 	  );
 	return $file;
     }
@@ -2907,12 +2984,14 @@ sub show_attributes {
 	(-text => 'Browse...',
 	 -command => sub {
 	     my($file, $path) = fileparse($rcsfile) if $rcsfile;
-	     my $newfile = get_filename($attribute_top,
-					-Title  => 'RCS/CVS file',
-					($rcsfile ? (-File   => $file,
-						     -Path   => $path) : ()),
-					-Create => 0,
-				       );
+	     my $newfile = get_filename
+		 ($attribute_top,
+		  -Title  => 'RCS/CVS file',
+		  ($rcsfile ? (-File   => $file,
+			       -Path   => $path) : ()),
+		  -Create => 0,
+		  -filetypes => [qw/pj1 pjt xml all/],
+		 );
 	     if ($newfile) {
 		 $rcsfile = $newfile;
 	     }
@@ -3522,7 +3601,7 @@ sub make_path {
 
 sub get_parent_path {
     my $path = shift;
-    my @path = split $separator, $path;
+    my @path = split "\Q$separator\E", $path;
     join $separator, @path[0 .. $#path-1];
 }
 
