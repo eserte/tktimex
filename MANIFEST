@@ -3,12 +3,15 @@ MANIFEST
 Makefile.PL
 tktimex
 ctimex
+timexserver
+timexserver.cgi
 clear_times.pl
 get_skeleton.pl
 convert2xml.pl
 Timex/Project.pm
 Timex/Project/XML.pm
 Timex/Rcs.pm
+Timex/Server.pm
 Timex/test.pl
 Tk/Autoscroll.pm
 Tk/UnderlineAll.pm
