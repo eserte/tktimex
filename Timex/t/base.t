@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: base.t,v 1.9 2001/04/04 21:50:25 eserte Exp $
+# $Id: base.t,v 1.10 2001/04/04 22:39:34 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -86,9 +86,14 @@ foreach (@res_times) {
 }
 
 use Timex::Project::XML;
+use File::Compare;
 my $xml_p = new Timex::Project::XML;
 $xml_p->load("testdata.xml");
 $xml_p->save("/tmp/test.xml");
 $xml_p->load("/tmp/test.xml");
+if (compare("testdata.xml", "/tmp/test.xml") != 0) {
+    warn "Hmmm while comparing xml data (?)";
+}
+
 #use Data::Dumper; print STDERR "Line " . __LINE__ . ", File: " . __FILE__ . "\n" . Data::Dumper->Dumpxs([$xml_p],[]); # XXX
 
