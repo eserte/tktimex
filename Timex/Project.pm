@@ -515,6 +515,32 @@ sub rebless_subprojects {
     }
 }
 
+sub traverse {
+    my($self, $sub, @args) = @_;
+    &$sub($self, @args);
+    foreach ($self->subproject) {
+	$_->traverse($sub, @args);
+    }
+}
+
+sub last_project {
+    my $self = shift;
+    my($last_project, $last_time) = @_;
+    $last_time = 0;
+    my $sub = sub {
+	my($self, $last_project, $last_time) = @_;
+	my $end_time_pair = $self->{'times'}[$#{$self->{'times'}}];
+	my $end_time = $end_time_pair->[$#{$end_time_pair}];
+	return if !defined $end_time;
+	if ($$last_time < $end_time) {
+	    $$last_project = $self;
+	    $$last_time = $end_time;
+	}
+    };
+    $self->traverse($sub, \$last_project, \$last_time);
+    $last_project;
+}
+
 ######################################################################
 
 1;
