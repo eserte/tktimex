@@ -8,7 +8,9 @@ timexserver.cgi
 clear_times.pl
 get_skeleton.pl
 convert2xml.pl
+Timex/ExcelExport.pm
 Timex/Project.pm
+Timex/Project/Export.pm
 Timex/Project/XML.pm
 Timex/Rcs.pm
 Timex/Server.pm

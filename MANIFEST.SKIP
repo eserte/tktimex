@@ -6,3 +6,6 @@ Makefile
 ^pm_to_blib$
 MANIFEST\.SKIP$
 ~$
+Timex.ppd
+Timex/de_template.csv
+Timex/testdata.xml
