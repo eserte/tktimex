@@ -1,14 +1,8 @@
 use ExtUtils::MakeMaker;
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
-WriteMakefile(
-    'NAME'	=> 'Timex',
-    'VERSION_FROM' => 'tktimex', # finds $VERSION
-    'ABSTRACT' => 'project time manager',
-    'EXE_FILES'  => [qw/tktimex ctimex timexserver/],
-    'dist'      => {'COMPRESS'=>'gzip -9', 'SUFFIX' => '.gz',
-                    'POSTOP'=>'-$(CHMOD) 644 $(DISTVNAME).tar$(SUFFIX)'},
-    'PM' =>
+
+my $pm =
     {
      'Timex/ExcelExport.pm'    => '$(INST_LIBDIR)/Timex/ExcelExport.pm',
      'Timex/Plugin.pm'         => '$(INST_LIBDIR)/Timex/Plugin.pm',
@@ -24,23 +18,51 @@ WriteMakefile(
      'Tk/UnderlineAll.pm'      => '$(INST_LIBDIR)/Timex/Tk/UnderlineAll.pm',
      'Win32Util.pm'            => '$(INST_LIBDIR)/Timex/Win32Util.pm',
 
-     'plain.up.gif'            => '$(INST_LIBDIR)/plain.up.gif',
-     'plain.down.gif'          => '$(INST_LIBDIR)/plain.down.gif',
-     'mini-clock.xpm'          => '$(INST_LIBDIR)/mini-clock.xpm',
+     'Timex/plain.up.gif'      => '$(INST_LIBDIR)/Timex/plain.up.gif',
+     'Timex/plain.down.gif'    => '$(INST_LIBDIR)/Timex/plain.down.gif',
+     'Timex/mini-clock.xpm'    => '$(INST_LIBDIR)/Timex/mini-clock.xpm',
 
      'Timex/de_template.csv'   => '$(INST_LIBDIR)/Timex/de_template.csv',
      'templates/oo.pjt'        => '$(INST_LIBDIR)/Timex/templates/oo.pjt',
-    },
-    'PREREQ_PM' => {'Tk'           => 402.003,
-		    'Tk::Getopt'   => 0.34,
-		    'Tk::Date'     => 0.30,
-		    'Data::Dumper' => 0,
-		    'Date::Calc'   => 0,
-		    'Mail::Send'   => 0,
-		    # These are only corequisites:
-		    'Spreadsheet::WriteExcel' => 0.42,
-	    	    'XML::Parser'  => 0,
-		   },
+    };
+if ($^O eq 'MSWin32') {
+    $pm->{'Timex/mini-clock.ico'} = '$(INST_LIBDIR)/Timex/mini-clock.ico';
+}
+
+my %prereq_pm =
+    ('Tk'           => 402.003,
+     'Tk::Getopt'   => 0.49,
+     'Tk::Date'     => 0.30,
+     'Data::Dumper' => 0,
+     'Mail::Send'   => 0,
+     'File::Spec'   => 0,
+     # These are only corequisites:
+     'Spreadsheet::WriteExcel' => 0.42,
+     'XML::Parser'  => 0,
+    );
+
+{
+    # we accept Date::Calc OR Date::Pcalc
+    my $prereq = "Date::Calc";
+    my $file = "$prereq.pm";
+    $file =~ s{::}{/}g;
+    eval { require $file };
+    if ($@) {
+	$prereq_pm{"Date::Pcalc"} = 0;
+    } else {
+	$prereq_pm{"Date::Calc"} = 0;
+    }
+}
+
+WriteMakefile(
+    'NAME'	=> 'Timex',
+    'VERSION_FROM' => 'tktimex', # finds $VERSION
+    'ABSTRACT' => 'project time manager',
+    'EXE_FILES'  => [qw/tktimex ctimex timexserver/],
+    'dist'      => {'COMPRESS'=>'gzip -9', 'SUFFIX' => '.gz',
+                    'POSTOP'=>'-$(CHMOD) 644 $(DISTVNAME).tar$(SUFFIX)'},
+    'PM' => $pm,
+    'PREREQ_PM' => \%prereq_pm,
     'AUTHOR' => 'Slaven Rezic (slaven@rezic.de)',
 );
 
