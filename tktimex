@@ -1,8 +1,8 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.22 2005/04/05 21:07:33 eserte Exp $
+# $Id: tktimex,v 6.23 2005/04/28 22:09:42 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -162,8 +162,9 @@ BEGIN { state_change("after use locale"); }
 # enable DnD
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
+use File::Spec qw();
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.22 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.23 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -277,14 +278,10 @@ $options = {};
     'longhelp' => M"Saving data also in a Data::Dumper format. Not really necessary anymore."],
    ['plugins',            '=s', undef,
     'longhelp' => M"A comma-separated list of initial plugins to load."],
-   ($^O eq 'MSWin32' ?
-    (['username', '=s', $ENV{USERNAME},
-      'longhelp' => M"A unix-like short username"],
-     ['realname', '=s', undef,
-      'longhelp' => M"The user's real name"],
-    ) :
-    ()
-   ),
+   ['username', '=s', $ENV{USERNAME},
+    'longhelp' => M"A unix-like short username"],
+   ['realname', '=s', undef,
+    'longhelp' => M"The user's real name"],
 
    M"Enterprise",
    ['enterpriseprojects', "=s", undef, 'subtype' => 'file',
@@ -343,7 +340,7 @@ Medium: only limited project manipulation possible"],
     'longhelp' => M"Hourly rate for work.",
     ],
    ['currency',           '=s', "EUR",
-    'choices' => ['EUR', 'USD', 'HRD'],
+    'choices' => ['EUR', 'USD'],
     'callback' => sub { update_costs_option(1) },
     'longhelp' => M"Currency for hourlyrate option.",
     ],
@@ -371,7 +368,7 @@ use vars qw($opt);
 eval {
     state_change("before require Tk::Getopt");
     require Tk::Getopt;
-    Tk::Getopt->VERSION(0.34);
+    Tk::Getopt->VERSION(0.49);
     state_change("after require Tk::Getopt");
 };
 if ($@) {
@@ -400,7 +397,8 @@ Please install this module from CPAN.\n"));
     state_change("Tk::Getopt checkpoint 1");
     $opt = new Tk::Getopt(-opttable => \@opttable,
 			  -options  => $options,
-			  -filename => "$home/.tktimexrc");
+			  -filename => File::Spec->catfile($home, ".tktimexrc"),
+			 );
     state_change("Tk::Getopt checkpoint 2");
     $opt->set_defaults;
     state_change("Tk::Getopt checkpoint 3");
@@ -468,11 +466,11 @@ if ($options->{'iconified'}) {
 $top->title($title);
 $top->geometry($options->{'geometry'}) if $options->{'geometry'};
 eval {
-    my $icon = $top->Pixmap(-file => Tk::findINC("mini-clock.xpm"));
-    if (!$icon) {
-	$top->Pixmap(-file => "$FindBin::RealBin/mini-clock.xpm");
+    my $icon = $top->Pixmap(-file => Tk::findINC("Timex/mini-clock.xpm") ||
+				     "$FindBin::RealBin/Timex/mini-clock.xpm");
+    if ($icon) {
+	$top->Icon(-image => $icon);
     }
-    $top->Icon(-image => $icon);
 }; warn $@ if $@;
 
 $top->bind("<Pause>" => sub {
@@ -594,7 +592,8 @@ $mb_file->separator;
 $mb_project = $menu_frame->Menubutton(-text => M"Project"
 				     )->pack(-side => 'left');
 $mb_project->command(-label => M"New",
-		     -command => \&new_project)
+		     -command => sub { new_project() },
+		    )
     unless $s_if || $m_if;
 # strange: -menu is only active if there is already a menu item
 $mb_project_menu = $mb_project->cget(-menu);
@@ -704,7 +703,7 @@ if (defined $opt) {
     $mb_options->separator
         unless $s_if || $m_if;
     $mb_options->command(-label => M"Option editor",
-			 -command => sub { $opt->option_editor($top) })
+			 -command => sub { $opt->option_editor($top, -buttons => ['oksave', 'cancel']) })
 	unless $s_if || $m_if;
 }
 
@@ -796,8 +795,8 @@ $balloon->attach($save_button, -msg => M"Save project data") if $balloon;
 use vars qw($minimized $save_geometry $up_photo $down_photo $min_button);
 $minimized = 0;
 eval {
-    $up_photo   = $top->Photo(-file => Tk::findINC("plain.up.gif"));
-    $down_photo = $top->Photo(-file => Tk::findINC("plain.down.gif"));
+    $up_photo   = $top->Photo(-file => Tk::findINC("Timex/plain.up.gif"));
+    $down_photo = $top->Photo(-file => Tk::findINC("Timex/plain.down.gif"));
 };
 warn $@ if $@;
 $min_button = $menu_frame->Button(-image => $up_photo,
@@ -1102,7 +1101,7 @@ sub enter_label {
 	    $Entry = "SimpleHistEntry";
 	    # -case => 1 is ugly...
 	    @extra_args = (-match => 1, -dup => 0, -case => 0);
-	    $this_history_file = "$home/.tktimex_hist";
+	    $this_history_file = File::Spec->catfile($home, ".tktimex_hist");
 	};
 	$entry = $status_frame->$Entry(-bg => $inner_bg,
 				       -fg => $inner_fg,
@@ -1185,13 +1184,18 @@ sub exists_project {
 }
 
 sub new_project {
-    my $label = enter_label(M"New project name:", 'newproject');
+    my($label) = @_;
+    my $p;
+    if (!defined $label) {
+	$label = enter_label(M"New project name:", 'newproject');
+    }
     if ($label && $root) {
 	return if exists_project($label);
-	my $p = $root->subproject($label);
+	$p = $root->subproject($label);
 	insert_project($p);
 	$project_frame->see(make_path($p));
     }
+    $p;
 }
 
 sub get_templates {
@@ -1316,10 +1320,12 @@ sub insert_project {
 
     $project_frame->add
 	($path,
-	 (defined $args{-after} ? (-after => $args{-after}) : ()),
 	 -text => $p->label,
 	 -itemtype => $p_itemtype,
-	 -data => $p);
+	 -data => $p,
+	 # workaround for Tk804 bug: -after has to be last argument!
+	 (defined $args{-after} ? (-after => $args{-after}) : ()),
+	);
 
     if ($p_itemtype eq 'imagetext' && $p->icon) {
 	if (!$icons{$path}) {
@@ -2829,7 +2835,7 @@ sub save_sos {
     return if !$root || !$root->modified;
     my $file;
     if (!$options->{'file'}) {
-	$file = sos_filename("$home/tktimex.pj1");
+	$file = sos_filename(File::Spec->catfile($home, "tktimex.pj1"));
     } else {
 	$file = sos_filename($options->{'file'});
     }
@@ -3397,7 +3403,21 @@ sub show_attributes {
 		       )->grid(-row => $row,
 			       -column => 1,
 			       -sticky => "we");
-    if ($readonly) { $jne->configure(-state => 'disabled') }
+    my $jobnumbers_browse;
+    if (defined &main::browse_jobnumbers) {
+	$jobnumbers_browse = $f->Button
+	    (-text => M("Browse")."...",
+	     -command => sub {
+		 my $new_jobnumber = main::browse_jobnumbers($attribute_top);
+		 if (defined $new_jobnumber) {
+		     $jobnumber = $new_jobnumber;
+		 }
+	     })->grid(-row => $row, -column => 2, -sticky => 'w');
+    }
+    if ($readonly) {
+	$jne->configure(-state => 'disabled');
+	$jobnumbers_browse->configure(-state => 'disabled') if $jobnumbers_browse;
+    }
 
     # Show intervals/Note ##########
     $row++;
@@ -3759,6 +3779,7 @@ sub show_intervals {
 		       -selectmode => 'extended',
 		       -exportselection => 1,
 		      )->pack(-fill => 'both', -expand => 1);
+    $w->Advertise(HList => $lb);
     $real_lb = $lb->Subwidget("scrolled");
     {
 	my $col = 0;
@@ -3964,7 +3985,7 @@ sub show_intervals {
 	$lb_popup_menu->command
 	    (-label => M"Edit",
 	     -command => sub {
-		 my $index = $lb->info('selection');
+		 my($index) = $lb->info('selection');
 		 return if !defined $index;
 		 $double_click->($index);
 	     }
@@ -4078,6 +4099,7 @@ sub show_intervals {
     $w->withdraw;
     $lb->see($i-1) if $i > 1;
     my $f = $w->Frame->pack(-fill => 'x');
+    $w->Advertise(ButtonFrame => $f);
     my $close_sub = sub {
 	#insert_all() if $modified;
 	update_project($project) if $modified;
@@ -4116,15 +4138,18 @@ sub show_intervals {
 #    $f->Label(-text => ' ')->pack(-side => 'left');
 
     require Tk::Optionmenu;
-    my $om = $f->Optionmenu(-variable => \$group,
-			    -textvariable => \$group,
-			    -options => ['',
-					 [M"daily" => 'daily'],
-					 [M"weekly" => 'weekly'],
-					 [M"monthly" => 'monthly'],
-					 [M"yearly" => 'yearly'],
+    my $om = $f->Optionmenu(-options => ['',
+					 [M("daily")   => 'daily'  ],
+					 [M("weekly")  => 'weekly' ],
+					 [M("monthly") => 'monthly'],
+					 [M("yearly")  => 'yearly' ],
 					],
 			   )->pack(-side => "right");
+    # Hack for buggy Tk::Optionmenu in Tk804:
+    $om->configure(-variable => \$group,
+		   -textvariable => \$group,
+		  );			    
+
     $f->Label(-text => " " . M"Group:")->pack(-side => 'right');
 
     $f->Checkbutton(-text => M"Subprojects",
@@ -4218,7 +4243,7 @@ sub get_entry {
 sub get_sel_entry {
     my $path = $project_frame->info('anchor');
     return $path if defined $path;
-    $project_frame->info('selection');
+    ($project_frame->info('selection'))[0];
 }
 
 sub entry_to_project {
@@ -4430,9 +4455,10 @@ sub get_home_dir {
 		$home = Win32Util::get_user_folder();
 	    };
 	} else {
-	    $home = eval { local $SIG{__DIE__};
-			   (getpwuid($<))[7];
-		       };
+	    $home = eval q{
+			    local $SIG{__DIE__};
+			    (getpwuid($<))[7];
+		          };
 	}
 	if (!defined $home) {
 	    $home = $ENV{'HOME'} || '/';
@@ -4442,18 +4468,20 @@ sub get_home_dir {
 }
 
 sub get_user_name {
-    if (!defined $username) {
+    $username = $options->{username};
+    if (!defined $username || $username =~ m{^\s*$}) {
 	if ($^O eq 'MSWin32') {
 	    eval q{
 	       use Win32Util;
 	       $username = Win32Util::get_user_name();
 	    };
 	} else {
-	    $username = eval { local $SIG{__DIE__};
-			       (getpwuid($<))[0];
-			   };
+	    $username = eval q{
+				local $SIG{__DIE__};
+			        getpwuid($<))[0];
+			      };
 	}
-	if (!defined $username) {
+	if (!defined $username || $username =~ m{^\s*$}) {
 	    $username = $ENV{USERNAME} || $ENV{USER} || "";
 	}
     }
@@ -4461,10 +4489,12 @@ sub get_user_name {
 }
 
 sub get_real_name {
-    if (!defined $realname) {
-	$realname = eval { local $SIG{__DIE__};
-			   ((getpwuid($<))[6]);
-		       };
+    $realname = $options->{realname};
+    if (!defined $realname || $realname =~ m{^\s*$}) {
+	$realname = eval q{
+			    local $SIG{__DIE__};
+			    ((getpwuid($<))[6]);
+		          };
 	$realname =~ s/,.*//;
     }
     $realname;
@@ -4530,7 +4560,7 @@ sub MyButtonRelease1
 
  if (!defined($ent) and $mode eq 'single')
   {
-     my $ent = $w->info('selection');
+     my($ent) = $w->info('selection');
      if (defined $ent)
       {
         $w->anchorSet($ent);
@@ -4601,7 +4631,7 @@ sub show_copyright {
 
 tktimex by Slaven Rezic (eserte@users.sourceforge.net)
 
-Copyright (c) 1996-2003 Slaven Rezic. All rights reserved.
+Copyright (c) 1996-2005 Slaven Rezic. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
@@ -4750,7 +4780,7 @@ L<perl>, L<Tk>, L<rcsintro(1)>, L<cvs(1)>, L<Timex::Project>
 
 Slaven Rezic (eserte@users.sourceforge.net)
 
-Copyright (c) 1996-2003 Slaven Rezic. All rights reserved.
+Copyright (c) 1996-2005 Slaven Rezic. All rights reserved.
 
 For a complete copyright see the Help/About menu entry.
 
