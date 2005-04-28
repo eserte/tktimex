@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.50 2005/03/05 23:33:02 eserte Exp $
+# $Id: Project.pm,v 3.51 2005/04/28 22:10:02 eserte Exp $
 #
 
 =head1 NAME
@@ -25,7 +25,7 @@ package Timex::Project;
 use strict;
 use vars qw($VERSION $magic $magic_template $emacsmode $pool @project_attributes);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 3.50 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 3.51 $ =~ /(\d+)\.(\d+)/);
 
 $magic = '#PJ1';
 $magic_template = '#PJT';
@@ -1023,7 +1023,7 @@ sub sum_time {
 	    if (defined $from) {
 		if (!defined $to) {
 		    if ($i != $#times) {
-			warn "No end time in " . $self->pathname . " (pos $i)";
+			warn "No end time in " . $self->pathname . " (pos $i)\n";
 			next;
 		    } else {
 			$dont_cache++; # implizites Setzen, daher nicht cachen
@@ -1565,7 +1565,7 @@ sub interpret_data_project {
 				$annotation = $2;
 			    }
 			    my(@interval) = split(/-/, $rest);
-			    warn "Interval must be two values"
+			    warn "Interval must be two values in <" . $parent->pathname . "/$label>\n"
 				if $#interval != 1;
 			    push @times, [@interval,
 					  (defined $annotation ? $annotation : ())

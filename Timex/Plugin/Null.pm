@@ -8,9 +8,11 @@
 package Timex::Plugin::Null;
 
 use strict;
-our $VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+our $VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 sub register {
+    my $self = shift;
+
     my $export_menu = $main::mb_export;
 
     my $null_menu = $export_menu->Menu;
@@ -18,12 +20,13 @@ sub register {
 			  -menu => $null_menu);
 
     $null_menu->command(-label => "Null Command",
-			-command => \&null_command,
+			-command => sub { $self->null_command },
 		      );
 }
 
 sub null_command {
-    my $top = $main::top;
+    my $self = shift;
+    my $top = $self->{top};
     $top->messageBox(-message => "This is the Null plugin");
 }
 

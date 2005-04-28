@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Plugin.pm,v 1.2 2005/03/05 23:32:40 eserte Exp $
+# $Id: Plugin.pm,v 1.3 2005/04/28 22:09:53 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2003 Slaven Rezic. All rights reserved.
@@ -78,7 +78,8 @@ sub load_plugin {
 	    }
 	}
     }
-    eval $mod.'::register(@plugin_args)';
+    my $plugin_obj = bless { top => $main::top }, $mod;
+    $plugin_obj->register(@plugin_args);
     if ($@) {
 	my $err = $@;
 	warn sprintf("Das Plugin %s konnte nicht registriert werden. Grund: %s", $mod, $err);
