@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: 50base.t,v 1.2 2005/03/05 23:33:16 eserte Exp $
+# $Id: 50base.t,v 1.3 2005/04/28 22:10:16 eserte Exp $
 # Author: Slaven Rezic
 #
 
@@ -28,6 +28,7 @@ my $pid = fork;
 if (!$pid) {
     my @cmd = ("$^X", catfile($FindBin::RealBin, updir, "tktimex"),
 	       "-geometry", "500x300+10+10",
+	       "-plugins", "Timex::Plugin::Null",
 	       catfile($FindBin::RealBin, "test.pj1"));
     exec @cmd;
     die "Can't execute @cmd: $!";
