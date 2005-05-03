@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.23 2005/04/28 22:09:42 eserte Exp $
+# $Id: tktimex,v 6.24 2005/05/03 19:32:27 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -164,7 +164,7 @@ use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.23 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.24 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -2627,6 +2627,7 @@ sub insert_all {
 
     $top->Unbusy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
 }
+*update_all = \&insert_all;
 
 sub insert_old_project {
     my($p, %args) = @_;
@@ -3038,8 +3039,10 @@ sub get_filename {
 		push @$types, [M"X11 bitmaps", '.xbm'];
 	    } elsif ($type eq 'ppm') {
 		push @$types, [M"PPM images", '.ppm'];
+	    } elsif ($type eq 'bmp') {
+		push @$types, [M"BMP images", '.bmp'];
 	    } elsif ($type eq 'images') {
-		push @$types, [M"Images", ['.ppm','.gif','.xpm','.xbm']];
+		push @$types, [M"Images", ['.ppm','.gif','.xpm','.xbm','.bmp']];
 	    }
 	}
     }
@@ -3369,10 +3372,10 @@ sub show_attributes {
 	     my $newfile = get_filename
 		 ($attribute_top,
 		  -Title  => M"Icon file",
-		  ($rcsfile ? (-File   => $file,
-			       -Path   => $path) : ()),
+		  ($iconfile ? (-File   => $file,
+				-Path   => $path) : ()),
 		  -Create => 0,
-		  -filetypes => [qw/images xpm gif xbm ppm/],
+		  -filetypes => [qw/images xpm gif xbm ppm bmp/],
 		 );
 	     if ($newfile) {
 		 $iconfile = $newfile;
@@ -3472,19 +3475,32 @@ sub show_attributes {
 	       }
 	   }
 
-	   $insert_all++ if ($archived && !$project->{'archived'});
+	   {
+	       local $^W = undef;
+	       $insert_all++ if ($archived && !$project->{'archived'});
+	   }
 	   $project->archived($archived);
 
 	   $project->rcsfile($rcsfile);
-
+	   
+	   {
+	       local $^W = undef;
+	       $insert_all++ if ($iconfile ne $project->{'iconfile'});
+	   }
 	   $project->icon($iconfile);
 
 	   $project->jobnumber($jobnumber);
 
-	   $insert_all++ if defined $old_rate && $rate ne $old_rate;
+	   {
+	       local $^W = undef;
+	       $insert_all++ if $rate ne $old_rate;
+	   }
 	   $project->rate($rate);
 
-	   $insert_all++ if defined $old_domain && $domain ne $old_domain;
+	   {
+	       local $^W = undef;
+	       $insert_all++ if $domain ne $old_domain;
+	   }
 	   $project->domain($domain);
 
 	   $attribute_top->destroy();
@@ -4670,7 +4686,7 @@ EOF
 
 =head1 NAME
 
-tktimex - project time manager
+tktimex - time recording tool
 
 =head1 SYNOPSIS
 
@@ -4678,7 +4694,7 @@ tktimex - project time manager
 
 =head1 DESCRIPTION
 
-B<tktimex> is a project time manager. Its purpose is to record working
+B<tktimex> is a time recording tool. Its purpose is to record working
 times for projects. Projects may be grouped hierarchically with
 subprojects. It is also possible to get some daily/weekey/monthly
 statistics.
@@ -4693,18 +4709,18 @@ the list by mouse click and click on the B<Cont> button. To stop the
 timer, click on the B<Pause> button. You can also double-click on a
 project to start/stop the timer.
 
-If autosaving is on, after each click on B<Pause>, the project list
-will be updated on disk, and so will every 10 minutes. If autosaving
-is off, you have to manually save the project list by clicking on the
-B<Save> button.
+If autosaving is on (which is the default), after each click on
+B<Pause>, the project list will be updated on disk, and so will every
+10 minutes. If autosaving is off, you have to manually save the
+project list by clicking on the B<Save> button.
 
 To reload an project list file, you have to specify the file name on
 the command line:
 
 	tktimex projectfile.pj1
 
-If Tk::Getopt is installed on your system (recommended!), you can set
-the default project list file in the B<Option editor> (menu
+If Tk::Getopt is installed on your system (highly recommended!), you
+can set the default project list file in the B<Option editor> (menu
 B<Options>).
 
 =head1 COMMAND LINE OPTIONS
@@ -4731,7 +4747,7 @@ Possible options are:
     	--[no]busyind
     	--autoscroll     (default: none)
     	--hourlyrate
-    	--currency       (default: DEM)
+    	--currency       (default: EUR)
 
 =head1 TODO
 
@@ -4759,9 +4775,6 @@ loss of data, there are always some backup files with the suffixes .1,
 .2 etc.
 
 The -oneday-immediately option is not supported with Tk::DateEntry.
-
-The tktimex process is very memory-consuming. Expect that 10 MB of the
-virtual memory will be eaten.
 
 Setting dateformat to "hs" (show hours, minutes and seconds) is not
 recommended due to cpu waste. Better leave the option at "d" or "h".

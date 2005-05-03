@@ -57,7 +57,7 @@ my %prereq_pm =
 WriteMakefile(
     'NAME'	=> 'Timex',
     'VERSION_FROM' => 'tktimex', # finds $VERSION
-    'ABSTRACT' => 'project time manager',
+    'ABSTRACT' => 'time recording tool',
     'EXE_FILES'  => [qw/tktimex ctimex timexserver/],
     'dist'      => {'COMPRESS'=>'gzip -9', 'SUFFIX' => '.gz',
                     'POSTOP'=>'-$(CHMOD) 644 $(DISTVNAME).tar$(SUFFIX)'},
