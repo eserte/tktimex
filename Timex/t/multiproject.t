@@ -2,18 +2,21 @@
 # -*- perl -*-
 
 #
-# $Id: multiproject.t,v 1.3 2001/04/04 22:39:51 eserte Exp $
+# $Id: multiproject.t,v 1.4 2005/10/10 19:14:27 eserte Exp $
 # Author: Slaven Rezic
 #
 
 use strict;
 use vars qw($first_project_text $second_project_text);
 
-use lib qw(.. ../..);
+use FindBin;
+use lib ("$FindBin::RealBin/..",
+	 "$FindBin::RealBin/../..",
+	);
 use Timex::MultiProject;
 use File::Compare;
 
-do "testprojects.pl";
+do "$FindBin::RealBin/testprojects.pl";
 
 BEGIN {
     if (!eval q{

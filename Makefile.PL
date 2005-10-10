@@ -13,6 +13,8 @@ my $pm =
      'Timex/Server.pm'	       => '$(INST_LIBDIR)/Timex/Server.pm',
      'Timex/Utmp.pm'	       => '$(INST_LIBDIR)/Timex/Utmp.pm',
      'Timex/MultiProject.pm'   => '$(INST_LIBDIR)/Timex/MultiProject.pm',
+     'Timex/Hooks.pm'	       => '$(INST_LIBDIR)/Timex/Hooks.pm',
+     'Timex/Msg.pm'   	       => '$(INST_LIBDIR)/Timex/Msg.pm',
 
      'Tk/Autoscroll.pm'	       => '$(INST_LIBDIR)/Timex/Tk/Autoscroll.pm',
      'Tk/UnderlineAll.pm'      => '$(INST_LIBDIR)/Timex/Tk/UnderlineAll.pm',
@@ -36,8 +38,11 @@ my %prereq_pm =
      'Data::Dumper' => 0,
      'Mail::Send'   => 0,
      'File::Spec'   => 0,
-     # These are only corequisites:
-     'Spreadsheet::WriteExcel' => 0.42,
+    );
+
+# These are only corequisites:
+my %coreq_pm =
+    ('Spreadsheet::WriteExcel' => 0.42,
      'XML::Parser'  => 0,
     );
 

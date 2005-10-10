@@ -230,4 +230,8 @@ Dies kann im Unternehmen-Abschnitt des Optionseditors gemacht werden.
 "yearly" => "jährlich",
 "Delete?" => "Löschen?",
 "Really delete?" => "Wirklich löschen?",
+"Couldn't load module %s. Reason: %s" => "Das Modul %s konnte nicht geladen werden. Grund: %s",
+"Couldn't load file %s" => "Die Datei %s konnte nicht geladen werden",
+"Couldn't load file %s. Reason: %s" => "Die Datei %s konnte nicht geladen werden. Grund: %s", 
+"Couldn't register plugin %s. Reason: %s. A possible cause is case sensitivity." => "Das Plugin %s konnte nicht registriert werden. Grund: %s. Ein mögliches Problem könnte Groß-/Kleinschreibung sein.",
 };

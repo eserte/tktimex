@@ -1,10 +1,10 @@
 # -*- perl -*-
 
 #
-# $Id: Plugin.pm,v 1.3 2005/04/28 22:09:53 eserte Exp $
+# $Id: Plugin.pm,v 1.4 2005/10/10 19:13:33 eserte Exp $
 # Author: Slaven Rezic
 #
-# Copyright (C) 2003 Slaven Rezic. All rights reserved.
+# Copyright (C) 2003,2005 Slaven Rezic. All rights reserved.
 # This package is free software; you can redistribute it and/or
 # modify it under the same terms as Perl itself.
 #
@@ -20,6 +20,17 @@ $VERSION = 0.02;
 use File::Basename qw(fileparse);
 use File::Spec::Functions qw(file_name_is_absolute);
 
+BEGIN {
+    if (!eval '
+use Msg qw(frommain);
+1;
+') {
+        warn $@ if $@;
+        eval 'sub M ($) { $_[0] }';
+        eval 'sub Mfmt { sprintf(shift, @_) }';
+    }
+}
+
 # from bbbike
 sub load_plugin {
     my $file = shift;
@@ -34,7 +45,7 @@ sub load_plugin {
 	    $mod = $file;
 	} else {
 	    if ($@) {
-		warn sprintf("Das Modul %s konnte nicht geladen werden. Grund: %s", $file, $@);
+		main::status_message(Mfmt("Couldn't load module %s. Reason: %s", $file, $@), "warn");
 		return;
 	    }
 	}
@@ -44,15 +55,13 @@ sub load_plugin {
 	my $loading_error = 0;
 	if (-r $file) {
 	    do $file or do {
-		# XXX use status_message etc.
-		warn "Die Datei $file konnte nicht geladen werden";
+		main::status_message(Mfmt("Couldn't load file %s", $file), "warn");
 		return;
 	    };
 	    $INC{"$mod.pm"} = $file;
 	} elsif (-r "$FindBin::RealBin/$file") {
 	    do "$FindBin::RealBin/$file" or do {
-		# XXX use status_message etc.
-		warn "Die Datei $FindBin::RealBin/$file konnte nicht geladen werden";
+		main::status_message(Mfmt("Couldn't load file %s", "$FindBin::RealBin/$file"), "warn");
 		return;
 	    };
 	    $INC{"$mod.pm"} = "$FindBin::RealBin/$file";
@@ -72,17 +81,19 @@ sub load_plugin {
 	    if (!$ok) {
 		eval 'require $file';
 		if ($@) {
-		    warn sprintf("Die Datei %s konnte nicht geladen werden. Grund: %s", $file, $@);
+		    main::status_message(Mfmt("Couldn't load file %s. Reason: %s", $file, $@), "warn");
 		    return;
 		}
 	    }
 	}
     }
     my $plugin_obj = bless { top => $main::top }, $mod;
-    $plugin_obj->register(@plugin_args);
+    eval {
+	$plugin_obj->register(@plugin_args);
+    };
     if ($@) {
 	my $err = $@;
-	warn sprintf("Das Plugin %s konnte nicht registriert werden. Grund: %s", $mod, $err);
+	main::status_message(Mfmt("Couldn't register plugin %s. Reason: %s. A possible cause is case sensitivity.", $mod, $err), "warn");
 	return;
     }
 }

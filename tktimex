@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.24 2005/05/03 19:32:27 eserte Exp $
+# $Id: tktimex,v 6.25 2005/10/10 19:12:57 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -29,18 +29,6 @@ BEGIN {
     state_change("after Tk");
 }
 use Tk::ErrorDialog;
-
-BEGIN {
-    if (!eval '
-use blib "/home/e/eserte/src/perl/Msg";
-use Msg;
-1;
-') {
-	warn $@ if $@ and $ENV{USER} and $ENV{USER} =~ /eserte/;
-	eval 'sub M ($) { $_[0] }';
-	eval 'sub Mfmt { sprintf(shift, @_) }';
-    }
-}
 
 eval '
 use lib "/home/e/eserte/lib/perl";
@@ -150,6 +138,17 @@ BEGIN {
     unshift @INC, "$_/Timex" for reverse @INC;
 }
 
+BEGIN {
+    if (!eval '
+use Msg;
+1;
+') {
+	warn $@ if $@ and $ENV{USER} and $ENV{USER} =~ /eserte/;
+	eval 'sub M ($) { $_[0] }';
+	eval 'sub Mfmt { sprintf(shift, @_) }';
+    }
+}
+
 eval { require Tk::UnderlineAll unless $Tk::VERSION eq 803.023 };
 BEGIN { state_change("before Timex::Project"); }
 use Timex::Project;
@@ -163,8 +162,9 @@ BEGIN { state_change("after use locale"); }
 use Tk::DropSite;
 BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
+use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.24 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.25 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -217,7 +217,7 @@ $status_edit = 0;
 $max_last_projects = 4;
 $inner_fg = "black";
 $inner_bg = "white";
-$ctrl_s = ($os eq 'win' ? 'Ctrl-' : 'C-');
+$ctrl_s = ($os eq 'win' ? sub { 'Ctrl+' . uc($_[0]) } : sub { 'C-' . $_[0] });
 $sbside = ($os eq 'win' ? 'e' : 'w');
 $use_enterprise = 0;
 $p_itemtype = 'imagetext';
@@ -317,6 +317,15 @@ $options = {};
     'choices' => ['', 'nothing', 'name', 'time'],
     'strict' => 1,
     'callback' => sub { insert_all() },
+   ],
+   ['projectlabelformat', '=s', '%n', callback => sub { insert_all() },
+    'longhelp' => M"Use a custom format for project labels in the list view.
+Placeholders are:
+%n project name
+%j job number
+%J job number in parenthesis
+%p project parent name
+",
    ],
 
    'Appearance',
@@ -440,6 +449,11 @@ want really two instances of this program running.\n"),
     exit;
 }
 
+# Hook init
+foreach (qw(before_start_project)) {
+    new Hooks $_;
+}
+
 use vars qw($m_if $s_if);
 $m_if = $options->{'interface'} eq 'medium';
 $s_if = $options->{'interface'} eq 'small';
@@ -523,8 +537,10 @@ $menu_frame = $top->Frame(-relief => 'raised',
 $mb_file = $menu_frame->Menubutton(-text => M"File")->pack(-side => 'left');
 state_change("first menubutton loaded");
 $mb_file->command(-label => M"Load",
-		  -command => sub { load_file(1) })
+		  -command => sub { load_file(1) },
+		  -accelerator => $ctrl_s->("o"))
     unless $s_if;
+$top->bind("all", "<Control-o>" => sub { load_file(1) });
 
 if (!$s_if) {
     my $show_it = 0;
@@ -557,7 +573,11 @@ if (!$s_if) {
 }
 
 $mb_file->command(-label => M"Save",
-		  -command => \&save_file);
+		  -command => \&save_file,
+		  -accelerator => $ctrl_s->("s"),
+		 );
+$top->bind("all", "<Control-s>" => \&save_file);
+
 $mb_file->cascade(-label => M"Export");
 $mb_file_menu = $mb_file->cget(-menu);
 $mb_export = $mb_file_menu->Menu;
@@ -572,13 +592,7 @@ $mb_export->command(-label => M"Save subproject",
 $mb_export->command(-label => M"Save XML",
 		    -command => \&save_xml);
 $mb_export->command(-label => M"Save Excel",
-		    -command => sub {
-			require Timex::ExcelExport;
-		        Timex::ExcelExport::save_dialog
-				($top, $root,
-				 -hourlyrate => $options->{'hourlyrate'},
-				);
-		    });
+		    -command => \&save_excel);
 $mb_export->command(-label => M"Dump",
 		    -command => \&dump_data) unless $s_if || $m_if;
 $mb_file->command(-label => M"Merge",
@@ -586,7 +600,10 @@ $mb_file->command(-label => M"Merge",
 $mb_file->command(-label => M"Update enterprise projects",
 		  -command => \&update_enterprise_projects);
 $mb_file->command(-label => M"Quit",
-		  -command => sub { quit_program() });
+		  -command => sub { quit_program() },
+		  -accelerator => $ctrl_s->("q"),
+		 );
+$top->bind("all", "<Control-q>" => sub { quit_program() });
 $mb_file->separator;
 
 $mb_project = $menu_frame->Menubutton(-text => M"Project"
@@ -614,8 +631,8 @@ $mb_project->command(-label => M"Undo",
 		     -command => \&undo);
 $mb_project->command(-label => M"Search",
 		     -command => sub { tk_search_project(+1) },
-		     -accelerator => $ctrl_s . 's');
-$top->bind('<Control-s>' => sub { tk_search_project(+1) });
+		     -accelerator => $ctrl_s->("f"));
+$top->bind('<Control-f>' => sub { tk_search_project(+1) });
 $top->bind('<Key-slash>' => sub { tk_search_project(+1) });
 $top->bind('<Key-question>' => sub { tk_search_project(-1) });
 $top->bind('<Key-n>' => sub { search_project($old_search_regex, +1) });
@@ -635,7 +652,7 @@ $mb_project->command(-label => M"Attributes",
     unless $s_if;
 $mb_project->command(-label => M"Intervals",
 		     -command => sub { show_intervals($top, undef) },
-		     -accelerator => $ctrl_s .'i')
+		     -accelerator => $ctrl_s->('i'))
     unless $s_if;
 $top->bind('<Control-i>' => sub { show_intervals($top, undef) })
     unless $s_if;
@@ -649,7 +666,7 @@ $mb_project->command(-label => M"Working time",
     unless $s_if;
 $mb_project->command(-label => M"Daily details",
 		     -command => \&show_one_day,
-		     -accelerator => $ctrl_s . 'd')
+		     -accelerator => $ctrl_s->('d'))
     unless $s_if;
 $top->bind('<Control-d>' => \&show_one_day)
     unless $s_if;
@@ -699,13 +716,12 @@ if ($options->{'tree'}) {
 	);
 }
 
-if (defined $opt) {
-    $mb_options->separator
-        unless $s_if || $m_if;
-    $mb_options->command(-label => M"Option editor",
-			 -command => sub { $opt->option_editor($top, -buttons => ['oksave', 'cancel']) })
-	unless $s_if || $m_if;
-}
+$mb_options->separator
+    unless $s_if || $m_if;
+$mb_options->command(-label => M"Option editor",
+		     -state => $opt ? "normal" : "disabled",
+		     -command => sub { $opt->option_editor($top, -buttons => ['oksave', 'cancel']) })
+    unless $s_if || $m_if;
 
 foreach my $def ([M"H:M:S"  => 'hs'],
 		 [M"H:M"    => 'h'],
@@ -1291,7 +1307,7 @@ sub insert_project {
     return if $p->archived && !$options->{'archived'};
     return if (defined $options->{'domain'} && $options->{'domain'} !~ /^\s*$/)
 	      && (!defined $p->domain || $p->domain ne $options->{'domain'});
-    my $label = $p->label;
+    my $label = get_project_label_for_hlist($p);
     my $path = make_path($p);
     return if !$path;
     if ($project_frame->info('exists', $path)) {
@@ -1320,7 +1336,7 @@ sub insert_project {
 
     $project_frame->add
 	($path,
-	 -text => $p->label,
+	 -text => $label,
 	 -itemtype => $p_itemtype,
 	 -data => $p,
 	 # workaround for Tk804 bug: -after has to be last argument!
@@ -1403,10 +1419,14 @@ sub start {
 
 sub common_start_project {
     my $p = shift;
+
     stop_project();
+    $project_frame->selectionClear;
+
+    return 0 if !check_start_project($p);
+
     $current_project = $p;
     my $current_pathname = $p->pathname($separator);
-    $project_frame->selectionClear;
     $project_frame->selectionSet($current_pathname);
     $project_frame->anchorSet($current_pathname);
     $project_frame->see($current_pathname);
@@ -1432,6 +1452,19 @@ sub common_start_project {
     }
 
     set_timeout();
+
+    1;
+}
+
+sub check_start_project {
+    my($p) = @_;
+    my $ret = Hooks::get_hooks("before_start_project")->execute($p);
+    while(my($k,$v) = each %{ $ret->{ReturnCodes} }) {
+	if (!$v) {
+	    return 0;
+	}
+    }
+    return 1;
 }
 
 sub start_project {
@@ -1442,7 +1475,9 @@ sub start_project {
 	return;
     }
 
-    common_start_project($p);
+    my $ret = common_start_project($p);
+    return if !$ret;
+
     $p->start_time;
 }
 
@@ -1840,6 +1875,11 @@ sub show_one_day {
     my $adjust_chain;
     if ($has_date) {
 	my $df = $f->Frame->pack;
+
+	my @choices = (qw(today yesterday),
+		       [M"one week before" => sub {time()-86400*7}],
+		       [M"four weeks before" => sub { time()-86400*7*4}],
+		      );
 	# from:
 	$dw = $df->Date
 	  ($inner_bg_opt => $inner_bg,
@@ -1848,9 +1888,24 @@ sub show_one_day {
 	   -fields => 'date',
 	   -value => 'now',
 	   -datefmt => "%12A, %2d.%2m.%4y",
-	   -choices => [qw(today yesterday),
-			[M"one week before" => sub {time()-86400*7}],
-			[M"four weeks before" => sub { time()-86400*7*4}],
+	   -choices => [ @choices,
+			 (eval { require Date::Calc; 1 }
+			  ?
+			  ([M"beginning of current week" => sub {
+				my @ymd = Date::Calc::Today();
+				@ymd = Date::Calc::Monday_of_Week(Date::Calc::Week_of_Year(@ymd));
+				Date::Calc::Mktime(@ymd,0,0,0);
+			    }],
+			   [M"beginning of current month" => sub {
+				my @ymd = Date::Calc::Today();
+				@ymd[2] = 1;
+				Date::Calc::Mktime(@ymd,0,0,0);
+			    }],
+			  )
+			  :
+			  (
+			  )
+			 ),
 		       ],
 	   -command => sub {
 	       # XXX if chain button activated, adjust dw_to widget
@@ -1867,10 +1922,7 @@ sub show_one_day {
 	     -fields => 'date',
 	     -value => 'now',
 	     -datefmt => "%12A, %2d.%2m.%4y",
-	     -choices => [qw(today yesterday),
-			  [M"one week before" => sub {time()-86400*7}],
-			  [M"four weeks before" => sub { time()-86400*7*4}],
-			 ],
+	     -choices => [ @choices ],
 	     -command => sub {
 		 if ($options->{'oneday-immediately'}) {
 		     $btn->invoke;
@@ -2926,6 +2978,12 @@ sub save_subproject {
 }
 
 sub save_xml {
+    if (!eval { require Timex::Project::XML; 1 }) {
+	warn $@;
+	$top->messageBox(-icon => "error",
+			 -message => M("No XML export possible, probably because the XML::Parser module is missing"));
+	return;
+    }
     my($file, $path) = get_file_path();
     $file = get_filename($top,
 			 -Title => M"Enter XML project file",
@@ -2937,9 +2995,16 @@ sub save_xml {
     return unless $file;
 
     $file = adjust_filename($file, ".xml");
-    require Timex::Project::XML;
     my $clone = clone Timex::Project::XML $root;
     $clone->save($file);
+}
+
+sub save_excel {
+    require Timex::ExcelExport;
+    Timex::ExcelExport::save_dialog
+	    ($top, $root,
+	     -hourlyrate => $options->{'hourlyrate'},
+	    );
 }
 
 sub merge_file {
@@ -3534,6 +3599,8 @@ sub show_intervals {
     my $day           = $args{-day};
     my $subproj       = $args{-subproj};
     my $w             = $args{-toplevel};
+    my $see_first     = $args{-seefirst};
+    my $see_last      = $args{-seelast}; # XXX not yet used
     if (!Tk::Exists($w)) {
 	undef $w;
     } else {
@@ -3577,7 +3644,7 @@ sub show_intervals {
 	$top->Unbusy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
     }
 
-    my($lb, $real_lb, $times);
+    my($lb, $real_lb, $times, $current_index);
 
     my $update = sub {
 	$args{-toplevel}     = $w;
@@ -3585,6 +3652,8 @@ sub show_intervals {
 	$args{-group}        = $group;
 	$args{-modified}     = $modified;
 	$args{-subproj}      = $subproj;
+	$args{-seefirst}     = defined $current_index ? $current_index : $real_lb->nearest(0 + 36); # Hack: add some room for header
+	$args{-seelast}      = $real_lb->nearest($real_lb->height - 1); # XXX not yet used
 	show_intervals($top, $project,
 		       %args);
     };
@@ -3983,6 +4052,15 @@ sub show_intervals {
 			   });
     };
 
+    my $split = sub {
+	my @sel = $lb->info('selection');
+	my $done_split = split_time_window($w, $project, $sel[$#sel]);
+	if ($done_split) {
+	    $modified++;
+	    $update->();
+	}	    
+    };
+
     if (!$group and
 	$lb->can("menu") and
 	$lb->can("PostPopupMenu")
@@ -3993,8 +4071,8 @@ sub show_intervals {
 				   -disabledforeground => "darkblue",
 				   -tearoff => 0);
 
-	my $current_index = undef;
-
+	$current_index = undef;
+	
 	$lb_popup_menu->command(-label => "Interval:",
 				-state => "disabled");
 
@@ -4022,6 +4100,12 @@ sub show_intervals {
 	    (-label => M"Insert after",
 	     -command => sub {
 		 $insert->("after");
+	     },
+	    );
+	$lb_popup_menu->command
+	    (-label => M"Split",
+	     -command => sub {
+		 $split->();
 	     },
 	    );
 	$lb_popup_menu->command
@@ -4113,7 +4197,22 @@ sub show_intervals {
     }
 
     $w->withdraw;
-    $lb->see($i-1) if $i > 1;
+
+    if (defined $see_first) {
+	eval {
+	    $real_lb->see($see_first); # restore last view
+	};
+	warn $@ if $@; # check for range overflow?
+##XXX rethink see_last
+#	if (defined $see_last && $see_last < $i) {
+#	    $lb->see($see_last);
+#	}
+    } elsif ($i > 1) {
+	$lb->see($i-1); # last element
+    }
+    undef $see_first;
+    undef $see_last;
+
     my $f = $w->Frame->pack(-fill => 'x');
     $w->Advertise(ButtonFrame => $f);
     my $close_sub = sub {
@@ -4185,6 +4284,101 @@ sub show_intervals {
     $w->Popup; #(@popup_args);
     if ($geometry) {
 	$w->geometry($geometry);
+    }
+}
+
+sub split_time_window {
+    my($w, $project, $index) = @_;
+    my $time_def = $project->{times}[$index];
+    return if !$time_def;
+    my $t = $w->Toplevel(-title => M"Split");
+    my $width = 300;
+    my $c_height = 30;
+    my $c = $t->Canvas(-width => $width, -height => 60)->pack(qw(-expand 1 -fill both));
+    my $f = $t->Frame->pack(qw(-fill x));
+    my $weiter = 0;
+    $f->Button(-text => M"Ok", -command => sub { $weiter = +1 })->pack(-side => "left");
+    $f->Button(-text => M"Cancel", -command => sub { $weiter = -1 })->pack(-side => "left");
+
+    $c->createRectangle(0, 0, $width, $c_height);
+    my $beg_time = $time_def->[$project->TIMES_FROM];
+    my $end_time = $time_def->[$project->TIMES_TO];
+    return if !defined $end_time;
+
+    my $sel_time;
+    my $current_time;
+    my @split_times;
+
+    my $l = $c->Label(-textvariable => \$current_time);
+    $c->createWindow($width/2, $c_height + 10, -window => $l, -anchor => "n");
+
+    my $ignore_more_motion;
+
+    my $redraw_splits = sub {
+	$c->delete("split");
+	my $split_i = 0;
+	for my $sel_time (@split_times) {
+	    my $x = ($sel_time - $beg_time)/($end_time - $beg_time) * $width;
+	    $c->createLine($x, 0, $x, $c_height, -tags => ["split", "split-$split_i"]);
+
+	    $c->createLine($x-3, $c_height+2, $x+3, $c_height+6, -width => 2, -fill => "red", -tags => ["split", "split-$split_i", "delete"]);
+	    $c->createLine($x-3, $c_height+6, $x+3, $c_height+2, -width => 2, -fill => "red", -tags => ["split", "split-$split_i", "delete"]);
+	    $split_i++;
+	}
+    };
+
+    my $sc = $c;
+    $sc->Tk::bind("<Any-Motion>", sub {
+		     if ($ignore_more_motion) {
+			 $ignore_more_motion = 0;
+			 return;
+		     }
+		     my($w) = shift;
+		     my($e) = $w->XEvent;
+		     my($x,$y) = ($sc->canvasx($e->x), $sc->canvasy($e->y));
+		     if ($x >= 0 && $x < $width && $y >= 0 && $y < $c_height) {
+			 $sel_time = (($x-0)/$width * ($end_time - $beg_time)) + $beg_time;
+			 my(@l) = localtime $sel_time;
+			 $current_time = sprintf "%02d:%02d:%02d", @l[2,1,0];
+		     } else {
+			 undef $sel_time;
+			 $current_time = "";
+		     }
+		 });
+    $sc->bind("delete", "<Any-Motion>", sub {
+		 my(@tags) = $sc->gettags("current");
+		 my($split_i) = grep { /split-\d+/ } @tags;
+		 ($split_i) = $split_i =~ /(\d+)/;
+		 my(@l) = localtime $split_times[$split_i];
+		 $current_time = sprintf "%02d:%02d:%02d", @l[2,1,0];
+		 $ignore_more_motion = 1;
+	     });
+    $sc->bind("delete", "<1>", sub {
+		 my(@tags) = $sc->gettags("current");
+		 my($split_i) = grep { /split-\d+/ } @tags;
+		 ($split_i) = $split_i =~ /(\d+)/;
+		 splice @split_times, $split_i, 1;
+		 $redraw_splits->();
+	     });
+    $sc->Tk::bind("<1>", sub {
+		     if (defined $sel_time) {
+			 push @split_times, $sel_time;
+			 $redraw_splits->();
+		     }
+		 });
+
+    $t->OnDestroy(sub { $weiter = -1 });
+    $t->waitVariable(\$weiter);
+
+    if (Tk::Exists($t)) {
+	$t->destroy;
+    }
+
+    if ($weiter) {
+	$project->split_time($index, [@split_times]);
+	1;
+    } else {
+	0;
     }
 }
 
@@ -4682,6 +4876,36 @@ EOF
     $okb->focus;
     $dia->bind('<Escape>' => sub { $okb->invoke });
     $dia->Popup(-popover => 'cursor');
+}
+
+sub status_message {
+    my($message, $type) = @_;
+    if (Tk::Exists($top)) {
+	$top->messageBox(-icon    => $type eq 'err' ? 'error' : 'warning',
+			 -title   => $type eq 'err' ? 'Error' : 'Warning',
+			 -type    => "Ok",
+			 -message => $message,
+			);
+    } else {
+	require Carp;
+	if ($type eq 'err') {
+	    Carp::croak($message);
+	} else {
+	    Carp::carp($message);
+	}
+    }
+}
+
+sub get_project_label_for_hlist {
+    my($p) = @_;
+    my $label = $options->{projectlabelformat};
+    local $^W = 0;
+    $label = "%n" if !defined $label || $label eq '';
+    $label =~ s{%n}{ $p->label }ge;
+    $label =~ s{%j}{ $p->jobnumber }ge;
+    $label =~ s{%J}{ $p->jobnumber ne "" ? "(" . $p->jobnumber . ")" : "" }ge;
+    $label =~ s{%p}{ $p->parent ? $p->parent->label : "" }ge;
+    $label
 }
 
 =head1 NAME

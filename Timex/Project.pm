@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.51 2005/04/28 22:10:02 eserte Exp $
+# $Id: Project.pm,v 3.52 2005/10/10 19:14:15 eserte Exp $
 #
 
 =head1 NAME
@@ -25,17 +25,17 @@ package Timex::Project;
 use strict;
 use vars qw($VERSION $magic $magic_template $emacsmode $pool @project_attributes);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 3.51 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 3.52 $ =~ /(\d+)\.(\d+)/);
 
 $magic = '#PJ1';
 $magic_template = '#PJT';
 $emacsmode = '-*- project -*-';
 @project_attributes = qw/archived rate rcsfile domain id notimes closed icon jobnumber/;
 
-##XXX use some day?
-#use constant TIMES_SINCE      => 0;
-#use constant TIMES_UNTIL      => 1;
-#use constant TIMES_ANNOTATION => 2;
+use constant TIMES_FROM       => 0;
+use constant TIMES_TO         => 1;
+use constant TIMES_ANNOTATION => 2;
+use constant TIMES_MAX        => 2;
 
 sub Timex_Project_API () { 1 }
 
@@ -902,13 +902,13 @@ sub unend_time {
 sub set_times {
     my($self, $i, $start, $end, $annotation) = @_;
     if (defined $start) {
-	$self->{'times'}[$i][0] = $start;
+	$self->{'times'}[$i][TIMES_FROM] = $start;
     }
     if (defined $end) {
-	$self->{'times'}[$i][1] = $end;
+	$self->{'times'}[$i][TIMES_TO] = $end;
     }
     if (defined $annotation) {
-	$self->{'times'}[$i][2] = $annotation;
+	$self->{'times'}[$i][TIMES_ANNOTATION] = $annotation;
     }
     $self->update_cached_time;
     $self->modified(1);
@@ -945,9 +945,18 @@ sub delete_times {
     $self->modified(1);
 }
 
+=head2 insert_times_after
+
+    $root->insert_times_after($index, ($from, $to, $annotation, ...));
+
+Insert the given time defintion (I<$from>, I<$to> etc.) into the
+project times after I<$index>.
+
+=cut
+
 sub insert_times_after {
-    my($self, $i, $start, $end) = @_;
-    splice @{ $self->{'times'} }, $i+1, 0, [$start, $end];
+    my($self, $i, @time_def) = @_;
+    splice @{ $self->{'times'} }, $i+1, 0, [@time_def];
     $self->update_cached_time;
     $self->modified(1);
 }
@@ -956,7 +965,7 @@ sub insert_times_after {
 
     $root->move_times_after($index_from, $index_before);
 
-Move the times definition at $index_from after $index_before.
+Move the times definition at I<$index_from> after I<$index_before>.
 
 =cut
 
@@ -972,6 +981,50 @@ sub move_times_after {
     }
     # modified ist bereits gesetzt
 }
+
+=head2 split_time
+
+    $root->split_time($index, \@split_points);
+
+Split the given time interval (by I<$index>) at the C<@split_points>
+(which is an array of epoch times).
+
+=cut
+
+sub split_time {
+    my($self, $index, $split_points_ref) = @_;
+    my @split_points = sort { $a <=> $b } @$split_points_ref;
+    return if !@split_points;
+
+    my $time_def = $self->{'times'}[$index] || die "Invalid index <$index>";
+
+    # Check for validity first
+    for my $split_time (@split_points) {
+	if ($split_time <= $time_def->[TIMES_FROM] ||
+	    $split_time >= $time_def->[TIMES_TO]) {
+	    die "Invalid split time <$split_time>, should be larger than C<$time_def->[TIMES_FROM]> and smaller than C<$time_def->[TIMES_TO]>";
+	}
+    }
+
+    my @new_time_defs;
+    my $last_begin_time = $time_def->[TIMES_FROM];
+    for my $split_time (@split_points, $time_def->[TIMES_TO]) {
+	push @new_time_defs, [$last_begin_time, $split_time, @{$time_def}[TIMES_ANNOTATION .. TIMES_MAX]];
+	$last_begin_time = $split_time;
+    }
+
+    splice @{ $self->{'times'} }, $index, 1, @new_time_defs;
+
+    $self->modified(1);
+}
+
+=head2 sort_times
+
+    $root->sort_times
+
+Bring the times in the right order.
+
+=cut
 
 sub sort_times {
     my($self) = @_;
@@ -991,15 +1044,18 @@ sub _min {
 
     $time = $project->sum_time($since, $until, %args)
 
-Return the time the given project accumulated since $since until $until.
-If $until is undefined, return the time until now. If -recursive is set in
-the %args hash to a true value, recurse into subprojects of $project.
+Return the time the given project accumulated since I<$since> until
+I<$until>. If I<$until> is undefined, return the time until now. If
+I<$since> is undefined, return the time from the beginning of epoch
+(January 1970). If C<-recursive> is set in the I<%args> hash to a true
+value, recurse into subprojects of I<$project>.
 
 =cut
 
 sub sum_time {
     my($self, $since, $until, %args) = @_;
     my $sum = 0;
+    $since = 0 if !defined $since;
     if ($args{'-recursive'}) {
 	foreach (@{$self->subproject}) {
 	    $sum += $_->sum_time($since, $until, %args);

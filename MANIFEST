@@ -18,6 +18,7 @@ Timex/t/base.t
 Timex/t/multiproject.t
 Timex/t/testdata.xml
 Timex/t/testprojects.pl
+Timex/t/split.t
 Tk/Autoscroll.pm	from Tk-SREZIC
 Tk/UnderlineAll.pm	from Tk-SREZIC
 Win32Util.pm		from Win32Util
@@ -43,3 +44,5 @@ timexserver
 timexserver.cgi
 tktimex			main program
 prereqinst.pl
+Timex/Hooks.pm		from bbbike
+Timex/Msg.pm		from Msg
