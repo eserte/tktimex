@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.52 2005/10/10 19:14:15 eserte Exp $
+# $Id: Project.pm,v 3.53 2006/01/03 23:06:33 eserte Exp $
 #
 
 =head1 NAME
@@ -25,12 +25,12 @@ package Timex::Project;
 use strict;
 use vars qw($VERSION $magic $magic_template $emacsmode $pool @project_attributes);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 3.52 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 3.53 $ =~ /(\d+)\.(\d+)/);
 
 $magic = '#PJ1';
 $magic_template = '#PJT';
 $emacsmode = '-*- project -*-';
-@project_attributes = qw/archived rate rcsfile domain id notimes closed icon jobnumber/;
+@project_attributes = qw/archived rate rcsfile domain id notimes closed icon jobnumber color/;
 
 use constant TIMES_FROM       => 0;
 use constant TIMES_TO         => 1;
@@ -258,6 +258,48 @@ sub icon {
     }
 }
 
+=head2 color
+
+    $rgb = $project->color;
+    $project->color($rgb);
+
+Get or set color for project. The color should be an X11 RGB value in
+the form C<#rrggbb>.
+
+=cut
+
+sub color {
+    my($self, $color) = @_;
+    if (defined $color) {
+	$self->{'color'} = $color;
+	$self->modified(1);
+    } else {
+	$self->{'color'};
+    }
+}
+
+=head2 color_from_ancestors
+
+=head2 color_from_parent
+
+    $rgb = $project->color_from_ancestors;
+
+Get color for this project, either from the project itself or from any
+of the ancestors. Return undef if no color could be found.
+B<color_from_parent> is just an alias.
+
+=cut
+
+sub color_from_parent {
+    my($self) = @_;
+    my $color = $self->{'color'};
+    return $color if defined $color && $color ne "";
+    my $parent = $self->parent;
+    return undef if !defined $parent;
+    $self->parent->color_from_parent;
+}
+*color_from_ancestors = \&color_from_parent;
+
 =head2 jobnumber
 
     $jobnumber = $project->jobnumber;
@@ -277,12 +319,15 @@ sub jobnumber {
     }
 }
 
+=head2 jobnumber_from_ancestors
+
 =head2 jobnumber_from_parent
 
-    $jobnumber = $project->jobnumber_from_parent;
+    $jobnumber = $project->jobnumber_from_ancestors;
 
 Get jobnumber for this project, either from the project itself or from
-any of the parents. Return undef if no jobnumber could be found.
+any of the ancestors. Return undef if no jobnumber could be found.
+B<jobnumber_from_parent> is just an alias.
 
 =cut
 
@@ -294,6 +339,7 @@ sub jobnumber_from_parent {
     return undef if !defined $parent;
     $self->parent->jobnumber_from_parent;
 }
+*jobnumber_from_ancestors = \&jobnumber_from_parent;
 
 
 =head2 note
