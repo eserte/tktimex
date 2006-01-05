@@ -1,5 +1,11 @@
 Revision history for Timex.
 
-4.13
-	- XXX
+6.27
+	- bugfix (bug showed up when merging timex files)
 
+6.26
+	- bugfix: solved @INC problem (seen on Mac and Windows)
+	- new attribute: colored projects
+	- new replacement strings for project labels (%y/%Y)
+
+...
