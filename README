@@ -1,13 +1,34 @@
 tktimex
 -------
 
-Here's a list of scripts and programs:
+INSTALLATION
+------------
 
-install.pl		- installer for Windows (and someday for Unix, too)
+First install like a normal perl module or program:
+
+      perl Makefile.PL
+      make all test install
+
+(On Windows with ActivePerl, replace make with nmake)
+
+USAGE
+-----
+
+Start tktimex:
+
+      tktimex
+
+Look into the menu in Help > Index (Hilfe > Index).
+
+LIST OF FILES
+-------------
 
 tktimex			- the main Tk program
 
 ctimex			- the console program
+
+install.pl		- installer for Windows (and someday for Unix,
+			  too, badly maintained these days)
 
 clear_times.pl		- clear all the times in a project file
 
