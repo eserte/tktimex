@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.26 2006/01/03 23:06:10 eserte Exp $
+# $Id: tktimex,v 6.27 2006/01/05 00:40:17 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -166,7 +166,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.26 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.27 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -1359,27 +1359,28 @@ sub insert_project {
 	}
     }
 
- STYLE_SET:
-    if ($can_itemstyle) {
-	if ($p->archived && $is_archiv) {
-	    $project_frame->itemConfigure($path, 0, -style => $is_archiv);
-	    last STYLE_SET;
-	}
-	if ($args{-style}) {
-	    $project_frame->itemConfigure($path, 0, -style => $args{-style});
-	    last STYLE_SET;
-	}
-	if ($p->color) {
-	    if (!$color_style{$p->color}) {
-		eval {
-		    $color_style{$p->color} = $top->ItemStyle($p_itemtype,
-							      -foreground => $p->color,
-							      -background => $inner_bg);
-		};
-		warn $@ if $@;
+ STYLE_SET: {
+	if ($can_itemstyle) {
+	    if ($p->archived && $is_archiv) {
+		$project_frame->itemConfigure($path, 0, -style => $is_archiv);
+		last STYLE_SET;
 	    }
-	    if ($color_style{$p->color}) {
-		$project_frame->itemConfigure($path, 0, -style => $color_style{$p->color});
+	    if ($args{-style}) {
+		$project_frame->itemConfigure($path, 0, -style => $args{-style});
+		last STYLE_SET;
+	    }
+	    if ($p->color) {
+		if (!$color_style{$p->color}) {
+		    eval {
+			$color_style{$p->color} = $top->ItemStyle($p_itemtype,
+								  -foreground => $p->color,
+								  -background => $inner_bg);
+		    };
+		    warn $@ if $@;
+		}
+		if ($color_style{$p->color}) {
+		    $project_frame->itemConfigure($path, 0, -style => $color_style{$p->color});
+		}
 	    }
 	}
     }
