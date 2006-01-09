@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: 80heavy.t,v 1.1 2006/01/09 21:08:26 eserte Exp $
+# $Id: 80heavy.t,v 1.2 2006/01/09 21:24:29 eserte Exp $
 # Author: Slaven Rezic
 #
 
@@ -31,8 +31,10 @@ if ($^O eq 'MSWin32') {
 $ENV{TKTIMEX_GUI_TESTING} = 1;
 
 my @test_args = (
-		 [],
-		 ["-sessioncol"],
+		 [], # 3 cols
+		 ["-sessioncol"], # 4 cols
+		 ["-hourlyrate", 100], # 4 cols
+		 ["-sessioncol", "-hourlyrate", 100], # 5 cols
 		 ["-notree", "-nolock", "-noautosave", "-iconified",
 		  "-username", "USER", "-realname", "REAL NAME"],
 		 ["-update", 1],
@@ -44,7 +46,7 @@ my @test_args = (
 
 plan tests => scalar(@test_args);
 
-my $tktimex_exe = catfile($FindBin::RealBin, updir, "tktimex");
+my $tktimex_exe = catfile($FindBin::RealBin, updir, "blib", "script", "tktimex");
 
 my($tempfh,$tempfile) = tempfile(SUFFIX => ".pj1",
 				 CLEANUP => 1);
