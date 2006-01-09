@@ -2,20 +2,20 @@
 # -*- perl -*-
 
 #
-# $Id: 50base.t,v 1.3 2005/04/28 22:10:16 eserte Exp $
+# $Id: 50base.t,v 1.4 2006/01/09 21:42:17 eserte Exp $
 # Author: Slaven Rezic
 #
 
 use strict;
 use FindBin;
-use File::Spec::Functions qw(catfile updir);
 
 BEGIN {
     if (!eval q{
 	use Test;
+	use File::Spec::Functions qw(catfile updir);
 	1;
     }) {
-	print "1..0 # skip: no Test module\n";
+	print "1..0 # skip: no Test and/or File::Spec::Functions module\n";
 	exit;
     }
 }
