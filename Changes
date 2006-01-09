@@ -1,5 +1,16 @@
 Revision history for Timex.
 
+6.29
+	- new option -sessioncol which is by default to false
+	  without the option there's no (largely useless) session column
+	- new option variable maxlastprojects (for the last projects
+          menu)
+	- environment variable TKTIMEXRC (including documentation)
+	- some warnings about small/medium interface
+	- bugfix: pj1 file was deleted if -update was set to very
+	  small values (1s or so)
+	- another test script
+
 6.27
 	- bugfix (bug showed up when merging timex files)
 
