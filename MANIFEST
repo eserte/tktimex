@@ -38,6 +38,7 @@ project2xls.pl
 project2xml.pl
 restrict_domain.pl
 t/50base.t		simple test script
+t/80heavy.t
 t/test.pj1		test project file
 templates/oo.pjt
 timexserver
