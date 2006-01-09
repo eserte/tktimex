@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.28 2006/01/09 21:24:04 eserte Exp $
+# $Id: tktimex,v 6.29 2006/01/09 22:02:02 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -30,11 +30,13 @@ BEGIN {
 }
 use Tk::ErrorDialog;
 
-eval '
+if ($ENV{TKTIMEX_DEVEL}) {
+    eval '
 use lib "/home/e/eserte/lib/perl";
 use Tk::App::Reloader;
 $Tk::App::Reloader::VERBOSE = 1;
-'; warn $@ if $@ and $ENV{USER} and $ENV{USER} =~ /eserte/;
+'; warn $@ if $@;
+}
 
 state_change("all use's processed...");
 
@@ -166,7 +168,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.28 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.29 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -198,6 +200,7 @@ use vars qw($utmp
 	    $load_merge_filename $load_menu
 	    $p_itemtype %icons
 	    $old_search_regex $initial_search_direction
+	    $lock_saving
 	   );
 
 $title = "tktimex $VERSION";
@@ -224,6 +227,7 @@ $sbside = ($os eq 'win' ? 'e' : 'w');
 $use_enterprise = 0;
 $p_itemtype = 'imagetext';
 $home     = get_home_dir();
+$lock_saving = 1;
 
 eval {
     require Timex::Utmp;
@@ -1115,6 +1119,7 @@ state_change("before MainLoop");
 if ($ENV{TKTIMEX_GUI_TESTING}) {
     exit;
 }
+$lock_saving = 0;
 MainLoop;
 
 ### RELOADER_START #########################################################
@@ -2841,6 +2846,11 @@ sub save_file {
 	} else {
 	    return;
 	}
+    }
+
+    if ($lock_saving) {
+	warn "Can't save, lock_saving is active ...\n";
+	return;
     }
 
     if (defined $current_project) {
