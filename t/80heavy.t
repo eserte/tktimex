@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: 80heavy.t,v 1.2 2006/01/09 21:24:29 eserte Exp $
+# $Id: 80heavy.t,v 1.3 2006/01/09 22:03:53 eserte Exp $
 # Author: Slaven Rezic
 #
 
@@ -13,8 +13,9 @@ BEGIN {
     if (!eval q{
 	use Test::More;
 	use File::Spec::Functions qw(catfile updir);
-	use File::Temp qw(tempfile);
+	use File::Temp qw(tempfile tempdir);
 	use File::Copy qw(cp);
+	use File::Compare qw(compare);
 	use Data::Dumper qw();
 	1;
     }) {
@@ -29,6 +30,7 @@ if ($^O eq 'MSWin32') {
 }
 
 $ENV{TKTIMEX_GUI_TESTING} = 1;
+$ENV{TKTIMEX_DEVEL} = 0;
 
 my @test_args = (
 		 [], # 3 cols
@@ -44,14 +46,17 @@ my @test_args = (
 		 ["-maxlastprojects", 4],
 		);
 
-plan tests => scalar(@test_args);
+plan tests => 2*scalar(@test_args);
 
 my $tktimex_exe = catfile($FindBin::RealBin, updir, "blib", "script", "tktimex");
 
-my($tempfh,$tempfile) = tempfile(SUFFIX => ".pj1",
-				 CLEANUP => 1);
-cp catfile($FindBin::RealBin, "test.pj1"), $tempfile
-    or die "Can't copy: $!";
+my($tempfh,$tempfile) = tempfile(DIR => tempdir(CLEANUP => 1),
+				 SUFFIX => ".pj1",
+				 CLEANUP => 1,
+				);
+my $origpj1 = catfile($FindBin::RealBin, "test.pj1");
+cp $origpj1, $tempfile
+    or die "Can't copy $origpj1 to $tempfile: $!";
 close $tempfh;
 
 my($rcfh, $rcfile) = tempfile(SUFFIX => ".tktimexrc",
@@ -64,6 +69,7 @@ for my $cmdadd (@test_args) {
     my @cmd = (@stdargs, @$cmdadd);
     system @cmd;
     is($?, 0, "Called with @cmd");
+    is(compare($tempfile, $origpj1), 0, "pj1 file unchanged");
 }
 
 __END__
