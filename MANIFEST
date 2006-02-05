@@ -6,6 +6,7 @@ Timex/ExcelExport.pm
 Timex/MultiProject.pm
 Timex/Plugin.pm
 Timex/Plugin/Null.pm
+Timex/Plugin/OvertimeAlarm.pm
 Timex/Project.pm
 Timex/Project/Export.pm
 Timex/Project/XML.pm

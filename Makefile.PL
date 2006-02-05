@@ -6,6 +6,7 @@ my $pm =
     {
      'Timex/ExcelExport.pm'    => '$(INST_LIBDIR)/Timex/ExcelExport.pm',
      'Timex/Plugin.pm'         => '$(INST_LIBDIR)/Timex/Plugin.pm',
+     'Timex/Plugin/OvertimeAlarm.pm' => '$(INST_LIBDIR)/Timex/Plugin/OvertimeAlarm.pm',
      'Timex/Project.pm'	       => '$(INST_LIBDIR)/Timex/Project.pm',
      'Timex/Project/Export.pm' => '$(INST_LIBDIR)/Timex/Project/Export.pm',
      'Timex/Project/XML.pm'    => '$(INST_LIBDIR)/Timex/Project/XML.pm',
