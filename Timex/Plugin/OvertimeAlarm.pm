@@ -5,7 +5,7 @@
 package Timex::Plugin::OvertimeAlarm;
 
 use strict;
-our $VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+our $VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 use Data::Dumper   qw();
 use File::Basename qw(dirname);
@@ -95,8 +95,16 @@ sub check_times {
 
     my %begin_of;
     $begin_of{day}   = timelocal(@l);
-    $begin_of{week}  = $begin_of{day}   -  7*86400; # not exact when dst changes
-    $begin_of{month} = $begin_of{day} - 30*86400; # totally inexact...
+    {
+	my @l = @l;
+	@l[3] = 1;
+	$begin_of{month} = timelocal(@l);
+    }
+    {
+	my @l = @l;
+	@l[3] -= ($l[6] == 0 ? 6 : $l[6]-1);
+	$begin_of{week} = timelocal(@l);
+    }
 
     my %time;
     for my $period (qw(day week month)) {
