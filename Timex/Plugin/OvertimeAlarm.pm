@@ -5,7 +5,7 @@
 package Timex::Plugin::OvertimeAlarm;
 
 use strict;
-our $VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+our $VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 use Data::Dumper   qw();
 use File::Basename qw(dirname);
@@ -137,7 +137,10 @@ sub check_times {
 	if ($Tk::platform eq 'unix') {
 	    my($wrapper) = $dialog->wrapper;
 	    # set sticky flag for gnome and fvwm2
-	    eval q{$dialog->property('set','_WIN_STATE','CARDINAL',32,[1],$wrapper);};
+	    eval q{
+		$dialog->property('set','_WIN_STATE','CARDINAL',32,[1],$wrapper); # sticky
+	        $dialog->property('set','_WIN_LAYER','CARDINAL',32,[6],$wrapper); # ontop
+	    };
 	    warn $@ if $@;
 	}
 	$dialog->Label(-text => $text,
