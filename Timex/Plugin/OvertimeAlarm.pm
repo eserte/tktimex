@@ -5,7 +5,7 @@
 package Timex::Plugin::OvertimeAlarm;
 
 use strict;
-our $VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+our $VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 use Data::Dumper   qw();
 use File::Basename qw(dirname);
@@ -132,10 +132,22 @@ sub check_times {
 	    $text .= ucfirst($period) . ": worked " . s2hm($time{$period}) . ", expected " . s2hm($max_time{$period}) . "\n";
 	    $alarm_shown{$period} = $today_token;
 	}
-	$self->{top}->messageBox(-title => "OvertimeAlarm",
-				 -icon => "info",
-				 -message => $text,
-				);
+
+	my $dialog = $self->{top}->Toplevel(-title => "OvertimeAlarm");
+	if ($Tk::platform eq 'unix') {
+	    my($wrapper) = $dialog->wrapper;
+	    # set sticky flag for gnome and fvwm2
+	    eval q{$dialog->property('set','_WIN_STATE','CARDINAL',32,[1],$wrapper);};
+	    warn $@ if $@;
+	}
+	$dialog->Label(-text => $text,
+		       -justify => "left",
+		      )->pack;
+	$dialog->Button(-text => "OK",
+			-command => sub {
+			    $dialog->destroy;
+			    undef $dialog;
+			})->pack;
     }
 }
 
