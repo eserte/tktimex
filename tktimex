@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.30 2006/02/05 12:50:18 eserte Exp $
+# $Id: tktimex,v 6.31 2006/03/19 19:29:07 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -168,7 +168,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.30 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.31 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -3266,6 +3266,10 @@ sub set_dateformat {
     if (set_time_update()) {
 	set_timeout();
     }
+    update_daily_details();
+}
+
+sub update_daily_details {
     foreach my $w ($top->Descendants("Toplevel")) {
 	# no M:
 	if ($w->{WindowType} and $w->{WindowType} eq "Daily details" and
@@ -3897,6 +3901,7 @@ sub show_intervals {
 		   $annotation_e = $annotation;
 	       }
 	       $project->set_times($i, $from_e, $to_e, $annotation);
+	       $modified++;
 	       $update->($t);
 	   },
 	  )->pack(-side => 'left');
@@ -4258,6 +4263,7 @@ sub show_intervals {
 			      $new_project_p->insert_times_after($#$new_times, @{ $times->[$index] });
 			      $project->delete_times($index);
 			  }
+			  $modified++;
 			  $update->();
 			  # XXX destroy problem?!
 			  $lb->afterIdle(sub { $t2->destroy if Tk::Exists($t2); });
@@ -4319,8 +4325,10 @@ sub show_intervals {
     my $f = $w->Frame->pack(-fill => 'x');
     $w->Advertise(ButtonFrame => $f);
     my $close_sub = sub {
-	#insert_all() if $modified;
-	update_project($project) if $modified;
+	if ($modified) {
+	    update_project($project);
+	    update_daily_details();
+	}
 	$w->destroy;
     };
     $w->protocol('WM_DELETE_WINDOW', $close_sub);
