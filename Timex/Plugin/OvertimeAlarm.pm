@@ -5,7 +5,7 @@
 package Timex::Plugin::OvertimeAlarm;
 
 use strict;
-our $VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+our $VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 use Data::Dumper   qw();
 use File::Basename qw(dirname);
@@ -118,18 +118,29 @@ sub check_times {
     }
 
     my %need_alarm;
+    my %update_alarm;
     for my $period (keys %time) {
 	next if !$max_time{$period}; # probably not configured yet...
-	if ($time{$period} > $max_time{$period} &&
-	    (!exists $alarm_shown{$period} || $alarm_shown{$period} ne $today_token)) {
-	    $need_alarm{$period}++;
+	if ($time{$period} > $max_time{$period}) {
+	    if (exists $alarm_shown{$period} && $alarm_shown{$period} eq $today_token) {
+		$update_alarm{$period}++;
+	    } else {
+		$need_alarm{$period}++;
+	    }
 	}
     }
 
+    my $set_alarm_text = sub {
+	my $period = shift;
+	my $text = "";
+	$text .= ucfirst($period) . ": worked " . s2hm($time{$period}) . ", expected " . s2hm($max_time{$period}) . "\n";
+	$text;
+    };
+
     if (keys %need_alarm) {
 	my $text = "";
-	for my $period (keys %need_alarm) {
-	    $text .= ucfirst($period) . ": worked " . s2hm($time{$period}) . ", expected " . s2hm($max_time{$period}) . "\n";
+	for my $period (keys(%need_alarm), keys(%update_alarm)) {
+	    $text .= $set_alarm_text->($period);
 	    $alarm_shown{$period} = $today_token;
 	}
 
@@ -143,14 +154,24 @@ sub check_times {
 	    };
 	    warn $@ if $@;
 	}
-	$dialog->Label(-text => $text,
-		       -justify => "left",
-		      )->pack;
+	my $l = $dialog->Label(-text => $text,
+			       -justify => "left",
+			      )->pack;
+	$self->{top}->Advertise(OvertimeAlarmLabel => $l);
 	$dialog->Button(-text => "OK",
 			-command => sub {
 			    $dialog->destroy;
 			    undef $dialog;
 			})->pack;
+    } elsif (keys %update_alarm) {
+	my $l = $self->{top}->Subwidget("OvertimeAlarmLabel");
+	if ($l && Tk::Exists($l)) {
+	    my $text = "";
+	    for my $period (keys(%update_alarm)) {
+		$text .= $set_alarm_text->($period);
+	    }
+	    $l->configure(-text => $text);
+	}
     }
 }
 
