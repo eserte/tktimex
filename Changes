@@ -1,5 +1,8 @@
 Revision history for Timex.
 
+6.31
+	- new overtime alarm plugin
+
 6.29
 	- new option -sessioncol which is by default to false
 	  without the option there's no (largely useless) session column
