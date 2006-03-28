@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Util.pm,v 1.1 2006/03/28 21:00:06 eserte Exp $
+# $Id: Util.pm,v 1.2 2006/03/28 22:49:17 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2006 Slaven Rezic. All rights reserved.
@@ -16,7 +16,9 @@ package Timex::Util;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+
+use Math::Complex qw(log10);
 
 # von gnuplot3.5 (graphics.c) geklaut
 sub make_tics {
