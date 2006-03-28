@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.31 2006/03/19 19:29:07 eserte Exp $
+# $Id: tktimex,v 6.32 2006/03/28 22:48:48 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -168,7 +168,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.31 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.32 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -243,7 +243,10 @@ $date_require = <<'EOF';
 	    ($inner_bg_opt, $inner_fg_opt) = ('-innerbg', '-innerfg');
 	}
 	if ($Tk::Date::VERSION >= 0.33) {
-	    %date_args = (-allarrows => 1);
+	    %date_args = (-allarrows => 1,
+			  -orient => "horiz", # XXX does not work, bug in Tk::Date?
+			  -datefmt => "%12A, %2d.%2m.%4y",
+			 );
 	}
 	$has_date = 1;
 EOF
@@ -3864,7 +3867,8 @@ sub show_intervals {
 				     -fg => $inner_fg,
 				     -textvariable => \$from)
 			 );
-	$from_date->grid(-row => $row++, -column => 1);
+	# Stick to east because of variable length of weekday names
+	$from_date->grid(-row => $row++, -column => 1, -sticky => "e");
 	$t->Label(-text => M("To").":")->grid(-row => $row, -column => 0);
 	my $to_date = ($has_date
 		       ? $t->Date($inner_bg_opt => $inner_bg,
@@ -3877,14 +3881,15 @@ sub show_intervals {
 				   -fg => $inner_fg,
 				   -textvariable => \$to)
 		      );
-	$to_date->grid(-row => $row++, -column => 1);
+	$to_date->grid(-row => $row++, -column => 1, -sticky => "e");
 
 	$t->Label(-text => M("Annotation").":")->grid(-row => $row, -column => 0);
 	$t->Entry(-textvariable => \$annotation)->grid(-row => $row++, -column => 1, -sticky => "ew");
 
 	my $f = $t->Frame->grid(-row => $row++, -column => 0, -columnspan => 2);
 
-	my $okb = $f->Button
+	my($okb, $cancelb);
+	$okb = $f->Button
 	  (-text => 'OK',
 	   -command => sub {
 	       my($from_e, $to_e, $annotation_e);
@@ -3900,13 +3905,42 @@ sub show_intervals {
 	       if (defined $annotation && $annotation !~ /^\s*$/) {
 		   $annotation_e = $annotation;
 	       }
+
+	       if ($to_e <= $from_e) {
+		   my $ans = $f->messageBox(-message => "First date larger or equal to second date. Is this OK?",
+					    -type => "YesNo",
+					    -icon => "question",
+					    -title => "Interval error",
+					   );
+		   if (lc $ans ne 'yes') {
+		       return;
+		   }
+	       }
+
+	       my($overlap_p, $overlap_time) = $root->is_overlapping($from_e, $to_e, -ignoreproject => $project);
+	       if ($overlap_p) {
+		   my $ans = $f->messageBox(-message => "Entered interval overlaps another project (" .
+					    $overlap_p->label . ") which has the interval " .
+					    $epoch2readable_date->($overlap_time->[$overlap_p->TIMES_FROM]) .
+					    " - " .
+					    $epoch2readable_date->($overlap_time->[$overlap_p->TIMES_TO]) .
+					    ".\nIs this OK?",
+					    -type => "YesNo",
+					    -icon => "question",
+					    -title => "Interval overlapping",
+					   );
+		   if (lc $ans ne 'yes') {
+		       return;
+		   }
+	       }
+
 	       $project->set_times($i, $from_e, $to_e, $annotation);
 	       $modified++;
 	       $update->($t);
 	   },
 	  )->pack(-side => 'left');
-	my $cancelb = $f->Button
-	  (-text => 'Cancel',
+	$cancelb = $f->Button
+	  (-text => M"Cancel",
 	   -command => sub {
 	       if ($args{-cancelcommand}) {
 		   $args{-cancelcommand}->($i);
@@ -3916,7 +3950,7 @@ sub show_intervals {
 	  )->pack(-side => 'left');
 	$cancelb->focus;
 	my $deleteb = $f->Button
-	  (-text => 'Delete',
+	  (-text => M"Delete",
 	   -command => sub {
 	       $project->delete_times($i);
 	       $update->($t);
@@ -3951,7 +3985,7 @@ sub show_intervals {
 	}
     };
 
-    $w = $top->Toplevel(-title => "Intervals for " . $project->pathname)
+    $w = $top->Toplevel(-title => Mfmt("Intervals for %s", $project->pathname))
 	if !defined $w;
     my $no_cols = 2;
     my $rev_lifetime_col;
@@ -4404,14 +4438,15 @@ sub split_time_window {
     return if !$time_def;
     my $t = $w->Toplevel(-title => M"Split");
     my $width = 300;
-    my $c_height = 30;
-    my $c = $t->Canvas(-width => $width, -height => 60)->pack(qw(-expand 1 -fill both));
+    my $c_y = 15;
+    my $c_height = 40;
+    my $c = $t->Canvas(-width => $width, -height => $c_y + $c_height + 30)->pack(qw(-expand 1 -fill both));
     my $f = $t->Frame->pack(qw(-fill x));
     my $weiter = 0;
     $f->Button(-text => M"Ok", -command => sub { $weiter = +1 })->pack(-side => "left");
     $f->Button(-text => M"Cancel", -command => sub { $weiter = -1 })->pack(-side => "left");
 
-    $c->createRectangle(0, 0, $width, $c_height);
+    $c->createRectangle(0, $c_y, $width, $c_height+$c_y);
     my $beg_time = $time_def->[$project->TIMES_FROM];
     my $end_time = $time_def->[$project->TIMES_TO];
     return if !defined $end_time;
@@ -4421,19 +4456,68 @@ sub split_time_window {
     my @split_times;
 
     my $l = $c->Label(-textvariable => \$current_time);
-    $c->createWindow($width/2, $c_height + 10, -window => $l, -anchor => "n");
+    $c->createWindow($width/2, $c_height + $c_y + 10, -window => $l, -anchor => "n");
 
     my $ignore_more_motion;
+
+    my $x_to_time = sub {
+	my($x) = @_;
+	int((($x-0)/$width * ($end_time - $beg_time)) + $beg_time);
+    };
+
+    my $time_to_x = sub {
+	my($time) = @_;
+	int(($time - $beg_time)/($end_time - $beg_time) * $width);
+    };
+
+    my $short_format_time = sub {
+	my($epoch_time) = @_;
+	my(@l) = localtime $epoch_time;
+	sprintf "%02d:%02d", @l[2,1];
+    };
+
+    my $format_time = sub {
+	my($epoch_time) = @_;
+	my(@l) = localtime $epoch_time;
+	sprintf "%02d:%02d:%02d", @l[2,1,0];
+    };
+
+    {
+	require Timex::Util;
+	require Time::Local;
+	my @beg_l = localtime $beg_time;
+	@beg_l[0,1] = (0,0);
+	$beg_l[2]++;
+	my @end_l = localtime $end_time;
+	@end_l[0,1] = (0,0);
+	if ("@beg_l" ne "@end_l") {
+	    $beg_time = Time::Local::timelocal(@beg_l);
+	    my $hours = ($end_time - $beg_time) / (60*60);
+	    my $tic = Timex::Util::make_tics(0, $hours);
+	    for(my $h = 0; $h<=$hours; $h+=$tic) {
+		my $time = $beg_time+$h*3600;
+		my $x = $time_to_x->($time);
+		$c->createLine($x, $c_y-3, $x, $c_y);
+		$c->createText($x, $c_y-3,
+			       -anchor => "s",
+			       -text => $short_format_time->($time),
+			       -font => "helvetica 6",
+			      );
+	    }
+	}
+    }
+
+    my $mover = $c->createLine(0,0,0,0, -fill=>"red");
 
     my $redraw_splits = sub {
 	$c->delete("split");
 	my $split_i = 0;
 	for my $sel_time (@split_times) {
-	    my $x = ($sel_time - $beg_time)/($end_time - $beg_time) * $width;
-	    $c->createLine($x, 0, $x, $c_height, -tags => ["split", "split-$split_i"]);
+	    my $x = $time_to_x->($sel_time);
+	    $c->createLine($x, $c_y, $x, $c_y+$c_height, -tags => ["split", "split-$split_i"]);
 
-	    $c->createLine($x-3, $c_height+2, $x+3, $c_height+6, -width => 2, -fill => "red", -tags => ["split", "split-$split_i", "delete"]);
-	    $c->createLine($x-3, $c_height+6, $x+3, $c_height+2, -width => 2, -fill => "red", -tags => ["split", "split-$split_i", "delete"]);
+	    $c->createLine($x-3, $c_y+$c_height+2, $x+3, $c_y+$c_height+6, -width => 2, -fill => "red", -tags => ["split", "split-$split_i", "delete"]);
+	    $c->createLine($x-3, $c_y+$c_height+6, $x+3, $c_y+$c_height+2, -width => 2, -fill => "red", -tags => ["split", "split-$split_i", "delete"]);
 	    $split_i++;
 	}
     };
@@ -4447,21 +4531,21 @@ sub split_time_window {
 		     my($w) = shift;
 		     my($e) = $w->XEvent;
 		     my($x,$y) = ($sc->canvasx($e->x), $sc->canvasy($e->y));
-		     if ($x >= 0 && $x < $width && $y >= 0 && $y < $c_height) {
-			 $sel_time = (($x-0)/$width * ($end_time - $beg_time)) + $beg_time;
-			 my(@l) = localtime $sel_time;
-			 $current_time = sprintf "%02d:%02d:%02d", @l[2,1,0];
+		     if ($x >= 0 && $x < $width && $y >= $c_y && $y < $c_height+$c_y) {
+			 $sel_time = $x_to_time->($x);
+			 $current_time = $format_time->($sel_time);
+			 $c->coords($mover, $x,$c_y,$x,$c_y+$c_height);
 		     } else {
 			 undef $sel_time;
 			 $current_time = "";
+			 $c->coords($mover, 0,0,0,0);
 		     }
 		 });
     $sc->bind("delete", "<Any-Motion>", sub {
 		 my(@tags) = $sc->gettags("current");
 		 my($split_i) = grep { /split-\d+/ } @tags;
 		 ($split_i) = $split_i =~ /(\d+)/;
-		 my(@l) = localtime $split_times[$split_i];
-		 $current_time = sprintf "%02d:%02d:%02d", @l[2,1,0];
+		 $current_time = $format_time->($split_times[$split_i]);
 		 $ignore_more_motion = 1;
 	     });
     $sc->bind("delete", "<1>", sub {
