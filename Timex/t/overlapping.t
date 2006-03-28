@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: overlapping.t,v 1.1 2006/03/28 22:01:47 eserte Exp $
+# $Id: overlapping.t,v 1.2 2006/03/28 22:11:03 eserte Exp $
 # Author: Slaven Rezic
 #
 
@@ -34,7 +34,7 @@ my @tests = (
 	     [1000,4000, 1],
 	    );
 	     
-plan tests => scalar(@tests);
+plan tests => 2*scalar(@tests);
 
 my $p = Timex::Project->new;
 $p->{times} = [[1000,2000,"Foobar","Blafoo"],
@@ -46,8 +46,10 @@ for my $test (@tests) {
     my($op,$ot) = $p->is_overlapping($from,$to);
     if ($yesno) {
 	is($op, $p, "Test $from - $to -> yes");
+	is(ref $ot, "ARRAY", "times interval is an interval");
     } else {
 	is($op, undef, "Test $from - $to -> undef");
+	is($ot, undef, "No times interval");
     }
 }
 
