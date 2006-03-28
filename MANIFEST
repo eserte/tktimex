@@ -13,6 +13,7 @@ Timex/Project/XML.pm
 Timex/Rcs.pm
 Timex/Server.pm
 Timex/Svn.pm
+Timex/Util.pm
 Timex/Utmp.pm
 Timex/de_template.csv
 Timex/t/base.t
