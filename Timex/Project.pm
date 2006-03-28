@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.54 2006/03/28 22:02:15 eserte Exp $
+# $Id: Project.pm,v 3.55 2006/03/28 22:49:06 eserte Exp $
 #
 
 =head1 NAME
@@ -25,7 +25,7 @@ package Timex::Project;
 use strict;
 use vars qw($VERSION $magic $magic_template $emacsmode $pool @project_attributes);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 3.54 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 3.55 $ =~ /(\d+)\.(\d+)/);
 
 $magic = '#PJ1';
 $magic_template = '#PJT';
@@ -1956,8 +1956,10 @@ Otherwise an empty list is returned.
 =cut
 
 sub is_overlapping {
-    my($project, $new_begin, $new_end) = @_;
+    my($project, $new_begin, $new_end, %args) = @_;
+    my $ignore_project = $args{"-ignoreproject"};
     for my $p ($project->all_subprojects) {
+	next if $ignore_project && $ignore_project eq $p;
 	for my $time (@{ $p->{times} }) {
 	    my($other_begin, $other_end) = @$time;
 	    next if $other_begin >= $new_end;
