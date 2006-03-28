@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: Project.pm,v 3.53 2006/01/03 23:06:33 eserte Exp $
+# $Id: Project.pm,v 3.54 2006/03/28 22:02:15 eserte Exp $
 #
 
 =head1 NAME
@@ -25,7 +25,7 @@ package Timex::Project;
 use strict;
 use vars qw($VERSION $magic $magic_template $emacsmode $pool @project_attributes);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 3.53 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 3.54 $ =~ /(\d+)\.(\d+)/);
 
 $magic = '#PJ1';
 $magic_template = '#PJT';
@@ -770,7 +770,8 @@ sub sorted_subprojects {
     @sub = $root->all_subprojects()
 
 Return all projects below $root (recurse into tree) as an flat array
-of Projects.
+of Projects. The project $root itself is included as first entry in
+this list.
 
 =cut
 
@@ -1943,6 +1944,28 @@ sub merge {
     push @changed_p, values %changed_p;
 
     ($modified, \@new_p, \@changed_p);
+}
+
+=head2 ($overlapping_project, $overlapping_line) = $project->is_overlapping($begin,$end)
+
+If the given begin and end time (in seconds since epoch) are
+overlapping any project interval in $project, then the overlapped
+project object is returned together with the overlapping line.
+Otherwise an empty list is returned.
+
+=cut
+
+sub is_overlapping {
+    my($project, $new_begin, $new_end) = @_;
+    for my $p ($project->all_subprojects) {
+	for my $time (@{ $p->{times} }) {
+	    my($other_begin, $other_end) = @$time;
+	    next if $other_begin >= $new_end;
+	    next if $new_begin >= $other_end;
+	    return ($p, $time);
+	}
+    }
+    ();
 }
 
 # XXX need work...
