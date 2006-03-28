@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: split.t,v 1.1 2005/10/10 19:11:31 eserte Exp $
+# $Id: split.t,v 1.2 2006/03/28 21:48:05 eserte Exp $
 # Author: Slaven Rezic
 #
 
@@ -10,12 +10,10 @@ use strict;
 
 BEGIN {
     if (!eval q{
-	use WWW::Mechanize;
-	use WWW::Mechanize::FormFiller;
 	use Test::More;
 	1;
     }) {
-	print "1..0 # skip: no WWW::Mechanize and/or Test::More modules\n";
+	print "1..0 # skip: no Test::More module\n";
 	exit;
     }
 }
