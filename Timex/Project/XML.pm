@@ -1,14 +1,14 @@
 # -*- perl -*-
 
 #
-# $Id: XML.pm,v 1.8 2003/03/28 16:52:51 eserte Exp $
+# $Id: XML.pm,v 1.9 2006/05/02 21:31:19 eserte Exp $
 # Author: Slaven Rezic
 #
-# Copyright (C) 1999 Slaven Rezic. All rights reserved.
+# Copyright (C) 1999,2006 Slaven Rezic. All rights reserved.
 # This package is free software; you can redistribute it and/or
 # modify it under the same terms as Perl itself.
 #
-# Mail: eserte@cs.tu-berlin.de
+# Mail: srezic@cpan.org
 # WWW:  http://user.cs.tu-berlin.de/~eserte/
 #
 
@@ -20,7 +20,18 @@ use XML::Parser;
 
 # XXX noch nicht getestet
 # XXX code aus Tk::XMLViewer verwenden (repository?)
-eval q{
+eval q|
+    use Encode;
+    sub convert2 {
+	Encode::decode("utf-8", $_[0]);
+    }
+    sub convert3 {
+	Encode::encode("utf-8", $_[0]);
+    }
+|;
+if ($@) {
+    warn $@;
+    eval q|
     use utf8;
     sub convert2 {
 	my $s = shift;
@@ -34,11 +45,12 @@ eval q{
 	$s =~ tr/\0-\xff//CU;
 	$s;
     }
-};
-if ($@) {
-    warn "Can't handle unicode in perl, using workaround...\n";
-    *convert2 = \&utf8_latin1;
-    *convert3 = \&latin1_utf8;
+    |;
+    if ($@) {
+        warn "Can't handle unicode in perl, using workaround...\n";
+        *convert2 = \&utf8_latin1;
+        *convert3 = \&latin1_utf8;
+    }
 }
 
 sub load {
@@ -151,6 +163,7 @@ sub interpret_tree {
 sub latin1_utf8 {
     my $s = shift;
     return "" unless defined $s;
+    use bytes;
     $s =~ s/ä/\xc3\xa4/g;
     $s =~ s/ö/\xc3\xb6/g;
     $s =~ s/ü/\xc3\xbc/g;
@@ -174,6 +187,7 @@ sub escape_special {
 sub utf8_latin1 {
     my $s = shift;
     return "" unless defined $s;
+    use bytes;
     $s =~ s/\xc3\xa4/ä/g;
     $s =~ s/\xc3\xb6/ö/g;
     $s =~ s/\xc3\xbc/ü/g;
