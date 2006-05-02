@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: base.t,v 1.11 2005/10/10 19:14:21 eserte Exp $
+# $Id: base.t,v 1.12 2006/05/02 21:31:27 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998,2005 Slaven Rezic. All rights reserved.
@@ -17,6 +17,9 @@ use FindBin;
 use lib ("$FindBin::RealBin/..");
 use Timex::Project;
 use Getopt::Long;
+use Test::More;
+
+plan skip_all => "Test not finished yet";
 
 use strict;
 use vars qw($first_project_text $second_project_text);
