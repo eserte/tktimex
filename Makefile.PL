@@ -13,6 +13,7 @@ my $pm =
      'Timex/Rcs.pm'	       => '$(INST_LIBDIR)/Timex/Rcs.pm',
      'Timex/Server.pm'	       => '$(INST_LIBDIR)/Timex/Server.pm',
      'Timex/Utmp.pm'	       => '$(INST_LIBDIR)/Timex/Utmp.pm',
+     'Timex/Util.pm'	       => '$(INST_LIBDIR)/Timex/Util.pm',
      'Timex/MultiProject.pm'   => '$(INST_LIBDIR)/Timex/MultiProject.pm',
      'Timex/Hooks.pm'	       => '$(INST_LIBDIR)/Timex/Hooks.pm',
      'Timex/Msg.pm'   	       => '$(INST_LIBDIR)/Timex/Msg.pm',
