@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.32 2006/03/28 22:48:48 eserte Exp $
+# $Id: tktimex,v 6.33 2006/09/12 21:48:04 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -168,7 +168,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.32 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.33 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -2512,15 +2512,23 @@ sub load_file {
     my $sos_file = sos_filename($file_to_load);
     if (-f $sos_file) {
 	my $mtime = (stat($sos_file))[9];
-	require Tk::Dialog;
-	$top->Dialog
+	my $Dialog = "Dialog";
+	if (eval { require Tk::LongDialog; 1 }) {
+	    $Dialog = "LongDialog";
+	} else {
+	    require Tk::Dialog;
+	}
+	$top->$Dialog
 	  (-title => M"Warning",
 	   -text => Mfmt
 	   ("There is a sos file <%s>\n".
-	    "from %s\n".
-	    "You should check whether this file contains valueable information.\n".
-	    "Otherwise delete the file to avoid this warning.",
-	    $sos_file, scalar(localtime($mtime))),
+	    "from %s.\n".
+	    "You should check whether this file contains valueable information, e.g. by using\n    diff '%s' '%s'\nor\n    cmp '%s' '%s'\n".
+	    "Otherwise delete the sos file to avoid this warning.",
+	    $sos_file, scalar(localtime($mtime)),
+	    $sos_file, $file_to_load, # diff
+	    $sos_file, $file_to_load, # cmp
+	   ),
 	   -popover => 'cursor',
 	   -default_button => M"OK",
 	   -buttons => [M"OK"])->Show;
@@ -4159,7 +4167,28 @@ sub show_intervals {
 	   -text => sec2time(time-$last_rev_def->{'Time'}, 'dd', 0));
     }
 
+    my $line_is_running = sub {
+	my($v) = @_;
+	return 0 if $project ne $current_project;
+	my $inx = $lb->info('selection');
+	return 0 if !defined $inx;
+	my $time = $project->{times}->[$inx];
+	return 0 if !defined $time;
+	if ($time->[Timex::Project::TIMES_TO] eq "") {
+	    if ($v) {
+		$lb->messageBox
+		    (-icon => 'info',
+		     -title => 'Running',
+		     -message => M"Cannot manipulate running interval",
+		     -type => M"Ok");
+	    }
+	    return 1;
+	}
+	return 0;
+    };
+
     my $delete = sub {
+	return if $line_is_running->(1);
 	return unless
 	    lc($lb->messageBox
 	       (-icon => 'question',
@@ -4172,6 +4201,7 @@ sub show_intervals {
     };
 
     my $insert = sub {
+	return if $line_is_running->(1);
 	my($before_or_after) = @_;
 	my @sel = $lb->info('selection');
 	my $before;
@@ -4195,6 +4225,7 @@ sub show_intervals {
     };
 
     my $split = sub {
+	return if $line_is_running->(1);
 	my @sel = $lb->info('selection');
 	my $done_split = split_time_window($w, $project, $sel[$#sel]);
 	if ($done_split) {
@@ -4221,6 +4252,7 @@ sub show_intervals {
 	$lb_popup_menu->command
 	    (-label => M"Edit",
 	     -command => sub {
+		 return if $line_is_running->(1);
 		 my($index) = $lb->info('selection');
 		 return if !defined $index;
 		 $double_click->($index);
@@ -4253,15 +4285,18 @@ sub show_intervals {
 	$lb_popup_menu->command
 	    (-label => M"Move",
 	     -command => sub {
+		 return if $line_is_running->(1);
 		 # BrowseEntry destroys the selection, so remember as
 		 # early as possible...
 		 my(@current_indexes) = $real_lb->info("selection");
 		 my $t2 = $lb->Toplevel(-title => M"Move interval");
 		 my $f0 = $t2->Frame->pack(-fill => 'x', -expand => 1);
 		 $f0->Label(-text => M"New Parent")->pack(-side => "left");
-		 my $new_project;
+		 my $new_project = $project->pathname;
 		 my $be = _all_projects_browseentry
 		     ($f0, -variable => \$new_project, -excluderoot => 1,
+		      ($Tk::BrowseEntry::VERSION > 4 ? (-listheight => 30) : ()),
+		      #-autolimitheight => 1, # XXX does not work?!
 		      -exportselection => 0);
 		 eval { $be->updateListWidth() }; warn $@ if $@;
 		 $be->pack(-side => "left", -fill => "x", -expand => 1);
@@ -4272,6 +4307,17 @@ sub show_intervals {
 			  if (!defined $new_project_p) {
 			      die "Can't find parent $new_project";
 			  }
+
+			  if ($current_project && $new_project eq $current_project->pathname) {
+			      $real_lb->messageBox
+				  (-message => M("Cannot move entry/ies to running project. Please stop the this project first."),
+				   -icon => 'error',
+				   -title => M"Move",
+				   -type => 'Ok',
+				  );
+			      return 0;
+			  }
+
 			  my $new_times = $new_project_p->interval_times("", -asref => 1);
 			  if (@current_indexes == 0) {
 			      @current_indexes = $current_index;
