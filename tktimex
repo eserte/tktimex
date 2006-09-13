@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.33 2006/09/12 21:48:04 eserte Exp $
+# $Id: tktimex,v 6.34 2006/09/13 18:29:34 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -168,7 +168,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.33 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.34 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -2622,30 +2622,41 @@ sub lock_file {
     my $lock_ok = 0;
     if (open(CURRFILE, $file)) {
 	$is_opened = 1;
-#warn "opend";
 	eval q{
 	    use Fcntl qw(:flock);
-#warn "try flock";
 	    if (!flock CURRFILE, LOCK_EX|LOCK_NB) {
-		use Tk::Dialog;
-		$top->Dialog
-		  (-title => M"File locked",
-		   -text  => Mfmt
-		   ("<%s> is already locked.\n\n" .
-		    "Please check that there is no other tktimex process " .
-		    "using this file and try again.\n", $file),
-		   -default_button => M"OK",
-		   -buttons => [M"OK"],
-		   -popover => 'cursor',
-		  )->Show;
-		$lock_ok = 0;
+		my $err = $!;
+		use Errno;
+		if (exists &Errno::EOPNOTSUPP && $err == Errno::EOPNOTSUPP()) {
+		    my $ret = $top->messageBox
+		        (-title => M"Locking not possible",
+			 -message => Mfmt
+			  ("Locking of file\n<%s>\nis not possible.\n\n" .
+			   "Maybe you're on a NFS without locking enabled.\n\n" .
+			   "Are you sure that no other tktimex process is " .
+			   "using this file and want to proceed?", $file),
+			 -icon => 'error',
+			 -type => 'OkCancel',
+			);
+		     $lock_ok = lc($ret) eq 'ok';
+		} else {
+		    $top->messageBox
+			(-title => M"File locked",
+		   	 -message  => Mfmt
+		   	  ("<%s> is already locked.\n\n" .
+		    	   "Please check that there is no other tktimex process " .
+		    	   "using this file and try again.\n", $file),
+			 -icon => 'error',
+			 -type => 'Ok',
+			);
+		    $lock_ok = 0;
+		}
 	    } else {
 		$lock_ok = 1;
 	    }
 	};
 	warn $@ if $@;
     }
-#warn "lockok=$lock_ok";
     $lock_ok;
 }
 
