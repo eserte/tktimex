@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.34 2006/09/13 18:29:34 eserte Exp $
+# $Id: tktimex,v 6.35 2006/09/21 00:53:26 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -168,12 +168,12 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.34 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.35 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
 
-use vars qw($can_lock $lock_is_strict $file_writeable);
+use vars qw($can_lock $lock_is_strict $file_writeable $no_lock_already_warned);
 $can_lock = ($^O ne 'MSWin32'); # gefährlich für win...
 $lock_is_strict = ($os eq 'win');
 
@@ -2628,17 +2628,24 @@ sub lock_file {
 		my $err = $!;
 		use Errno;
 		if (exists &Errno::EOPNOTSUPP && $err == Errno::EOPNOTSUPP()) {
-		    my $ret = $top->messageBox
-		        (-title => M"Locking not possible",
-			 -message => Mfmt
-			  ("Locking of file\n<%s>\nis not possible.\n\n" .
-			   "Maybe you're on a NFS without locking enabled.\n\n" .
-			   "Are you sure that no other tktimex process is " .
-			   "using this file and want to proceed?", $file),
-			 -icon => 'error',
-			 -type => 'OkCancel',
-			);
-		     $lock_ok = lc($ret) eq 'ok';
+		    if (!$no_lock_already_warned) {
+		        my $ret = $top->messageBox
+		            (-title => M"Locking not possible",
+		        	 -message => Mfmt
+		        	  ("Locking of file\n<%s>\nis not possible.\n\n" .
+		        	   "Maybe you're on a NFS without locking enabled.\n\n" .
+		        	   "Are you sure that no other tktimex process is " .
+		        	   "using this file and want to proceed?", $file),
+		        	 -icon => 'error',
+		        	 -type => 'OkCancel',
+		        	);
+		        $lock_ok = lc($ret) eq 'ok';
+			if ($lock_ok) {
+			    $no_lock_already_warned = 1;
+			}
+		    } else {
+			$lock_ok = 1;
+		    }
 		} else {
 		    $top->messageBox
 			(-title => M"File locked",
