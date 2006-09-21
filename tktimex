@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.35 2006/09/21 00:53:26 eserte Exp $
+# $Id: tktimex,v 6.36 2006/09/21 18:33:31 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -168,7 +168,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.35 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.36 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -540,8 +540,8 @@ if ($Tk::VERSION >= 800.005) {
 			    -background => $inner_bg,
 			    -foreground => $inner_fg);
 
-    $hl_entry{"red"}  = $top->ItemStyle($p_itemtype, -foreground => 'red');
-    $hl_entry{"blue"} = $top->ItemStyle($p_itemtype, -foreground => 'blue');
+    $hl_entry{"red"}  = $top->ItemStyle($p_itemtype, -foreground => 'red', -background => $inner_bg);
+    $hl_entry{"blue"} = $top->ItemStyle($p_itemtype, -foreground => 'blue', -background => $inner_bg);
 
     $new_in_merge     = $top->ItemStyle($p_itemtype, -foreground => 'green3',
 					-background => $inner_bg);
@@ -2100,6 +2100,36 @@ sub show_one_day {
 			  },
 			 )->pack(-expand => 1,
 				 -fill => 'both');
+
+    if (!$s_if) {
+	my $popup_entry;
+	my $popup_project;
+	my $real_lb = $lb->Subwidget("scrolled");
+	my $lb_popup_menu = $real_lb->Menu(-tearoff => 0,
+					   -disabledforeground => "darkblue");
+	$lb_popup_menu->command(-label => M"Project:",
+				-state => "disabled");
+	$lb_popup_menu->command(-label => M"Attributes",
+				-command => sub { show_attributes_by_project($popup_project) });
+	$lb_popup_menu->command(-label => M"Intervals",
+				-command => sub { show_intervals($top, $popup_project) });
+	if ($real_lb->can("menu") &&
+	    $real_lb->can("PostPopupMenu") && $Tk::VERSION >= 800) {
+	    $real_lb->menu($lb_popup_menu);
+	    $real_lb->Tk::bind('<3>' => sub {
+				   my $w = $_[0];
+				   my $e = $w->XEvent;
+				   $popup_entry = $w->GetNearest($e->y, 0);
+				   return unless defined $popup_entry;
+				   $w->anchorSet($popup_entry);
+				   $popup_project = $real_lb->info('data', $popup_entry);
+				   return unless $popup_project;
+				   $lb_popup_menu->entryconfigure(0, -label => $popup_project->label);
+				   $w->PostPopupMenu($e->X, $e->Y);
+			       });
+	}
+    }
+
     $btn->configure(-command => sub {
 		      my $s_from;
 		      if ($has_date) {
@@ -2134,7 +2164,7 @@ sub show_one_day {
 			  if (defined $jobnumber && $jobnumber ne "") {
 			      $label .= " (" . $jobnumber . ")";
 			  }
-			  $lb->add($i, -text => $label);
+			  $lb->add($i, -text => $label, -data => $p);
 			  my $diff = $p->sum_time($s_from, $s_to);
 			  $sum += $diff;
 			  $lb->itemCreate($i, 1, -text =>
@@ -2194,6 +2224,9 @@ sub daily_intervals {
 	 -width => 60,
 	 -selectmode => "browse",
 	 -browsecmd => $highlight_sub,
+	 -background => $inner_bg,
+	 -foreground => $inner_fg,
+	 -highlightthickness => 0,
 	)->pack(-expand => 1, -fill => 'both',
 		-side => "left");
 
@@ -3381,10 +3414,7 @@ sub _all_projects_browseentry {
 }
 
 sub show_attributes {
-    my($path, $readonly) = @_;
-
-    my $readonly_some;
-    if (defined $current_project) { $readonly_some = 1 }
+    my($path, @args) = @_;
 
     if (!defined $path) {
 	$path = get_sel_entry();
@@ -3393,6 +3423,16 @@ sub show_attributes {
 
     my $project = $project_frame->info('data', $path);
     return if !defined $project;
+
+    show_attributes_by_project($project, @args);
+}
+
+sub show_attributes_by_project {
+    my($project, $readonly) = @_;
+
+    my $readonly_some;
+    if (defined $current_project) { $readonly_some = 1 }
+
 
     my $attribute_top = $top->Toplevel(-title => M"Attributes");
     my $f = $attribute_top->Frame->pack(-fill => 'both', -expand => 1);
@@ -4121,6 +4161,7 @@ sub show_intervals {
 
 	if (!$anchor_set and defined $day and $day <= $from) {
 	    $lb->anchorSet($i);
+	    $see_first = $i;
 	    $anchor_set = 1;
 	}
 
