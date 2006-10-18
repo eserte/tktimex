@@ -5,13 +5,14 @@
 package Timex::Plugin::OvertimeAlarm;
 
 use strict;
-our $VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+our $VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 use Data::Dumper   qw();
 use File::Basename qw(dirname);
 use Safe	   qw();
 use Storable	   qw(dclone);
-use Time::Local	   qw(timelocal);
+use Time::Local	   qw(timelocal); # Probably I could remove this in favour of mktime
+use POSIX          qw(mktime);
 
 our $alarm_task;
 our $alarm_timer;
@@ -103,7 +104,7 @@ sub check_times {
     {
 	my @l = @l;
 	@l[3] -= ($l[6] == 0 ? 6 : $l[6]-1);
-	$begin_of{week} = timelocal(@l);
+	$begin_of{week} = mktime(@l);
     }
 
     my %time;
