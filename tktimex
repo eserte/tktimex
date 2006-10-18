@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.36 2006/09/21 18:33:31 eserte Exp $
+# $Id: tktimex,v 6.37 2006/10/18 21:47:04 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -168,7 +168,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.36 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.37 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -313,6 +313,9 @@ $options = {};
     "longhelp" => M"If set: a day should be treated as 8 hours."],
    ['archived',           '!',  0, 'callback' => \&toggle_show_archived,
     "longhelp" => M"Show archived projects too.",
+    ],
+   ['hideold',            '!',  0, 'callback' => \&toggle_hide_old,
+    "longhelp" => M"Hide old projects. Old projects are defined as projects which had no activity in the last month. This may change in future i.e. there will be an option to change the period.",
     ],
    ['onlytop',            '!',  0, 'callback' => \&toggle_show_archived,
     "longhelp" => M"Do not show subprojects.",
@@ -721,6 +724,11 @@ $mb_options->checkbutton(-label => M"day = 8h",
 $mb_options->checkbutton(-label => M"Show archived",
 			 -command => \&toggle_show_archived,
 			 -variable => \$options->{'archived'},
+			)
+    unless $s_if || $m_if;
+$mb_options->checkbutton(-label => M"Hide old projects",
+			 -command => \&toggle_hide_old,
+			 -variable => \$options->{'hideold'},
 			)
     unless $s_if || $m_if;
 $mb_options->checkbutton(-label => M"Show only top",
@@ -2624,6 +2632,9 @@ sub load_file {
 	    gui_set_pause_or_cont(M"Cont");
 	}
     }
+    if ($options->{'hideold'}) {
+	do_hide_old();
+    }
 }
 
 BEGIN { state_change("parsed 54%"); }
@@ -3373,6 +3384,40 @@ sub toggle_show_archived {
     }
 }
 
+sub toggle_hide_old {
+    if (not_running(\$options->{'hideold'})) {
+	if ($options->{'hideold'}) {
+	    do_hide_old();
+	} else {
+	    traverse_entries
+		(sub {
+		     my($entry) = @_;
+		     $project_frame->show("entry", $entry);
+		 });
+	}
+    }
+}
+
+sub do_hide_old {
+    my $since = time - 86400*30;
+    traverse_entries
+	(sub {
+	     my($entry) = @_;
+	     my $p = $project_frame->entrycget($entry, "-data");
+	     my $has_times = $p->last_time_subprojects;
+	     if (!$has_times) {
+		 $project_frame->show("entry", $entry);
+	     } else {
+		 my $time = $p->sum_time($since, undef, -recursive => 1);
+		 if ($time) {
+		     $project_frame->show("entry", $entry);
+		 } else {
+		     $project_frame->hide("entry", $entry);
+		 }
+	     }
+	 });
+}
+
 sub toggle_show_only_top {
     not_running(\$options->{'onlytop'}) && insert_all();
 }
@@ -3730,6 +3775,10 @@ sub show_attributes_by_project {
 
 	   $project->color($color);
 
+	   {
+	       local $^W = undef;
+	       $insert_all++ if ($jobnumber ne $project->jobnumber);
+	   }
 	   $project->jobnumber($jobnumber);
 
 	   {
