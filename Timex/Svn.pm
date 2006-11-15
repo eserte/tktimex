@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Svn.pm,v 1.4 2003/01/22 00:34:48 eserte Exp $
+# $Id: Svn.pm,v 1.5 2006/11/15 20:33:14 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2003 Slaven Rezic. All rights reserved.
@@ -16,7 +16,7 @@ package Timex::Svn;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 package Timex::Svn::File;
 use vars qw(@ISA);
@@ -35,12 +35,13 @@ sub parse_svnlog {
     $self->{Revisions} = [];
     $self->{RCS_File} = "???";
     $self->{Working_File} = "???";
-
     $self->_open_log;
     scalar <RLOG>; # overread separator
     while(!eof(RLOG)) {
-	chomp($_ = scalar <RLOG>);
-	if (!/^rev\s+(\d+):\s*(.+?)\s*\|\s*(\d+)-(\d+)-(\d+)\s+(\d+):(\d+):(\d+).*?\s*\|\s*(\d+)\s+lines?/) {
+	my $l = $_;
+	chomp($l = scalar <RLOG>);
+	if ($l !~ /^rev\s+(\d+):\s*(.+?)\s*\|\s*(\d+)-(\d+)-(\d+)\s+(\d+):(\d+):(\d+).*?\s*\|\s*(\d+)\s+lines?/ &&
+	    $l !~ /^r(\d+)\s*\|\s*(.+?)\s*\|\s*(\d+)-(\d+)-(\d+)\s+(\d+):(\d+):(\d+).*?\s*\|\s*(\d+)\s+lines?/) {
 	    die "Can't parse $_";
 	}
 	my($rev, $name, $Y, $M, $D, $h, $m, $s, $lines) =
@@ -123,7 +124,7 @@ sub _log_hack {
     foreach my $logentry (@{ $ref->{logentry} }) {
 	foreach my $path (@{ $logentry->{paths}->[0]->{path} }) {
   	    if ($path->{content} =~ m|/\Q$base\E$| && # XXX only approx!
-  		$path->{action} eq 'D') {
+  		$path->{action} =~ m{^[DM]$}) {
 		$end_rev = $logentry->{revision};
 		last;
   	    }
