@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.38 2006/11/14 22:52:10 eserte Exp $
+# $Id: tktimex,v 6.39 2007/01/16 23:37:43 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -190,7 +190,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.38 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.39 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -3413,7 +3413,7 @@ sub toggle_show_archived {
 }
 
 sub toggle_hide_old {
-    if (not_running(\$options->{'hideold'})) {
+#    if (not_running(\$options->{'hideold'})) { # XXX check needed?
 	if ($options->{'hideold'}) {
 	    do_hide_old();
 	} else {
@@ -3423,7 +3423,7 @@ sub toggle_hide_old {
 		     $project_frame->show("entry", $entry);
 		 });
 	}
-    }
+#    }
 }
 
 sub do_hide_old {
@@ -3999,16 +3999,21 @@ sub show_intervals {
 	    $to   = $epoch2readable_date->($to);
 	}
 
+	my $some_are_readonly = ($to eq ""); # means: this project is running
+
 	my $from_date = ($has_date
 			 ? $t->Date($inner_bg_opt => $inner_bg,
 				    $inner_fg_opt => $inner_fg,
 				    %date_args,
 				    -variable => \$from,
 				    -choices => $date_choices,
+				    -state => "disabled",
 				    )
 			 : $t->Entry(-bg => $inner_bg,
 				     -fg => $inner_fg,
-				     -textvariable => \$from)
+				     -textvariable => \$from,
+				     ($some_are_readonly ? (-state => "readonly") : ()),
+				    )
 			 );
 	# Stick to east because of variable length of weekday names
 	$from_date->grid(-row => $row++, -column => 1, -sticky => "e");
@@ -4019,10 +4024,13 @@ sub show_intervals {
 				  %date_args,
 				  -variable => \$to,
 				  -choices => $date_choices,
+				  -state => "disabled",
 				 )
 		       : $t->Entry(-bg => $inner_bg,
 				   -fg => $inner_fg,
-				   -textvariable => \$to)
+				   -textvariable => \$to,
+				   ($some_are_readonly ? (-state => "readonly") : ()),
+				  )
 		      );
 	$to_date->grid(-row => $row++, -column => 1, -sticky => "e");
 
@@ -4036,45 +4044,48 @@ sub show_intervals {
 	  (-text => 'OK',
 	   -command => sub {
 	       my($from_e, $to_e, $annotation_e);
-	       if (!$has_date) {
-		   $from_e = $readable_date2epoch->($from);
-		   $to_e   = $readable_date2epoch->($to);
-		   if (!defined $from_e || !defined $to_e) {
-		       die "Can't recognize $from/$to";
+	       if (!$some_are_readonly) {
+		   if (!$has_date) {
+		       $from_e = $readable_date2epoch->($from);
+		       $to_e   = $readable_date2epoch->($to);
+		       if (!defined $from_e || !defined $to_e) {
+			   die "Can't recognize $from/$to";
+		       }
+		   } else {
+		       ($from_e, $to_e) = ($from, $to);
 		   }
-	       } else {
-		   ($from_e, $to_e) = ($from, $to);
+
+		   if ($to_e <= $from_e) {
+		       my $ans = $f->messageBox(-message => "First date larger or equal to second date. Is this OK?",
+						-type => "YesNo",
+						-icon => "question",
+						-title => "Interval error",
+					       );
+		       if (lc $ans ne 'yes') {
+			   return;
+		       }
+		   }
+
+		   my($overlap_p, $overlap_time) = $root->is_overlapping($from_e, $to_e, -ignoreproject => $project);
+		   if ($overlap_p) {
+		       my $ans = $f->messageBox(-message => "Entered interval overlaps another project (" .
+						$overlap_p->label . ") which has the interval " .
+						$epoch2readable_date->($overlap_time->[$overlap_p->TIMES_FROM]) .
+						" - " .
+						$epoch2readable_date->($overlap_time->[$overlap_p->TIMES_TO]) .
+						".\nIs this OK?",
+						-type => "YesNo",
+						-icon => "question",
+						-title => "Interval overlapping",
+					       );
+		       if (lc $ans ne 'yes') {
+			   return;
+		       }
+		   }
 	       }
+
 	       if (defined $annotation && $annotation !~ /^\s*$/) {
 		   $annotation_e = $annotation;
-	       }
-
-	       if ($to_e <= $from_e) {
-		   my $ans = $f->messageBox(-message => "First date larger or equal to second date. Is this OK?",
-					    -type => "YesNo",
-					    -icon => "question",
-					    -title => "Interval error",
-					   );
-		   if (lc $ans ne 'yes') {
-		       return;
-		   }
-	       }
-
-	       my($overlap_p, $overlap_time) = $root->is_overlapping($from_e, $to_e, -ignoreproject => $project);
-	       if ($overlap_p) {
-		   my $ans = $f->messageBox(-message => "Entered interval overlaps another project (" .
-					    $overlap_p->label . ") which has the interval " .
-					    $epoch2readable_date->($overlap_time->[$overlap_p->TIMES_FROM]) .
-					    " - " .
-					    $epoch2readable_date->($overlap_time->[$overlap_p->TIMES_TO]) .
-					    ".\nIs this OK?",
-					    -type => "YesNo",
-					    -icon => "question",
-					    -title => "Interval overlapping",
-					   );
-		   if (lc $ans ne 'yes') {
-		       return;
-		   }
 	       }
 
 	       $project->set_times($i, $from_e, $to_e, $annotation);
@@ -4092,13 +4103,15 @@ sub show_intervals {
 	   },
 	  )->pack(-side => 'left');
 	$cancelb->focus;
-	my $deleteb = $f->Button
-	  (-text => M"Delete",
-	   -command => sub {
-	       $project->delete_times($i);
-	       $update->($t);
-	   },
-	  )->pack(-side => 'left');
+	if (!$some_are_readonly) {
+	    $f->Button
+		(-text => M"Delete",
+		 -command => sub {
+		     $project->delete_times($i);
+		     $update->($t);
+		 },
+		)->pack(-side => 'left');
+	}
 	$t->bind('<Return>' => sub { $okb->invoke });
 	$t->bind('<Escape>' => sub { $cancelb->invoke });
 	$t->Popup(-popover => 'cursor');
@@ -4257,13 +4270,16 @@ sub show_intervals {
 	    $interval = $to-$from if !$group;
 	    $lb->itemCreate($i, $col++, -text => sec2time($interval,
 							  undef, undef));
-
-	    if (defined $annotation) {
-		# XXX strip annotation to X chars?
-		$lb->itemCreate($i, $col, -text => $annotation);
-	    }
+	} else {
+	    $lb->itemCreate($i, $col++, -text => M"Running");
 	    $col++;
-
+	}
+	if (defined $annotation) {
+	    # XXX strip annotation to X chars?
+	    $lb->itemCreate($i, $col, -text => $annotation);
+	}
+	$col++;
+	if (defined $to) {
 	    if ($has_costs) {
 		# hier nicht runden, wegen der Granularität...
 		my $hours = $interval/3600;
@@ -4289,8 +4305,6 @@ sub show_intervals {
 		}
 	    }
 	    if (@t) { $lb->itemCreate($i, $col++, -text => join(", ", @t)) }
-	} else {
-	    $lb->itemCreate($i, $col++, -text => M"Running");
 	}
 	$i++;
     }
@@ -4306,19 +4320,22 @@ sub show_intervals {
     my $line_is_running = sub {
 	my($v) = @_;
 	return 0 if $project ne $current_project;
-	my $inx = $lb->info('selection');
-	return 0 if !defined $inx;
-	my $time = $project->{times}->[$inx];
-	return 0 if !defined $time;
-	if ($time->[Timex::Project::TIMES_TO] eq "") {
-	    if ($v) {
-		$lb->messageBox
-		    (-icon => 'info',
-		     -title => 'Running',
-		     -message => M"Cannot manipulate running interval",
-		     -type => M"Ok");
+	for my $inx ($lb->info('selection')) {
+	    if (defined $inx) {
+		my $time = $project->{times}->[$inx];
+		if (defined $time) {
+		    if ($time->[Timex::Project::TIMES_TO] eq "") {
+			if ($v) {
+			    $lb->messageBox
+				(-icon => 'info',
+				 -title => 'Running',
+				 -message => M"Cannot manipulate running interval",
+				 -type => M"Ok");
+			}
+			return 1;
+		    }
+		}
 	    }
-	    return 1;
 	}
 	return 0;
     };
@@ -4388,7 +4405,6 @@ sub show_intervals {
 	$lb_popup_menu->command
 	    (-label => M"Edit",
 	     -command => sub {
-		 return if $line_is_running->(1);
 		 my($index) = $lb->info('selection');
 		 return if !defined $index;
 		 $double_click->($index);
