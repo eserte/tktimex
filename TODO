@@ -1,0 +1,31 @@
+TODO
+----
+
+* If the project list has to be redrawn (e.g. because timeformat was
+  changed) then the selection (the green background) of the active
+  projects gets lost
+
+* "Show current project" may show the wrong project if with another
+  project was chosen by right-click menu
+
+* -readonly option for tktimex: lot to be done, but this is necessary
+  to have a look at a locked file. Maybe the easiest solution: use a
+  temporary copy of the .pj1 and use this. All changes would
+  automatically get lost.
+
+* Interval editor => annotation: the entry should be white. Also the
+  date entries, if not yet.
+
+* Interval editor => change of any option: window jumps if
+  enlightenment wm is used (probably because I destroy the window and
+  recreate it, instead of reusing the toplevel)
+
+* Daily details: Show is not necessary, if immediately is active.
+  Disable show in this case.
+
+* Find a better wording for "Kein Intervall"/The breaking of the chain
+  (maybe a better image, like the one from Gimp)
+
+* Maybe make interface=medium default and should not contain stuff
+  like enterprise etc. (which is not used anymore anyway)
+
