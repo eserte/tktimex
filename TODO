@@ -23,9 +23,89 @@ TODO
 * Daily details: Show is not necessary, if immediately is active.
   Disable show in this case.
 
+  Maybe move "close" button elsewhere, to bottom?
+
 * Find a better wording for "Kein Intervall"/The breaking of the chain
   (maybe a better image, like the one from Gimp)
 
 * Maybe make interface=medium default and should not contain stuff
   like enterprise etc. (which is not used anymore anyway)
 
+* If there's no project file, than ask for one and ask the user if he
+  wants to use it as default (so it's stored in the config) (Is this
+  already implemented?)
+
+* Is it possible to change the right-mouse popup menu behaviour to
+  stay all the time? (Like in modern GUIs?)
+
+* Stacktrace, tktimex version from approx: 02 Mar 2005:
+
+--- Begin Traceback ---
+Can't use an undefined value as an ARRAY reference at
+/usr/perl-5.8.4/bin/tktimex line 3587.
+
+Tk callback for .toplevel2.toplevel1
+main::__ANON__ at /usr/perl-5.8.4/bin/tktimex line 3587
+main::__ANON__ at /usr/perl-5.8.4/bin/tktimex line 3706
+main::__ANON__ at /usr/perl-5.8.4/bin/tktimex line 3942
+Tk callback for .toplevel2.frame.hlist.menu
+Tk::__ANON__ at /usr/perl-5.8.4/lib/site_perl/5.8.4/i686-linux/Tk.pm
+line 247
+Tk::Menu::Invoke at
+/usr/perl-5.8.4/lib/site_perl/5.8.4/i686-linux/Tk/Menu.pm line 531
+<ButtonRelease>
+(command bound to event)
+
+* Auto-shrink icons if too large (by integral numbers or using the
+  resizing module from cpan)
+
+* Windows version: put tktimex into systray and remove from the
+  taskbar when iconified?
+
+  Some BASIC code:
+
+procedure TForm1.FormCreate(Sender: TObject) ;
+begin
+   ShowWindow(Application.Handle, SW_HIDE) ;
+   SetWindowLong(Application.Handle, GWL_EXSTYLE,
+     getWindowLong(Application.Handle, GWL_EXSTYLE) or
+     WS_EX_TOOLWINDOW) ;
+   ShowWindow(Application.Handle, SW_SHOW) ;
+end;
+
+* The hidden ESC and bad usability: all places with
+  entries/browseentries and which can only be left by hitting
+  esc/return, should get additional ok/cancel buttons. Example: new
+  project entry in footer.
+
+* Tk::LongDialog should be bundled with tktimex. Maybe find some other
+  Dialog calls and replace with LongDialog. And maybe put LongDialog
+  to CPAN or even to Tk?
+
+* Dialog handling: Option for changing dialog mode for input (like
+  project name): "normal" for normal dialogs and "advanced"/"embedded"
+  for dialogs within the footer of the toplevel (like now). Normal
+  should be default.
+
+* Implementation detail for projectlist HList: always use show/hide
+  when hiding items from the list, e.g. "show archived", "hide old" ...?
+  Nowadays, with fast computers, this seems to be not a problem
+  anymore.
+
+* Note: bei insert_all muss schon auf das hide-flag geachtet werden
+  und nach jedem insert_project ggfs. ein hide() gemacht werden. oder
+  immer nachträglich nach insert_all, wahrscheinlich leichter zu
+  implementieren 
+
+* "Continue last" from main menu does not work? Nothing happens?
+
+* The hide algorithm should make sure that running projects (+ parents)
+  are never hidden
+
+* When searching for a project, then hidden projects should also be
+  found and unhidden for this moment. Maybe more general: a project
+  which has the anchor should be unhidden.
+
+* Naming: nowadays "preferences" or "settings" is used, not "options"
+
+* "Edit line %d for %s" -> "Edit entry %d for %s"
