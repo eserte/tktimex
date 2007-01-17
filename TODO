@@ -1,10 +1,6 @@
 TODO
 ----
 
-* If the project list has to be redrawn (e.g. because timeformat was
-  changed) then the selection (the green background) of the active
-  projects gets lost
-
 * "Show current project" may show the wrong project if with another
   project was chosen by right-click menu
 
@@ -106,6 +102,3 @@ end;
   found and unhidden for this moment. Maybe more general: a project
   which has the anchor should be unhidden.
 
-* Naming: nowadays "preferences" or "settings" is used, not "options"
-
-* "Edit line %d for %s" -> "Edit entry %d for %s"
