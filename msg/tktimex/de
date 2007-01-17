@@ -120,6 +120,8 @@ Medium: Nur eine begrenzte Projektmanipulation ist möglich',
 'Open application iconfied' => 'Anwendung als Symbol öffnen',
 'Option editor' => 'Optionseditor',
 'Options' => 'Optionen',
+'Settings' => 'Einstellungen',
+'Settings editor' => 'Einstellungseditor',
 'Parent' => 'Vater',
 'Pause' => 'Pause',
 'Project' => 'Projekt',
@@ -188,9 +190,9 @@ von %s
 Es sollte überprüft werden, ob diese Datei wertvolle Information enthält.
 Anderweitig kann diese Datei gelöscht werden um diese Warnung zu vermeiden.',
 'There is no enterprise projects file defined.
-Please go to the enterprise tab in the option editor.
+Please go to the enterprise tab in the settings editor.
 ' => 'Es ist keine unternehmensweite Projektedatei definiert.
-Dies kann im Unternehmen-Abschnitt des Optionseditors gemacht werden.
+Dies kann im Unternehmen-Abschnitt des Einstellungseditors gemacht werden.
 ',
 'Time' => 'Zeit',
 'Timex XML files' => 'Timex-XML-Datein',
