@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.39 2007/01/16 23:37:43 eserte Exp $
+# $Id: tktimex,v 6.40 2007/01/17 00:02:48 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -190,7 +190,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.39 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.40 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -725,7 +725,7 @@ $mb_project->command(-label => M"Daily details",
 $top->bind('<Control-d>' => \&show_one_day)
     unless $s_if;
 
-$mb_options = $menu_frame->Menubutton(-text => M"Options", -direction => "below"
+$mb_options = $menu_frame->Menubutton(-text => M"Settings", -direction => "below"
 					)->pack(-side => 'left');
 $mb_options->checkbutton(-label => M"Autosave",
 			 -command => \&toggle_autosave,
@@ -777,7 +777,7 @@ if ($options->{'tree'}) {
 
 $mb_options->separator
     unless $s_if || $m_if;
-$mb_options->command(-label => M"Option editor",
+$mb_options->command(-label => M"Settings editor",
 		     -state => $opt ? "normal" : "disabled",
 		     -command => sub { $opt->option_editor($top, -buttons => ['oksave', 'cancel']) })
     unless $s_if || $m_if;
@@ -811,7 +811,18 @@ $mb_help->command
 		     -title => "tktimex",
 		    );
        };
-       $status_text->configure(-text => substr($@, 0, 40) . "...") if $@;
+       if ($@) {
+	   $top->messageBox(-icon => 'error',
+			    -title => M"Error",
+			    -text => <<EOF
+It seems that Tk::Pod is not installed (error message below). You can instead use perldoc to read the documentation:
+
+    perldoc tktimex
+
+Detailed error message:
+EOF
+			    . substr($@, 0, 80) . "...");
+       }
    });
 
 state_change("menu done");
@@ -2779,6 +2790,7 @@ sub update_project {
 	do_hide_old();
     }
 
+    gui_current_project();
 }
 
 sub insert_all {
@@ -2800,9 +2812,6 @@ sub insert_all {
 	insert_old_project($p,
 			   -newprojects => \%new_p,
 			   -changedprojects => \%changed_p);
-    }
-    if (defined $current_project) {
-	$project_frame->anchorSet(make_path($current_project));
     }
     @all_domains = $root->get_all_domains;
 
@@ -2848,9 +2857,19 @@ sub insert_all {
 	do_hide_old();
     }
 
+    gui_current_project();
+
     $top->Unbusy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
 }
 BEGIN { *update_all = \&insert_all }
+
+sub gui_current_project {
+    if (defined $current_project) {
+	my $current_pathname = make_path($current_project);
+	$project_frame->selectionSet($current_pathname);
+	$project_frame->anchorSet($current_pathname);
+    }
+}
 
 sub insert_old_project {
     my($p, %args) = @_;
@@ -3230,7 +3249,7 @@ sub update_enterprise_projects {
 	    (-title => M"Error",
 	     -text => M
 	     ("There is no enterprise projects file defined.\n" .
-	      "Please go to the enterprise tab in the option editor.\n"),
+	      "Please go to the enterprise tab in the settings editor.\n"),
 	     -popover => 'cursor')->Show;
 	return;
     }
@@ -3966,7 +3985,7 @@ sub show_intervals {
 	my $has_date;
 	eval $date_require;
 
-	my $t = $w->Toplevel(-title => "Edit line $i for "
+	my $t = $w->Toplevel(-title => "Edit entry $i for "
 			               . $project->pathname);
 	my $row = 0;
 	my($from, $to, $annotation) = @{$times->[$i]};
@@ -3994,12 +4013,12 @@ sub show_intervals {
 	};
 	$t->Label(-text => M("From").":")->grid(-row => $row, -column => 0);
 
+	my $some_are_readonly = ($to eq ""); # means: this project is running
+
 	if (!$has_date) {
 	    $from = $epoch2readable_date->($from);
 	    $to   = $epoch2readable_date->($to);
 	}
-
-	my $some_are_readonly = ($to eq ""); # means: this project is running
 
 	my $from_date = ($has_date
 			 ? $t->Date($inner_bg_opt => $inner_bg,
@@ -4007,7 +4026,7 @@ sub show_intervals {
 				    %date_args,
 				    -variable => \$from,
 				    -choices => $date_choices,
-				    -state => "disabled",
+				     ($some_are_readonly ? (-state => "disabled") : ()),
 				    )
 			 : $t->Entry(-bg => $inner_bg,
 				     -fg => $inner_fg,
@@ -4024,7 +4043,7 @@ sub show_intervals {
 				  %date_args,
 				  -variable => \$to,
 				  -choices => $date_choices,
-				  -state => "disabled",
+				  ($some_are_readonly ? (-state => "disabled") : ()),
 				 )
 		       : $t->Entry(-bg => $inner_bg,
 				   -fg => $inner_fg,
@@ -5331,21 +5350,31 @@ B<New>.
 To start the timer on a particular project, select the project from
 the list by mouse click and click on the B<Cont> button. To stop the
 timer, click on the B<Pause> button. You can also double-click on a
-project to start/stop the timer.
+project to start the timer.
 
 If autosaving is on (which is the default), after each click on
 B<Pause>, the project list will be updated on disk, and so will every
 10 minutes. If autosaving is off, you have to manually save the
 project list by clicking on the B<Save> button.
 
-To reload an project list file, you have to specify the file name on
-the command line:
+It is possible to organize projects hierarchically by using the B<New
+subproject> menu item in the B<Project>. To change the hierarchy
+afterwards, change the "Root" value in the B<Project> > B<Attributes>
+menu entry. This is also the place to change other project attributes.
 
-	tktimex projectfile.pj1
+Use B<Project> > B<Daily details> to show a daily overview of worked
+projects with their times.
 
-If Tk::Getopt is installed on your system (highly recommended!), you
-can set the default project list file in the B<Option editor> (menu
-B<Options>).
+Use B<Project> > B<Intervals> to show a complete per-project overview
+with all intervals so far. Here it is also possible to attach
+annotations to specific intervals.
+
+By default, projects are saved to the file named F<.timex.pj1> in the
+user's home directory.
+
+If L<Tk::Getopt> is installed on your system (highly recommended!),
+you can set the default project list file in the B<Settings editor>
+(menu B<Settings>).
 
 =head1 COMMAND LINE OPTIONS
 
@@ -5390,6 +5419,7 @@ Possible options are:
 
     - private vs. enterprice projects
 
+More TODOs are in a separate file named F<TODO>.
 
 =head1 BUGS
 
