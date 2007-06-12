@@ -1,5 +1,8 @@
 Revision history for Timex.
 
+6.42
+	- new format option %a (annotations)
+
 6.41
 	- new option: -project2labelformat (used for daily details view)
 	- new format option %P (full path of project)
