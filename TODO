@@ -1,6 +1,9 @@
 TODO
 ----
 
+* Don't disturb the user if "last" is not available. Use is_in_path
+  instead.
+
 * "Show current project" may show the wrong project if with another
   project was chosen by right-click menu
 
@@ -102,3 +105,9 @@ end;
   found and unhidden for this moment. Maybe more general: a project
   which has the anchor should be unhidden.
 
+* Show daily details: also show current running project, maybe with a
+  "+" sign or so to show that it's still running
+
+* Maybe: daily details: show also annotations?
+
+* project tree: +/- verschwindet manchmal (beim editieren der zeit)
