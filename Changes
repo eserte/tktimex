@@ -1,5 +1,38 @@
 Revision history for Timex.
 
+6.41
+	- new option: -project2labelformat (used for daily details view)
+	- new format option %P (full path of project)
+	- bug fixes (in split function in interval editor)
+
+6.40
+	- renamed menu entry "options" into "settings"
+	- better help if Tk::Pod is missing
+	- bug fixes (selection won't be lost for updated projects)
+	- Pod additions
+
+6.39
+	- toggling "hide old projects" is now possible if project is running
+
+6.38
+	- Tk::Menu hack to prevent accidently selecting a menu item if the
+	  window is moved to the bottom
+
+6.37
+	- new menu entry and option for auto-hiding old projects
+
+6.35
+	- NFS lock: warn only once
+
+6.34
+	- better dialog if locking is not possible (e.g. if using NFS)
+
+6.32
+	- dates are now shown with weekday
+	- interval editor: check and warn if invalid dates or
+	  overlapping dates were entered
+	- splitting intervals window is now nicer
+
 6.31
 	- new overtime alarm plugin
 
