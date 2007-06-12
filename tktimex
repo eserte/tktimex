@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.41 2007/06/12 21:28:40 eserte Exp $
+# $Id: tktimex,v 6.42 2007/06/12 21:43:58 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -190,7 +190,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.41 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.42 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -286,6 +286,7 @@ $placeholders_help = "Placeholders are:
 %Y inherited job number in parenthesis
 %p project parent name
 %P full project path name
+%a all today's/interval's annotations
 
 More placeholders may be defined by plugins.
 ";
@@ -2209,7 +2210,10 @@ sub show_one_day {
 		      my $i = 0;
 		      my $sum = 0;
 		      foreach my $p (@p) {
-			  my $label = get_project_label_from_format($p, $options->{project2labelformat});
+			  my $label = get_project_label_from_format
+			      ($p, -format => $options->{project2labelformat},
+			       -from => $s_from, -to => $s_to,
+			      );
 
 			  $lb->add($i, -text => $label, -data => $p);
 			  my $diff = $p->sum_time($s_from, $s_to);
@@ -5315,8 +5319,10 @@ sub status_message {
 }
 
 sub get_project_label_from_format {
-    my($p, $format) = @_;
-    my $label = defined $format ? $format : $options->{projectlabelformat};
+    my($p, %args) = @_;
+    my $label = defined $args{-format} ? $args{-format} : $options->{projectlabelformat};
+    my $from = defined $args{-from} ? $args{-from} : $today_time,
+    my $to   = defined $args{-to}   ? $args{-to}   : time;
     local $^W = 0;
     $label = "%n" if !defined $label || $label eq '';
     $label =~ s{%n}{ $p->label }ge;
@@ -5326,6 +5332,7 @@ sub get_project_label_from_format {
     $label =~ s{%P}{ $p->pathname }ge;
     $label =~ s{%y}{ $p->jobnumber_from_parent }ge;
     $label =~ s{%Y}{ $p->jobnumber_from_parent ne "" ? "(" . $p->jobnumber_from_parent . ")" : "" }ge;
+    $label =~ s{%a}{ join ", ", $p->get_all_annotations($from, $to) }ge;
     Hooks::get_hooks("project_label_replacement")->execute(\$label, $p);
     $label
 }
