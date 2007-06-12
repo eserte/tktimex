@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.40 2007/01/17 00:02:48 eserte Exp $
+# $Id: tktimex,v 6.41 2007/06/12 21:28:40 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -190,7 +190,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.40 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.41 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -275,7 +275,20 @@ EOF
 
 state_change("before Getopt definition");
 
-use vars qw($max_enterprise_file_list @all_domains $options @opttable);
+use vars qw($max_enterprise_file_list @all_domains $options @opttable
+	    $placeholders_help
+	  );
+$placeholders_help = "Placeholders are:
+%n project name
+%j job number
+%J job number in parenthesis
+%y inherited job number
+%Y inherited job number in parenthesis
+%p project parent name
+%P full project path name
+
+More placeholders may be defined by plugins.
+";
 $max_enterprise_file_list = 4;
 $options = {};
 @opttable =
@@ -355,16 +368,12 @@ $options = {};
    ['projectlabelformat', '=s', '%n', callback => sub { insert_all() },
     'longhelp' => M"Use a custom format for project labels in the list view.
 
-Placeholders are:
-%n project name
-%j job number
-%J job number in parenthesis
-%y inherited job number
-%Y inherited job number in parenthesis
-%p project parent name
+" . $placeholders_help,
+   ],
+   ['project2labelformat', '=s', '%P %Y',
+    'longhelp' => M"Use a custom format for project labels in the daily details view.
 
-More placeholders may be defined by plugins.
-",
+" . $placeholders_help,
    ],
    ['maxlastprojects', '=i', $default_max_last_projects, 
     'longhelp' => M"Number of projects in the last used projects menu list"],
@@ -1393,7 +1402,7 @@ sub insert_project {
     return if $p->archived && !$options->{'archived'};
     return if (defined $options->{'domain'} && $options->{'domain'} !~ /^\s*$/)
 	      && (!defined $p->domain || $p->domain ne $options->{'domain'});
-    my $label = get_project_label_for_hlist($p);
+    my $label = get_project_label_from_format($p);
     my $path = make_path($p);
     return if !$path;
     if ($project_frame->info('exists', $path)) {
@@ -2200,11 +2209,8 @@ sub show_one_day {
 		      my $i = 0;
 		      my $sum = 0;
 		      foreach my $p (@p) {
-			  my $label = $p->pathname;
-			  my $jobnumber = $p->jobnumber_from_parent;
-			  if (defined $jobnumber && $jobnumber ne "") {
-			      $label .= " (" . $jobnumber . ")";
-			  }
+			  my $label = get_project_label_from_format($p, $options->{project2labelformat});
+
 			  $lb->add($i, -text => $label, -data => $p);
 			  my $diff = $p->sum_time($s_from, $s_to);
 			  $sum += $diff;
@@ -4708,11 +4714,11 @@ sub split_time_window {
 	my @end_l = localtime $end_time;
 	@end_l[0,1] = (0,0);
 	if ("@beg_l" ne "@end_l") {
-	    $beg_time = Time::Local::timelocal(@beg_l);
-	    my $hours = ($end_time - $beg_time) / (60*60);
+	    my $beg_time_h = Time::Local::timelocal(@beg_l);
+	    my $hours = ($end_time - $beg_time_h) / (60*60);
 	    my $tic = Timex::Util::make_tics(0, $hours);
 	    for(my $h = 0; $h<=$hours; $h+=$tic) {
-		my $time = $beg_time+$h*3600;
+		my $time = $beg_time_h+$h*3600;
 		my $x = $time_to_x->($time);
 		$c->createLine($x, $c_y-3, $x, $c_y);
 		$c->createText($x, $c_y-3,
@@ -5308,15 +5314,16 @@ sub status_message {
     }
 }
 
-sub get_project_label_for_hlist {
-    my($p) = @_;
-    my $label = $options->{projectlabelformat};
+sub get_project_label_from_format {
+    my($p, $format) = @_;
+    my $label = defined $format ? $format : $options->{projectlabelformat};
     local $^W = 0;
     $label = "%n" if !defined $label || $label eq '';
     $label =~ s{%n}{ $p->label }ge;
     $label =~ s{%j}{ $p->jobnumber }ge;
     $label =~ s{%J}{ $p->jobnumber ne "" ? "(" . $p->jobnumber . ")" : "" }ge;
     $label =~ s{%p}{ $p->parent ? $p->parent->label : "" }ge;
+    $label =~ s{%P}{ $p->pathname }ge;
     $label =~ s{%y}{ $p->jobnumber_from_parent }ge;
     $label =~ s{%Y}{ $p->jobnumber_from_parent ne "" ? "(" . $p->jobnumber_from_parent . ")" : "" }ge;
     Hooks::get_hooks("project_label_replacement")->execute(\$label, $p);
