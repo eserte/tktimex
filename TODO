@@ -12,9 +12,6 @@ TODO
   temporary copy of the .pj1 and use this. All changes would
   automatically get lost.
 
-* Interval editor => annotation: the entry should be white. Also the
-  date entries, if not yet.
-
 * Interval editor => change of any option: window jumps if
   enlightenment wm is used (probably because I destroy the window and
   recreate it, instead of reusing the toplevel)
@@ -72,11 +69,6 @@ begin
    ShowWindow(Application.Handle, SW_SHOW) ;
 end;
 
-* The hidden ESC and bad usability: all places with
-  entries/browseentries and which can only be left by hitting
-  esc/return, should get additional ok/cancel buttons. Example: new
-  project entry in footer.
-
 * Tk::LongDialog should be bundled with tktimex. Maybe find some other
   Dialog calls and replace with LongDialog. And maybe put LongDialog
   to CPAN or even to Tk?
@@ -85,11 +77,6 @@ end;
   when hiding items from the list, e.g. "show archived", "hide old" ...?
   Nowadays, with fast computers, this seems to be not a problem
   anymore.
-
-* Note: bei insert_all muss schon auf das hide-flag geachtet werden
-  und nach jedem insert_project ggfs. ein hide() gemacht werden. oder
-  immer nachträglich nach insert_all, wahrscheinlich leichter zu
-  implementieren 
 
 * "Continue last" from main menu does not work? Nothing happens?
 
@@ -103,6 +90,3 @@ end;
 * Show daily details: also show current running project, maybe with a
   "+" sign or so to show that it's still running
 
-* Maybe: daily details: show also annotations?
-
-* project tree: +/- verschwindet manchmal (beim editieren der zeit)
