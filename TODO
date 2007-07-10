@@ -81,11 +81,6 @@ end;
   Dialog calls and replace with LongDialog. And maybe put LongDialog
   to CPAN or even to Tk?
 
-* Dialog handling: Option for changing dialog mode for input (like
-  project name): "normal" for normal dialogs and "advanced"/"embedded"
-  for dialogs within the footer of the toplevel (like now). Normal
-  should be default.
-
 * Implementation detail for projectlist HList: always use show/hide
   when hiding items from the list, e.g. "show archived", "hide old" ...?
   Nowadays, with fast computers, this seems to be not a problem

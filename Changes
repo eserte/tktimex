@@ -1,5 +1,10 @@
 Revision history for Timex.
 
+6.43
+	- new option: -inlineentry (to enable the dialog-less entry
+	  widget, as it was the default until now, otherwise a dialog
+	  is shown)
+
 6.42
 	- new format option %a (annotations)
 

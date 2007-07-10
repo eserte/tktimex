@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.42 2007/06/12 21:43:58 eserte Exp $
+# $Id: tktimex,v 6.43 2007/07/10 20:23:29 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -190,7 +190,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.42 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.43 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -405,6 +405,9 @@ If changes are made here, then tktimex needs to be restarted.
     'strict' => 1,
     'longhelp' => M("Autoscrolling is not available on all systems.\n" .
     "Changes are effective on restart.")
+    ],
+   ['inlineentry',        '!', 0,
+    'longhelp' => M"Use inline text entries instead of dialogs.\nConfirm with Return, Cancel with Escape.\n"
     ],
    ['hourlyrate',         '=f', 0,
     'callback' => sub { update_costs_option(1) },
@@ -824,7 +827,7 @@ $mb_help->command
        if ($@) {
 	   $top->messageBox(-icon => 'error',
 			    -title => M"Error",
-			    -text => <<EOF
+			    -message => <<EOF
 It seems that Tk::Pod is not installed (error message below). You can instead use perldoc to read the documentation:
 
     perldoc tktimex
@@ -1185,7 +1188,31 @@ sub enter_label {
     my $action;
     my $res = '';
     $status_edit++;
-    $status_text->configure(-text => $label);
+
+    my $dialog;
+    my $parent;
+    if ($options->{inlineentry}) {
+	$status_text->configure(-text => $label);
+	$parent = $status_frame;
+    } else {
+	require Tk::DialogBox;
+	$dialog = $top->DialogBox(-command => sub {
+				      my($button) = @_;
+				      # XXX make language dependent!!!
+				      if ($button =~ m{ok}i) {
+					  $action = "yes";
+				      } else {
+					  $action = "no";
+				      }
+				  },
+				  -buttons => [M"Ok", M"Cancel"],
+				  -default_button => M"Ok",
+				 );
+	eval { $dialog->configure(-cancel_button => M"Cancel") }; # Tk804.027_050
+	my $f1 = $dialog->add("Frame")->pack(qw(-expand 1 -fill both));
+	$f1->Label(-text => $label)->pack(-side => "left");
+	$parent = $f1;
+    }
 
     my $Entry = "Entry";
     my @extra_args;
@@ -1198,7 +1225,7 @@ sub enter_label {
 	if ($status_browse_entry) {
 	    $entry = $status_browse_entry;
 	} else {
-	    $entry = $status_frame->$Entry();
+	    $entry = $parent->$Entry();
 	}
 	$entry->configure(-bg => $inner_bg,
 			  -fg => $inner_fg,
@@ -1215,11 +1242,11 @@ sub enter_label {
 	    @extra_args = (-match => 1, -dup => 0, -case => 0);
 	    $this_history_file = File::Spec->catfile($home, ".tktimex_hist");
 	};
-	$entry = $status_frame->$Entry(-bg => $inner_bg,
-				       -fg => $inner_fg,
-				       -textvariable => \$res,
-				       -width => 30,
-				       @extra_args);
+	$entry = $parent->$Entry(-bg => $inner_bg,
+				 -fg => $inner_fg,
+				 -textvariable => \$res,
+				 -width => 30,
+				 @extra_args);
 
 	$entry->bindtags([ref $entry, $entry]);
 	if ($entry->can('historyMergeFromFile')) {
@@ -1234,15 +1261,22 @@ sub enter_label {
 	}
     }
 
-    $entry->pack(-side => 'left');
-    $entry->waitVisibility;
-    $entry->grab;
-    $entry->focus;
-    $entry->bind("<Return>", sub { $action = 'yes' });
-    $entry->bind("<Escape>", sub { $action = 'no' });
     $entry->OnDestroy(sub { $status_edit-- });
-    $entry->waitVariable(\$action);
-    $entry->grabRelease;
+    $entry->pack(-side => 'left');
+    $entry->focus;
+
+    if ($dialog) {
+	$entry->bind("<Return>", sub { $dialog->Subwidget("B_".M"Ok")->invoke });
+	$entry->bind("<Escape>", sub { $dialog->Subwidget("B_".M"Cancel")->invoke });
+	$dialog->Show;
+    } else {
+	$entry->waitVisibility;
+	$entry->grab;
+	$entry->bind("<Return>", sub { $action = 'yes' });
+	$entry->bind("<Escape>", sub { $action = 'no' });
+	$entry->waitVariable(\$action);
+	$entry->grabRelease;
+    }
 
     # Muss vor $entry->destroy kommen!
     if ($action eq 'yes') {
@@ -1265,8 +1299,10 @@ sub enter_label {
 	$entry->packForget;
 	$status_edit--;
     } else {
-	$entry->destroy;
+	$entry->destroy if Tk::Exists($entry);
     }
+
+    $dialog->destroy if $dialog && Tk::Exists($dialog);
 
     $status_text->configure(-text => M("Current file") . ": " .
 			    ($options->{file} || ""));
@@ -1304,7 +1340,7 @@ sub new_project {
     if ($label && $root) {
 	return if exists_project($label);
 	$p = $root->subproject($label);
-	insert_project($p);
+	insert_project($p, -interactive => 1);
 	$project_frame->see(make_path($p));
     }
     $p;
@@ -1350,7 +1386,7 @@ sub new_project_from_template {
 	my $p = clone $template_p;
 	$p->label($label);
 	$p->reparent($root);
-	insert_project_recursive($p);
+	insert_project_recursive($p, -interactive => 1);
 	$project_frame->see(make_path($p));
     }
 }
@@ -1365,7 +1401,7 @@ sub new_sub_project {
 	my $path = $p->pathname . $separator . $label;
 	return if exists_project($path);
 	my $sub_p = $p->subproject($label);
-	insert_project($sub_p);
+	insert_project($sub_p, -interactive => 1);
 	$project_frame->see(make_path($sub_p));
     }
 }
@@ -1407,7 +1443,15 @@ sub insert_project {
     my $path = make_path($p);
     return if !$path;
     if ($project_frame->info('exists', $path)) {
-	warn Mfmt("Duplicate entry path %s - please check .pj1 file!",$path);
+	my $msg = Mfmt("Duplicate entry path %s - please check .pj1 file!",$path);
+	if ($args{'-interactive'}) {
+	    $top->messageBox(-icon => 'error',
+			     -title => M"Error",
+			     -message => $msg,
+			    );
+	} else {
+	    warn $msg;
+	}
 	return;
     }
 
