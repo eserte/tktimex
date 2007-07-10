@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.43 2007/07/10 20:23:29 eserte Exp $
+# $Id: tktimex,v 6.44 2007/07/10 21:10:10 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -190,7 +190,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.43 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.44 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -1869,6 +1869,23 @@ sub traverse_entries {
     }
 }
 
+sub traverse_unclosed_entries {
+    my $sub = shift;
+    _traverse_unclosed_entries($sub, "");
+}
+
+sub _traverse_unclosed_entries {
+    my($sub, $active) = @_;
+    if (defined $active and $active ne "") {
+	$sub->($active);
+	my $p = $project_frame->info('data', $active);
+	return if $p->closed;
+    }
+    for my $child ($project_frame->info("children", $active)) {
+	_traverse_unclosed_entries($sub, $child);
+    }
+}
+
 sub act_time {
     my $p = shift;
     if (!$p) {
@@ -2840,6 +2857,8 @@ sub update_project {
     $project_frame->delete("entry", $top_parent_entry);
     insert_old_project($top_parent, -after => $prev_entry);
 
+    update_tree_status($top_parent_entry);
+
     if ($options->{'hideold'}) {
 	do_hide_old();
     }
@@ -2869,43 +2888,7 @@ sub insert_all {
     }
     @all_domains = $root->get_all_domains;
 
-    if ($is_tree) {
-	# custom setmode implementation to use the recorded closed information
-	# in the project file
-	my $setmode;
-	$setmode = sub {
-	    my ($ent,$mode) = @_;
-	    unless (defined $mode) {
-		$mode = 'none';
-		my @args;
-		push(@args,$ent) if defined $ent;
-		my @children = $project_frame->infoChildren( @args );
-		if ( @children ) {
-		    my $p = entry_to_project($ent);
-		    $mode = $p && $p->closed ? 'open' : 'close';
-		    foreach my $c (@children) {
-			if ($mode eq 'open') {
-			    $project_frame->hide(-entry => $c);
-			} else {
-			    $mode = 'open' if $project_frame->infoHidden( $c );
-			}
-			$setmode->( $c );
-		    }
-		}
-	    }
-
-	    if (defined $ent) {
-		if ( $mode eq 'open' )  {
-		    $project_frame->_indicator_image( $ent, 'plus' );
-		} elsif ( $mode eq 'close' ) {
-		    $project_frame->_indicator_image( $ent, 'minus' );
-		} elsif( $mode eq 'none' ) {
-		    $project_frame->_indicator_image( $ent, undef );
-		}
-	    }
-	};
-  	$setmode->();
-    }
+    update_tree_status();
 
     if ($options->{'hideold'}) {
 	do_hide_old();
@@ -2916,6 +2899,50 @@ sub insert_all {
     $top->Unbusy($Tk::VERSION >= 800.014 ? (-recurse => 1) : ());
 }
 BEGIN { *update_all = \&insert_all }
+
+sub update_tree_status {
+    my($ent) = @_;
+    if ($is_tree) {
+	# custom setmode implementation to use the recorded closed information
+	# in the project file
+	my $setmode;
+	$setmode = sub {
+	    my($ent,$mode) = @_;
+	    unless (defined $mode) {
+		$mode = 'none';
+	    }
+	    my @args;
+	    push @args, $ent if defined $ent;
+	    my @children = $project_frame->infoChildren(@args);
+	    if (@children) {
+		if ($mode ne 'hidden') {
+		    my $p = entry_to_project($ent);
+		    $mode = $p && $p->closed ? 'open' : 'close';
+		}
+		foreach my $c (@children) {
+		    if ($mode eq 'open' || $mode eq 'hidden') {
+			$project_frame->hide(-entry => $c);
+			$setmode->($c, "none"); # XXX none/hidden?
+		    } else {
+			$mode = 'open' if $project_frame->infoHidden($c);
+			$setmode->($c);
+		    }
+		}
+	    }
+
+	    if (defined $ent) {
+		if ($mode eq 'open')  {
+		    $project_frame->_indicator_image($ent, 'plus');
+		} elsif ($mode eq 'close') {
+		    $project_frame->_indicator_image($ent, 'minus');
+		} elsif ($mode eq 'none') {
+		    $project_frame->_indicator_image($ent, undef);
+		}
+	    }
+	};
+  	$setmode->($ent);
+    }
+}
 
 sub gui_current_project {
     if (defined $current_project) {
@@ -2944,7 +2971,8 @@ sub insert_old_project {
 
     insert_project($p, -after => $prev_entry, -style => $set_style->($p));
     if (!$options->{'onlytop'}) {
-	foreach ($p->sorted_subprojects($options->{'sort'})) {
+	my @sorted_subprojects = $p->sorted_subprojects($options->{'sort'});
+	foreach (@sorted_subprojects) {
 	    insert_old_project($_, %args);
 	}
     }
@@ -3490,7 +3518,7 @@ sub toggle_hide_old {
 	if ($options->{'hideold'}) {
 	    do_hide_old();
 	} else {
-	    traverse_entries
+	    traverse_unclosed_entries
 		(sub {
 		     my($entry) = @_;
 		     $project_frame->show("entry", $entry);
@@ -3501,7 +3529,7 @@ sub toggle_hide_old {
 
 sub do_hide_old {
     my $since = time - 86400*30;
-    traverse_entries
+    traverse_unclosed_entries
 	(sub {
 	     my($entry) = @_;
 	     my $p = $project_frame->entrycget($entry, "-data");
@@ -4108,7 +4136,10 @@ sub show_intervals {
 	$to_date->grid(-row => $row++, -column => 1, -sticky => "e");
 
 	$t->Label(-text => M("Annotation").":")->grid(-row => $row, -column => 0);
-	$t->Entry(-textvariable => \$annotation)->grid(-row => $row++, -column => 1, -sticky => "ew");
+	$t->Entry(-textvariable => \$annotation,
+		  -bg => $inner_bg,
+		  -fg => $inner_fg,
+		 )->grid(-row => $row++, -column => 1, -sticky => "ew");
 
 	my $f = $t->Frame->grid(-row => $row++, -column => 0, -columnspan => 2);
 
