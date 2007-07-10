@@ -1,5 +1,8 @@
 Revision history for Timex.
 
+6.44
+	- fixed bug (tree open/close information was lost sometimes)
+
 6.43
 	- new option: -inlineentry (to enable the dialog-less entry
 	  widget, as it was the default until now, otherwise a dialog
