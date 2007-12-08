@@ -18,6 +18,7 @@ Timex/Utmp.pm
 Timex/de_template.csv
 Timex/t/base.t
 Timex/t/multiproject.t
+Timex/t/rcs.t
 Timex/t/testdata.xml
 Timex/t/testprojects.pl
 Timex/t/split.t

@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.14 2003/01/22 21:17:23 eserte Exp $
+# $Id: Rcs.pm,v 1.15 2007/12/08 16:45:02 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1998 Slaven Rezic. All rights reserved.
@@ -50,11 +50,14 @@ sub unixtime {
 # static method
 sub rcsdate2unixtime {
     my $date = shift;
-    if ($date =~ m|^(\d+)/(\d+)/(\d+)\s+(\d+):(\d+):(\d+)$|) {
+    my($y,$m,$d,$H,$M,$S,$tzoff);
+    if (($y,$m,$d,$H,$M,$S) = $date =~ m|^(\d+)/(\d+)/(\d+)\s+(\d+):(\d+):(\d+)$| or
+	($y,$m,$d,$H,$M,$S,$tzoff) = $date =~ m|^(\d+)-(\d+)-(\d+)\s+(\d+):(\d+):(\d+)\s([+-]\d{4})$|) {
+	# XXX Take $tzoff, if available, into account:
 	my $ret;
 	if (eval {
 	    require Time::Local;
-	    $ret = Time::Local::timelocal($6, $5, $4, $3, $2-1, $1-1900);
+	    $ret = Time::Local::timelocal($S, $M, $H, $d, $m-1, $y-1900);
 	    1;
 	}) {
 	    return $ret;
@@ -62,7 +65,7 @@ sub rcsdate2unixtime {
 
 	require POSIX;
 	# XXX unterschiedliche Sommerzeit????
-	my $time = POSIX::mktime($6, $5, $4, $3, $2-1, $1-1900);
+	my $time = POSIX::mktime($S, $M, $H, $d, $m-1, $y-1900);
 	my $t1 = POSIX::mktime(localtime($time));
 	my $t2 = POSIX::mktime(gmtime($time));
 	$time + $t1 - $t2;
