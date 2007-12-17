@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.46 2007/11/20 21:58:31 eserte Exp $
+# $Id: tktimex,v 6.47 2007/12/17 20:45:12 eserte Exp $
 #
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
@@ -190,7 +190,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.46 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 6.47 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -792,7 +792,26 @@ $mb_options->separator
     unless $s_if || $m_if;
 $mb_options->command(-label => M"Settings editor",
 		     -state => $opt ? "normal" : "disabled",
-		     -command => sub { $opt->option_editor($top, -buttons => ['oksave', 'cancel']) })
+		     -command => sub {
+			 $opt->option_editor
+			     ($top,
+			      # Unfortunately Tk::Getopt until 0.49_50 required
+			      # the definition of *all* strings. And all I
+			      # wanted was to change the one for "optedit"...
+			      -string => {
+					  'optedit'    => 'Settings editor',
+					  'undo'       => 'Undo',
+					  'lastsaved'  => 'Last saved',
+					  'save'       => 'Save',
+					  'defaults'   => 'Defaults',
+					  'ok'         => 'OK',
+					  'apply'      => 'Apply',
+					  'cancel'     => 'Cancel',
+					  'helpfor'    => 'Help for:',
+					  'oksave'     => 'OK',
+					 },
+			      -buttons => ['oksave', 'cancel'],
+			     ) })
     unless $s_if || $m_if;
 
 foreach my $def ([M"H:M:S"  => 'hs'],
