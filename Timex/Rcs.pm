@@ -1,10 +1,10 @@
 # -*- perl -*-
 
 #
-# $Id: Rcs.pm,v 1.15 2007/12/08 16:45:02 eserte Exp $
+# $Id: Rcs.pm,v 1.16 2008/02/21 22:51:36 eserte Exp $
 # Author: Slaven Rezic
 #
-# Copyright (C) 1998 Slaven Rezic. All rights reserved.
+# Copyright (C) 1998,2008 Slaven Rezic. All rights reserved.
 # This package is free software; you can redistribute it and/or
 # modify it under the same terms as Perl itself.
 #
@@ -14,7 +14,7 @@
 
 BEGIN {
     die "Timex::Rcs does not work with DOS/Windows"
-      if $^O =~ /(mswin|dos)i/;
+      if $^O =~ /(mswin|dos)/i;
 }
 
 
@@ -89,6 +89,8 @@ sub log      { shift->{Log} }
 package Timex::RcsFile;
 use strict;
 use File::Basename;
+use File::Spec;
+use Timex::Util qw(is_in_path save_pwd);
 
 my $delim_regex = "^----------------------------\$";
 my $file_delim_regex = "^=============================================================================\$";
@@ -246,6 +248,24 @@ sub _get_vcs_type {
 	require Timex::Svn;
 	bless $self, 'Timex::Svn::File'; # re-bless hack
 	return $self->{VCS_Type};
+    }
+    if (is_in_path("svk")) {
+	my $is_svk = 0;
+	save_pwd {
+	    chdir $dir
+		or die "Cannot change to $dir: $!";
+	    open OLDOUT, ">&STDOUT" or die "Can't dup STDOUT: $!";
+	    open STDOUT, "> " . File::Spec->devnull or die "Can't redirect STDOUT: $!";
+	    system("svk", "info");
+	    open STDOUT, ">&OLDOUT" or die "Can't dup OLDERR: $!";
+	    $is_svk = $? == 0;
+	};
+	if ($is_svk) {
+	    $self->{VCS_Type} = "SVK";
+	    require Timex::Svk;
+	    bless $self, 'Timex::Svk::File';
+	    return $self->{VCS_Type};
+	}
     }
 
     # fallback
