@@ -1,5 +1,8 @@
 Revision history for Timex.
 
+6.47
+	- svk support
+
 6.46
 	- fixed problem in new_sub_project
 
