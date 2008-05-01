@@ -1,5 +1,9 @@
 Revision history for Timex.
 
+6.48
+	- debugging tool improvement: ptksh may be called multiple
+	  times
+
 6.47
 	- svk support
 
