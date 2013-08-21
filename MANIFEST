@@ -27,29 +27,30 @@ Timex/t/overlapping.t
 Tk/Autoscroll.pm	from Tk-SREZIC
 Tk/UnderlineAll.pm	from Tk-SREZIC
 Win32Util.pm		from Win32Util
-clear_times.pl
-ctimex
+support/clear_times.pl
+support/ctimex
 emacs/project.el
-get_skeleton.pl
-install.pl		from bbbike
-install.pl.config
+support/get_skeleton.pl
+support/install.pl		from bbbike
+support/install.pl.config
 kde/Timex.kdelnk
 msg/tktimex/de
 Timex/mini-clock.ico
 Timex/mini-clock.xpm
 Timex/plain.down.gif
 Timex/plain.up.gif
-project2xls.pl
-project2xml.pl
-restrict_domain.pl
+support/project2xls.pl
+support/project2xml.pl
+support/restrict_domain.pl
 t/50base.t		simple test script
 t/80heavy.t
 t/test.pj1		test project file
 templates/oo.pjt
-timexserver
-timexserver.cgi
+support/timexserver
+support/timexserver.cgi
 tktimex			main program
-prereqinst.pl
+support/prereqinst.pl
 Timex/Hooks.pm		from bbbike
 Timex/Msg.pm		from Msg
 TODO
+support/stattimex.pl

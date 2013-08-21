@@ -20,15 +20,17 @@ Start tktimex:
 
 Look into the menu in Help > Index (Hilfe > Index).
 
-LIST OF FILES
--------------
+LIST OF SUPPORTING SCRIPTS
+--------------------------
 
-tktimex			- the main Tk program
+These scripts may be found in the "support" subdirectory and are not
+installed by default.
 
 ctimex			- the console program
 
 install.pl		- installer for Windows (and someday for Unix,
 			  too, badly maintained these days)
+			  (XXX does not work anymore)
 
 clear_times.pl		- clear all the times in a project file
 
