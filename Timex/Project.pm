@@ -1731,20 +1731,20 @@ times.
 sub load {
     my($self, $file, %args) = @_;
     my @data;
-    if (!open(FILE, $file)) {
+    open my $fh, "<", $file or do {
 	$@ = "Can't read <$file>: $!";
 	warn $@;
-	undef;
-    } else {
-	while(<FILE>) {
-	    chomp;
-	    s/\r//g; # strip dos newlines
-	    next if /^\s*$/; # overread empty lines
-	    push @data, $_;
-	}
-	close FILE;
-	$self->interpret_data(\@data, %args);
+	return undef;
+    };
+    binmode $fh;
+    while(<$fh>) {
+	chomp;
+	s/\r//g; # strip dos newlines (should not happen with new pj1 files, but maybe with older
+	next if /^\s*$/; # overread empty lines
+	push @data, $_;
     }
+    close $fh;
+    $self->interpret_data(\@data, %args);
 }
 
 =head2 is_project_file
