@@ -2,7 +2,6 @@
 # -*- perl -*-
 
 #
-# $Id: project2xls.pl,v 1.1 2000/11/24 21:28:50 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -14,7 +13,7 @@
 #
 
 use FindBin;
-use lib "$FindBin::RealBin";
+use lib "$FindBin::RealBin/..";
 
 use Timex::Project;
 use Timex::ExcelExport;

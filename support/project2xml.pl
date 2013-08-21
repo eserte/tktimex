@@ -2,7 +2,6 @@
 # -*- perl -*-
 
 #
-# $Id: project2xml.pl,v 1.2 2000/11/24 21:21:59 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -14,7 +13,7 @@
 #
 
 use FindBin;
-use lib "$FindBin::RealBin";
+use lib "$FindBin::RealBin/..";
 
 use Timex::Project;
 use Timex::Project::XML;

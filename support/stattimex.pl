@@ -2,7 +2,6 @@
 # -*- perl -*-
 
 #
-# $Id: stattimex.pl,v 1.2 2003/03/28 16:52:29 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2002 Online Office Berlin. All rights reserved.
@@ -12,7 +11,7 @@
 #
 
 use FindBin;
-use lib "$FindBin::RealBin";
+use lib "$FindBin::RealBin/..";
 use Timex::Project;
 use Timex::Rcs;
 use Getopt::Long;

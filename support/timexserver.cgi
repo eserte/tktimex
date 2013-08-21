@@ -2,7 +2,6 @@
 # -*- perl -*-
 
 #
-# $Id: timexserver.cgi,v 1.4 1999/11/02 23:56:33 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 1999 Slaven Rezic. All rights reserved.
@@ -16,7 +15,7 @@
 # XXX FCGI verwenden
 
 use FindBin;
-use lib ("$FindBin::RealBin");
+use lib ("$FindBin::RealBin/..");
 
 use Event;
 #use Storable qw(nstore freeze);

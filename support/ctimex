@@ -2,7 +2,6 @@
 # -*- perl -*-
 
 #
-# $Id: ctimex,v 1.5 1999/03/09 14:04:18 eserte Exp $
 # Author: Slaven Rezic
 # Mail: <URL:mailto:eserte@cs.tu-berlin.de>
 # WWW:  <URL:http://www.cs.tu-berlin.de/~eserte/>
@@ -10,7 +9,7 @@
 #
 
 use FindBin;
-use lib "$FindBin::RealBin";
+use lib "$FindBin::RealBin/..";
 use Term::Complete;
 use Timex::Project;
 use Getopt::Long;

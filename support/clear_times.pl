@@ -2,8 +2,6 @@
 # -*- perl -*-
 
 #
-# $Id: clear_times.pl,v 1.2 1999/04/29 08:13:00 eserte Exp $
-#
 # Author: Slaven Rezic
 #
 # Mail: mailto:eserte@cs.tu-berlin.de
@@ -16,7 +14,7 @@
 # $1000000-question: where's the difference???
 
 use FindBin;
-use lib "$FindBin::RealBin";
+use lib "$FindBin::RealBin/..";
 use Timex::Project;
 
 my $operation = "clear";
