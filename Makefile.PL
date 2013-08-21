@@ -76,7 +76,7 @@ WriteMakefile(
     'NAME'	=> 'Timex',
     'VERSION_FROM' => 'tktimex', # finds $VERSION
     'ABSTRACT' => 'time recording tool',
-    'EXE_FILES'  => [qw/tktimex ctimex timexserver/],
+    'EXE_FILES'  => [qw/tktimex/],
     'dist'      => {'COMPRESS'=>'gzip -9', 'SUFFIX' => '.gz',
                     'POSTOP'=>'-$(CHMOD) 644 $(DISTVNAME).tar$(SUFFIX)'},
     'PM' => $pm,
