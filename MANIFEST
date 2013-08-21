@@ -41,7 +41,6 @@ Timex/plain.down.gif
 Timex/plain.up.gif
 support/project2xls.pl
 support/project2xml.pl
-support/restrict_domain.pl
 t/50base.t		simple test script
 t/80heavy.t
 t/test.pj1		test project file
