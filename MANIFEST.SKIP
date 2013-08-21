@@ -1,6 +1,8 @@
 Makefile
 \.tar\.gz$
 \bRCS\b
+^\.git/
+^\.gitignore$
 ^blib/
 ^index\.html
 ^pm_to_blib$
@@ -10,3 +12,5 @@ Timex.ppd
 Timex/testdata.xml
 Timex/Plugin/Iconmobile.pm
 tktimex.bat
+^MYMETA.json$
+^MYMETA.yml$
