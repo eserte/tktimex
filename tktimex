@@ -1538,6 +1538,9 @@ sub insert_project {
 
     if ($p_itemtype eq 'imagetext' && $p->icon) {
 	if (!$icons{$path}) {
+	    if ($p->icon =~ m{\.png$}i) {
+		require Tk::PNG;
+	    }
 	    eval {
 		$icons{$path} = $project_frame->Photo(-file => $p->icon);
 	    }; warn $@ if $@;
@@ -3427,7 +3430,9 @@ sub get_filename {
 		push @$types, [M"Timex XML files", '.xml'];
 	    } elsif ($type eq 'pjt') {
 		push @$types, [M"Timex Template files", '.pjt'];
-	    } elsif ($type eq 'gif') {
+	    } elsif ($type eq 'png') {
+		push @$types, [M"PNG images", '.png'];
+	    } elsif ($type eq 'xpm') {
 		push @$types, [M"GIF images", '.gif'];
 	    } elsif ($type eq 'xpm') {
 		push @$types, [M"X11 pixmaps", '.xpm'];
@@ -3438,7 +3443,7 @@ sub get_filename {
 	    } elsif ($type eq 'bmp') {
 		push @$types, [M"BMP images", '.bmp'];
 	    } elsif ($type eq 'images') {
-		push @$types, [M"Images", ['.ppm','.gif','.xpm','.xbm','.bmp']];
+		push @$types, [M"Images", ['.png','.ppm','.gif','.xpm','.xbm','.bmp']];
 	    }
 	}
     }
@@ -3816,7 +3821,7 @@ sub show_attributes_by_project {
 		  ($iconfile ? (-File   => $file,
 				-Path   => $path) : ()),
 		  -Create => 0,
-		  -filetypes => [qw/images xpm gif xbm ppm bmp/],
+		  -filetypes => [qw/images png xpm gif xbm ppm bmp/],
 		 );
 	     if ($newfile) {
 		 $iconfile = $newfile;
