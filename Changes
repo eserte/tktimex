@@ -1,5 +1,8 @@
 Revision history for Timex.
 
+	- moved to github, clone address is now
+	  git://github.com/eserte/tktimex.git
+
 6.48
 	- debugging tool improvement: ptksh may be called multiple
 	  times

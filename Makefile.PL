@@ -2,6 +2,17 @@ use ExtUtils::MakeMaker;
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 
+my $eumm_recent_enough = $ExtUtils::MakeMaker::VERSION >= 6.54;
+if (!$eumm_recent_enough) {
+    *MY::dist_core = sub {
+	<<'EOF';
+dist :
+	$(NOECHO) $(ECHO) "Sorry, use a newer EUMM!"
+
+EOF
+    };
+}
+
 my $pm =
     {
      'Timex/ExcelExport.pm'    => '$(INST_LIBDIR)/Timex/ExcelExport.pm',
@@ -71,6 +82,17 @@ WriteMakefile(
     'PM' => $pm,
     'PREREQ_PM' => \%prereq_pm,
     'AUTHOR' => 'Slaven Rezic (slaven@rezic.de)',
+
+    ($eumm_recent_enough
+     ? (META_MERGE => {
+		       resources  => { repository => 'git://github.com/eserte/tktimex.git' },
+		      },
+	META_ADD   => {
+		      },
+       )
+     : ()
+    ),
+
 );
 
 #sub MY::top_targets {
@@ -86,13 +108,11 @@ sub MY::postamble {
     if (defined $ENV{USER} && $ENV{USER} eq 'eserte' && $^O =~ /bsd/i && -f "../perl.release.mk") {
 	$postamble .= <<'EOF';
 
-CVS_DIR=${HOME}/work/timex
-
 SF_PROJECT=ptktools
 SF_PACKAGE=tktimex
 
 .include "../perl.release.mk"
-.include "../perl.cvs.mk"
+.include "../perl.git.mk"
 
 EOF
     }
