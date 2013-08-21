@@ -1544,25 +1544,30 @@ sub save {
     # first dump data, then open file... so crashes between open and print
     # are less likely
     my $buf = $self->dump_data(%args);
-    if (!open(FILE, ">$file")) {
+    open my $ofh, ">", $file or do {
 	$@ = "Can't write to <$file>: $!";
 	warn $@;
-	undef;
-    } else {
-	print FILE $buf;
-	close FILE;
-	# Filesize could be actually larger, because of different line
-	# endings (so on MS-DOS/Windows)
-	if (-f $file && 
-	    length($buf) <= -s $file) {
-	    1;
-	} else {
-	    $@ = "Expected size " . length($buf) . 
-	      " of file <$file>, but got " . (-s $file) . "\n";
-	    warn $@;
-	    undef;
-	}
+	return undef;
+    };
+    binmode $ofh; # force UNIX newlines even on DOS
+    print $ofh $buf;
+    close $ofh or do {
+	$@ = "Error while writing <$file>: $!";
+	warn $@;
+	return undef;
+    };
+    if (!-f $file) {
+	$@ = "Strange, file <$file> does not exist?!";
+	warn $@;
+	return undef;
     }
+    if (length($buf) != -s $file) {
+	$@ = "Expected size " . length($buf) . 
+	    " of file <$file>, but got " . (-s $file) . "\n";
+	warn $@;
+	return undef;
+    }
+    1;
 }
 
 sub interpret_data {
