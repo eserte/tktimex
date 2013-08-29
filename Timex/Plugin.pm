@@ -1,10 +1,9 @@
 # -*- perl -*-
 
 #
-# $Id: Plugin.pm,v 1.4 2005/10/10 19:13:33 eserte Exp $
 # Author: Slaven Rezic
 #
-# Copyright (C) 2003,2005 Slaven Rezic. All rights reserved.
+# Copyright (C) 2003,2005,2013 Slaven Rezic. All rights reserved.
 # This package is free software; you can redistribute it and/or
 # modify it under the same terms as Perl itself.
 #
@@ -15,7 +14,7 @@
 package Timex::Plugin;
 use strict;
 use vars qw($VERSION %plugins);
-$VERSION = 0.02;
+$VERSION = 0.03;
 
 use File::Basename qw(fileparse);
 use File::Spec::Functions qw(file_name_is_absolute);
@@ -31,15 +30,36 @@ use Msg qw(frommain);
     }
 }
 
+sub new { bless {}, shift }
+
 # from bbbike
 sub load_plugin {
-    my $file = shift;
+    my($self, $file) = @_;
     my @plugin_args;
     if ($file =~ /^(.*)=(.*)$/) {
 	$file = $1;
 	@plugin_args = split / /, $2;
     }
+    my $mod = $self->load_file($file);
+    return if $self->is_plugin_registered($mod);
+    my $plugin_obj = bless { top => $main::top }, $mod;
+    eval {
+	$plugin_obj->register(@plugin_args);
+    };
+    if ($@) {
+	my $err = $@;
+	main::status_message(Mfmt("Couldn't register plugin %s. Reason: %s. A possible cause is case sensitivity.", $mod, $err), "warn");
+	return;
+    }
+
+    $self->add_plugin(modname => $mod);
+}
+
+sub load_file {
+    my($self, $file) = @_;
+
     my $mod;
+
     if ($file =~ /::/) {
 	if (eval qq{ require $file; 1 }) {
 	    $mod = $file;
@@ -87,15 +107,19 @@ sub load_plugin {
 	    }
 	}
     }
-    my $plugin_obj = bless { top => $main::top }, $mod;
-    eval {
-	$plugin_obj->register(@plugin_args);
-    };
-    if ($@) {
-	my $err = $@;
-	main::status_message(Mfmt("Couldn't register plugin %s. Reason: %s. A possible cause is case sensitivity.", $mod, $err), "warn");
-	return;
-    }
+
+    $mod;
+}
+
+sub add_plugin {
+    my($self, %args) = @_;
+    my $modname = $args{modname} || die "modname is missing";
+    $self->{plugins}->{$modname} = { modname => $modname };
+}
+
+sub is_plugin_registered {
+    my($self, $modname) = @_;
+    exists $self->{plugins}->{$modname};
 }
 
 1;

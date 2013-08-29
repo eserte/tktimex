@@ -273,6 +273,9 @@ $date_require = <<'EOF';
 	$has_date = 1;
 EOF
 
+require Timex::Plugin;
+my $plugin_manager = Timex::Plugin->new;
+
 state_change("before Getopt definition");
 
 use vars qw($max_enterprise_file_list @all_domains $options @opttable
@@ -322,7 +325,9 @@ $options = {};
    ['securesave',         '!', 0,
     'longhelp' => M"Saving data also in a Data::Dumper format. Not really necessary anymore."],
    ['plugins',            '=s', undef,
-    'longhelp' => M"A comma-separated list of initial plugins to load."],
+    'longhelp' => M"A comma-separated list of initial plugins to load.",
+    'callback' => \&plugins_update,
+   ],
    ['username', '=s', $ENV{USERNAME},
     'longhelp' => M"A unix-like short username"],
    ['realname', '=s', undef,
@@ -1196,26 +1201,27 @@ $top->repeat(5*60*1000, \&check_still_today);
 
 Tk::App::Reloader::check_loop() if defined &Tk::App::Reloader::check_loop;
 
-if ($options->{plugins}) {
-    require Timex::Plugin;
-    my @warnings;
-    local $SIG{__WARN__} = sub { push @warnings, @_ };
-    foreach my $plugin (split /\s*,\s*/, $options->{plugins}) {
-	Timex::Plugin::load_plugin($plugin);
-    }
-    if (@warnings) {
-	require Tk::DialogBox;
-	require Tk::ROText;
-	my $d = $top->DialogBox(-title => M"Error while loading plugins",
-				-buttons => [M"OK"],
-				-popover => 'cursor',
-			       );
-	my $txt = $d->add('ROText', -width => 40, -height => 10,
-			  -relief => "flat", -borderwidth => 0,
-			  -wrap => "word",
-			 )->pack(-expand => 1, -fill => "both");
-	$txt->insert("end", join("\n", @warnings));
-	$d->Show;
+sub plugins_update {
+    if ($options->{plugins}) {
+	my @warnings;
+	local $SIG{__WARN__} = sub { push @warnings, @_ };
+	foreach my $plugin (split /\s*,\s*/, $options->{plugins}) {
+	    $plugin_manager->load_plugin($plugin);
+	}
+	if (@warnings) {
+	    require Tk::DialogBox;
+	    require Tk::ROText;
+	    my $d = $top->DialogBox(-title => M"Error while loading plugins",
+				    -buttons => [M"OK"],
+				    -popover => 'cursor',
+				   );
+	    my $txt = $d->add('ROText', -width => 40, -height => 10,
+			      -relief => "flat", -borderwidth => 0,
+			      -wrap => "word",
+			     )->pack(-expand => 1, -fill => "both");
+	    $txt->insert("end", join("\n", @warnings));
+	    $d->Show;
+	}
     }
 }
 
