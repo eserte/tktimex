@@ -10,7 +10,6 @@ MANIFEST\.SKIP$
 ~$
 Timex.ppd
 Timex/testdata.xml
-Timex/Plugin/Iconmobile.pm
 tktimex.bat
 ^MYMETA.json$
 ^MYMETA.yml$
