@@ -5,7 +5,7 @@
 package Timex::Plugin::ScreenSaver;
 
 use strict;
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 use POSIX 'strftime';
 
@@ -13,6 +13,8 @@ our $X;
 our @screensaver_states;
 our $last_screensaver_state;
 our $tl;
+
+use constant MAX_SCREENSAVER_STATES => 100;
 
 sub register {
     my $self = shift;
@@ -44,8 +46,8 @@ sub check_screensaver {
     my $now_screensaver_state = $self->is_screensaver_on;
     if (defined $last_screensaver_state && $now_screensaver_state != $last_screensaver_state) {
 	push @screensaver_states, { epoch => time, state => $now_screensaver_state };
-	if (@screensaver_states > 100) {
-	    splice @screensaver_states, 0, 100-@screensaver_states;
+	if (@screensaver_states > MAX_SCREENSAVER_STATES) {
+	    splice @screensaver_states, 0, @screensaver_states - MAX_SCREENSAVER_STATES;
 	}
 	$self->update_screensaver_times;
     }
