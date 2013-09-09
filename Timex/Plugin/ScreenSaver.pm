@@ -5,7 +5,7 @@
 package Timex::Plugin::ScreenSaver;
 
 use strict;
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 use POSIX 'strftime';
 
@@ -86,6 +86,9 @@ sub update_screensaver_times {
     $lb->insert('end', map {
 	strftime("%F %T", localtime $_->{epoch}) . ": " . ($_->{state} ? 'on' : 'off')
     } @screensaver_states);
+    for my $lb_i (0..$#screensaver_states) {
+	$lb->itemconfigure($lb_i, -foreground => $screensaver_states[$lb_i]->{state} ? 'darkred' : 'darkgreen');
+    }
     $lb->see('end');
 }
 
