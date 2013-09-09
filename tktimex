@@ -2,8 +2,6 @@
 # -*- perl -*-
 
 #
-# $Id: tktimex,v 6.50 2013/08/21 16:48:04 eserte Exp $
-#
 # Author: Slaven Rezic
 # Copyright: see in subroutine show_copyright or the Help/Copyright menu entry
 #            (it's basically a BSD-styled copyright)
@@ -190,7 +188,7 @@ BEGIN { state_change("after Tk::DropSite"); }
 use File::Spec qw();
 use Hooks; # this is the BBBike implementation
 
-$VERSION = sprintf("%d.%02d", q$Revision: 6.50 $ =~ /(\d+)\.(\d+)/);
+$VERSION = '6.51';
 
 use vars qw($os);
 $os = ($^O eq 'MSWin32' || $^O eq 'os2' ? 'win' : 'unix');
@@ -3593,7 +3591,7 @@ sub toggle_hide_old {
 }
 
 sub do_hide_old {
-    my $since = time - 86400*30;
+    my $since = is_old_threshold();
     traverse_unclosed_entries
 	(sub {
 	     my($entry) = @_;
@@ -3610,6 +3608,10 @@ sub do_hide_old {
 		 }
 	     }
 	 });
+}
+
+sub is_old_threshold {
+    time - 86400*30; # one month, currently hardcoded
 }
 
 sub toggle_show_only_top {
@@ -3636,18 +3638,27 @@ sub _all_projects_browseentry {
     my($parent, %args) = @_;
 
     my $exclude_root = delete $args{-excluderoot};
+    my $hide_old = delete $args{-hideold};
+
+    my $since = $hide_old ? is_old_threshold() : undef;
 
     require Tk::BrowseEntry;
     my $browse = $parent->BrowseEntry(%args);
     _fix_be($browse);
     # Verwendung des Schwartzian Transform wegen Problemen mit lc.
     # Es ist vielleicht auch marginal schneller.
-    foreach (_all_labels) {
-	if (!defined $_ || $_ eq '') {
+    foreach my $p ($root->all_subprojects) {
+	my $pathname = $p->pathname;
+	if (!defined $pathname || $pathname eq '') {
 	    next if $exclude_root;
-	    $_ = '(Root)'
+	    $pathname = '(Root)'
+	} elsif (defined $since) {
+	    my $time = $p->sum_time($since, undef);
+	    if (!$time) {
+		next;
+	    }
 	}
-	$browse->insert("end", $_);
+	$browse->insert("end", $pathname);
     }
     $browse;
 }
@@ -4615,7 +4626,9 @@ sub show_intervals {
 		 $f0->Label(-text => M"New Parent")->pack(-side => "left");
 		 my $new_project = $project->pathname;
 		 my $be = _all_projects_browseentry
-		     ($f0, -variable => \$new_project, -excluderoot => 1,
+		     ($f0, -variable => \$new_project,
+		      -excluderoot => 1,
+		      -hideold => $options->{'hideold'},
 		      ($Tk::BrowseEntry::VERSION > 4 ? (-listheight => 30) : ()),
 		      #-autolimitheight => 1, # XXX does not work?!
 		      -exportselection => 0);
@@ -5403,7 +5416,7 @@ sub show_copyright {
 
 tktimex by Slaven Rezic (eserte@users.sourceforge.net)
 
-Copyright (c) 1996-2006 Slaven Rezic. All rights reserved.
+Copyright (c) 1996-2013 Slaven Rezic. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
@@ -5620,7 +5633,7 @@ L<perl>, L<Tk>, L<rcsintro(1)>, L<cvs(1)>, L<Timex::Project>
 
 Slaven Rezic (eserte@users.sourceforge.net)
 
-Copyright (c) 1996-2006 Slaven Rezic. All rights reserved.
+Copyright (c) 1996-2013 Slaven Rezic. All rights reserved.
 
 For a complete copyright see the Help/About menu entry.
 
