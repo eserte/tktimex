@@ -48,6 +48,7 @@ my %prereq_pm =
     ('Tk'           => 402.003,
      'Tk::Getopt'   => 0.49,
      'Tk::Date'     => 0.30,
+     'Date::Calc'   => 0,
      'Data::Dumper' => 0,
      'Mail::Send'   => 0,
      'File::Spec'   => 0,
@@ -58,19 +59,6 @@ my %coreq_pm =
     ('Spreadsheet::WriteExcel' => 0.42,
      'XML::Parser'  => 0,
     );
-
-{
-    # we accept Date::Calc OR Date::Pcalc
-    my $prereq = "Date::Calc";
-    my $file = "$prereq.pm";
-    $file =~ s{::}{/}g;
-    eval { require $file };
-    if ($@) {
-	$prereq_pm{"Date::Pcalc"} = 0;
-    } else {
-	$prereq_pm{"Date::Calc"} = 0;
-    }
-}
 
 WriteMakefile(
     'NAME'	=> 'Timex',
