@@ -1590,7 +1590,7 @@ sub insert_project {
 	}
 	$project_frame->itemCreate
 	    ($path, $pf_today_index, -itemtype => 'text',
-	     -text => sec2time($p->sum_time($today_time, undef,
+	     -text => sec2time($p->sum_time($today_time, $today_time+86400,
 					    -recursive => 1)));
 	$project_frame->itemCreate
 	    ($path, $pf_total_index, -itemtype => 'text',
