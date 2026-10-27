@@ -209,6 +209,7 @@ Dies kann im Unternehmen-Abschnitt des Einstellungseditors gemacht werden.
 'Version lifetime' => 'Versions-Lebenszeit',
 'Warning' => 'Warnung',
 'Week' => 'Woche',
+'Whole day (%02d:00-%02d:00)' => 'Ganzer Tag (%02d:00-%02d:00)',
 'Working time' => 'Arbeitszeit',
 'Wrapped search' => 'Suche wird umgebrochen XXX',
 'Yes' => 'Ja',

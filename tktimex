@@ -221,6 +221,7 @@ use vars qw($utmp
 	    $p_itemtype %icons
 	    $old_search_regex $initial_search_direction
 	    $lock_saving
+	    $whole_day_begin_hour $whole_day_end_hour
 	   );
 
 $title = "tktimex $VERSION";
@@ -248,6 +249,9 @@ $use_enterprise = 0;
 $p_itemtype = 'imagetext';
 $home     = get_home_dir();
 $lock_saving = 1;
+# Used by the "Whole day" button in the interval editor
+$whole_day_begin_hour = 8;
+$whole_day_end_hour   = 16;
 
 eval {
     require Timex::Utmp;
@@ -4210,6 +4214,53 @@ sub show_intervals {
 				  )
 		      );
 	$to_date->grid(-row => $row++, -column => 1, -sticky => "e");
+
+	if (!$some_are_readonly) {
+	    # Fill both date widgets with a standard working day, based
+	    # on the day part of the "From" date.
+	    $t->Button
+		(-text => Mfmt("Whole day (%02d:00-%02d:00)",
+			       $whole_day_begin_hour, $whole_day_end_hour),
+		 -command => sub {
+		     my $from_e = ($has_date ? $from : $readable_date2epoch->($from));
+		     if (!defined $from_e) {
+			 $t->messageBox(-message => "Can't recognize $from",
+					-type => "OK",
+					-icon => "error",
+					-title => "Interval error",
+				       );
+			 return;
+		     }
+		     # If the time parts of both dates differ, then
+		     # probably something was edited already, and
+		     # hitting this button may be accidental.
+		     my $to_e = ($has_date ? $to : $readable_date2epoch->($to));
+		     if (defined $to_e) {
+			 my @from_l = localtime $from_e;
+			 my @to_l   = localtime $to_e;
+			 if ("@from_l[0..2]" ne "@to_l[0..2]") {
+			     my $ans = $t->messageBox(-message => "The times of the From and To dates differ, so maybe they were edited already.\nReally replace the interval by a whole day?",
+						      -type => "YesNo",
+						      -icon => "question",
+						      -title => "Whole day",
+						     );
+			     return if lc $ans ne 'yes';
+			 }
+		     }
+		     my @l = localtime $from_e;
+		     require Time::Local;
+		     my $new_from = Time::Local::timelocal(0, 0, $whole_day_begin_hour, @l[3..5]);
+		     my $new_to   = Time::Local::timelocal(0, 0, $whole_day_end_hour,   @l[3..5]);
+		     if ($has_date) {
+			 $from = $new_from;
+			 $to   = $new_to;
+		     } else {
+			 $from = $epoch2readable_date->($new_from);
+			 $to   = $epoch2readable_date->($new_to);
+		     }
+		 },
+		)->grid(-row => $row++, -column => 1, -sticky => "e");
+	}
 
 	$t->Label(-text => M("Annotation").":")->grid(-row => $row, -column => 0);
 	$t->Entry(-textvariable => \$annotation,
